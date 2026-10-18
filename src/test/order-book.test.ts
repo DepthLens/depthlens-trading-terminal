@@ -36,6 +36,15 @@ it('runs only with Heatmap/DOM enablement and unsubscribes/resets on pair or sou
   expect(transport.subscribe.mock.calls.at(-1)?.slice(0, 2)).toEqual(['binance', 'dogeusdt@depth@100ms']);
   book.setEnabled(false); expect(transport.stop).toHaveBeenCalledTimes(3); expect(book.debug().bidLevels).toBe(0);
 });
+it('Bybit falls back from orderbook.1000 to orderbook.200 when no snapshot arrives', () => {
+  book.configure('BTCUSDT', 'bybit', true);
+  expect(transport.subscribe.mock.calls.at(-1)?.slice(0, 2)).toEqual(['bybit', 'orderbook.1000.BTCUSDT']);
+  vi.advanceTimersByTime(4000);
+  expect(transport.stop).toHaveBeenCalledTimes(1);
+  expect(transport.subscribe.mock.calls.at(-1)?.slice(0, 2)).toEqual(['bybit', 'orderbook.200.BTCUSDT']);
+  transport.receive?.({ type: 'snapshot', data: { s: 'BTCUSDT', u: 1, b: [['99', '2']], a: [['101', '3']] } });
+  expect(book.debug().state).toBe('Synced');
+});
 it('Binance buffers before REST, drops older events and bridges snapshot ID inclusively', async () => {
   let resolve: ((d: any) => void) | undefined;
   vi.mocked(fetch).mockImplementation(() => new Promise(r => { resolve = r; }));
