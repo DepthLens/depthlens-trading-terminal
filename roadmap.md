@@ -1,5 +1,11 @@
 # Roadmap
 
+## Heatmap view
+- [ ] Buffer: 1s book snapshots, USDT notional buckets, 60 min typed-array history, Bybit orderbook.1000→200 fallback, "Collecting data… X min".
+- [ ] Drawing: offscreen ImageData, 1s updates + rAF, navy→blue→cyan→white→yellow→orange sqrt scale at 98th percentile, legend, trade bubbles, price/bid/ask lines + axis tag.
+- [ ] Controls: intensity, 5/15/30/60m window, x1/x2/x5/x10 grouping, min bubble, bubbles toggle, Center, wheel zoom + drag pan, hover tooltip, hidden-tab gap marking.
+- [ ] Verify: 3 min on BTCUSDT, controls, 3 pair switches, off/on, no console errors.
+
 ## Live order book engine
 - [x] Shared-socket subscriptions, Bybit snapshot/delta book, Binance buffered snapshot/sequence resync.
 - [x] Active-pair/source and Heatmap/DOM gating; toggleable Book debug panel, no drawing.

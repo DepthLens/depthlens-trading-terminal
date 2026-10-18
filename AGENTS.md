@@ -18,3 +18,4 @@
 - MarketList virtualizes fixed-height rows via market-list.ts and reads ticker refs once per second in its own component, so quote updates cannot rerender the terminal or chart.
 - order-book.ts owns the single active liquidity book and sequence recovery; optional topics multiplex through the existing active exchange socket, never create a connection, and book diagnostics rerender only their own panel.
 - Only correct historical chart candles that already exist in the rendered series; stream timestamps can precede or skip loaded history and must not cause chart exceptions.
+- Heatmap state lives in browser-safe `heatmap-data.ts` (one-second typed-array columns, USDT notional, 60-minute cap); `Heatmap.tsx` only draws via offscreen ImageData and rAF, receives trades through the LiveQuote bridge (`heat`), and never opens sockets.
