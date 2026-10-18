@@ -64,8 +64,8 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       candles.applyOptions({priceLineColor:latest.close>=latest.open?up:down});
       el.dataset['lastClose'] = formatPrice(latest.close, priceFormat);
       if (!hovered) setLegend({...latest});
-      const axis = `${Math.round(chart.priceScale('right').width())}px`;
-      if (el.parentElement && el.parentElement.style.getPropertyValue('--axis-w') !== axis) el.parentElement.style.setProperty('--axis-w', axis);
+      const axisWidth = Math.round(chart.priceScale('right').width()), axis = `${axisWidth}px`;
+      if (axisWidth > 0 && el.parentElement && el.parentElement.style.getPropertyValue('--axis-w') !== axis) el.parentElement.style.setProperty('--axis-w', axis);
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(flush); };
     const receive = (tick: {time: number; price: number}) => {
