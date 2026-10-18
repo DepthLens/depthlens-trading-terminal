@@ -6,7 +6,7 @@ import { aggregate, applyTrade, NATIVE, type Bar } from '@/lib/chart-data';
 import { marketStream } from '@/lib/market-stream';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 export { aggregate } from '@/lib/chart-data';
-export type LiveTick = { price: number; direction: number };
+export type LivePrice = { price: number; time: number; direction: number };
 function toColor(el: HTMLElement, name: string) {
   const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
   const raw = getComputedStyle(el).getPropertyValue(name).trim();
@@ -15,11 +15,11 @@ function toColor(el: HTMLElement, name: string) {
   const [r,g,b] = ctx.getImageData(0,0,1,1).data;
   return `rgb(${r},${g},${b})`;
 }
-export function PriceChart({ symbol, minutes, theme, priceFormat, onTick }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; onTick: (tick: LiveTick) => void }) {
+export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; live: LivePrice | null }) {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const tickRef = useRef(onTick);
-  tickRef.current = onTick;
+  const liveRef = useRef(live);
+  liveRef.current = live;
   const [legend, setLegend] = useState<Bar | null>(null);
   const [status, setStatus] = useState('Connecting');
   useEffect(() => {
@@ -33,20 +33,19 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, onTick }: { sy
     let stopped = false, hovered = false, frame = 0;
     let bars: Bar[] = [], rawBars: Bar[] = [];
     let latest: Bar | undefined;
-    let lastPrice: number | undefined, lastId = -1, direction = 0;
-    let recentTrades: {time:number;price:number}[] = [];
     let stopStream: (() => void) | undefined;
-    let stopTrades: (() => void) | undefined;
     let historyRetry: ReturnType<typeof setTimeout> | undefined;
     const abort = new AbortController();
     const interval = NATIVE[minutes] ?? '1m';
     const flush = () => {
       frame = 0;
       if (stopped || !latest) return;
+      // The last candle always tracks the live trade price, whatever the timeframe.
+      const lv = liveRef.current;
+      if (lv) latest = applyTrade(latest, lv.time, lv.price, minutes);
       const time = (latest.time / 1000) as UTCTimestamp;
       candles.update({ ...latest,time });
       if (!hovered) setLegend({...latest});
-      tickRef.current({price:latest.close,direction});
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(flush); };
     chart.subscribeCrosshairMove(param => {
@@ -57,41 +56,22 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, onTick }: { sy
     });
     const handle = (message: any) => {
       const d = message.data ?? message;
-      if (d.e === 'aggTrade') {
-        const id = Number(d.a), time = Number(d.T), price = Number(d.p);
-        if (id <= lastId || !Number.isFinite(time) || !(price>0)) return;
-        lastId=id;
-        if (lastPrice !== undefined && price !== lastPrice) direction = price > lastPrice ? 1 : -1;
-        lastPrice = price;
-        recentTrades.push({time,price});
-        recentTrades = recentTrades.filter(t=>t.time>=time-10000);
-        const next = applyTrade(latest,time,price,minutes);
-        if (next === latest) return;
-        // Flush the previous bucket before advancing, even within one animation frame.
-        if (latest && next.time > latest.time) { cancelAnimationFrame(frame); flush(); }
-        latest=next; schedule();
-      } else if (d.k) {
-        const k=d.k;
-        const b: Bar = {time:Number(k.t),open:Number(k.o),high:Number(k.h),low:Number(k.l),close:Number(k.c)};
-        if (!Number.isFinite(b.time) || !Number.isFinite(b.close)) return;
-        if (NATIVE[minutes]) {
-          if (latest && b.time<latest.time) return;
-          let updated=b;
-          for (const t of recentTrades.filter(t=>t.time>Number(d.E))) updated=applyTrade(updated,t.time,t.price,minutes);
-          if (latest && updated.time>latest.time) { cancelAnimationFrame(frame); flush(); }
-          latest=updated;
-        } else {
-          const bucket=Math.floor(b.time/(minutes*60000))*minutes*60000;
-          if (latest && bucket<latest.time) return;
-          rawBars=rawBars.filter(x=>x.time>=bucket && x.time!==b.time); rawBars.push(b); rawBars.sort((a,b)=>a.time-b.time);
-          let updated=aggregate(rawBars,minutes).at(-1);
-          for (const t of recentTrades.filter(t=>t.time>Number(d.E))) updated=applyTrade(updated,t.time,t.price,minutes);
-          if (!updated) return;
-          if (latest && updated.time>latest.time) { cancelAnimationFrame(frame); flush(); }
-          latest=updated;
-        }
-        schedule();
+      if (!d.k) return;
+      const k=d.k;
+      const b: Bar = {time:Number(k.t),open:Number(k.o),high:Number(k.h),low:Number(k.l),close:Number(k.c)};
+      if (!Number.isFinite(b.time) || !Number.isFinite(b.close)) return;
+      if (NATIVE[minutes]) {
+        if (latest && b.time<latest.time) return;
+        latest=b;
+      } else {
+        const bucket=Math.floor(b.time/(minutes*60000))*minutes*60000;
+        if (latest && bucket<latest.time) return;
+        rawBars=rawBars.filter(x=>x.time>=bucket && x.time!==b.time); rawBars.push(b); rawBars.sort((a,b)=>a.time-b.time);
+        const updated=aggregate(rawBars,minutes).at(-1);
+        if (!updated) return;
+        latest=updated;
       }
+      schedule();
     };
     const load = async () => {
       try {
@@ -104,17 +84,18 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, onTick }: { sy
         bars=NATIVE[minutes]?rawBars:aggregate(rawBars,minutes);
         latest=bars.at(-1);
         candles.setData(bars.map(b=>({...b,time:(b.time/1000) as UTCTimestamp})));
-        if (latest) { setLegend({...latest}); tickRef.current({price:latest.close,direction:0}); lastPrice=latest.close; }
+        if (latest) setLegend({...latest});
         chart.timeScale().scrollToRealTime();
-        stopStream=marketStream(`wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${interval}`,handle);
-        stopTrades=marketStream(`wss://fstream.binance.com/ws/${symbol.toLowerCase()}@aggTrade`,handle, live=>{ if (!stopped) setStatus(live?'Live':'Reconnecting'); });
+        stopStream=marketStream(`wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${interval}`,handle, live=>{ if (!stopped) setStatus(live?'Live':'Reconnecting'); });
       } catch {
         if (stopped) return;
         setStatus('History unavailable · retrying'); historyRetry=setTimeout(load,5000);
       }
     };
     void load();
-    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);stopStream?.();stopTrades?.();cancelAnimationFrame(frame);chartRef.current=null;chart.remove(); };
+    // Kline messages alone arrive too slowly to animate trades; pump the live price in.
+    const pump = setInterval(schedule, 250);
+    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);clearInterval(pump);stopStream?.();cancelAnimationFrame(frame);chartRef.current=null;chart.remove(); };
   },[symbol,minutes,theme,priceFormat.precision,priceFormat.minMove]);
   const zoom = (factor: number) => {
     const scale=chartRef.current?.timeScale(), range=scale?.getVisibleLogicalRange();

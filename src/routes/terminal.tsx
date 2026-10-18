@@ -1,7 +1,8 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Search, X, SlidersHorizontal, ChevronDown, Palette } from 'lucide-react';
-import { PriceChart, type LiveTick } from '@/components/PriceChart';
+import { PriceChart, type LivePrice } from '@/components/PriceChart';
+import logo from '@/assets/depthlens-logo.png.asset.json';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -22,7 +23,7 @@ function Terminal() {
   const [query,setQuery]=useState('');
   const [pairStatus,setPairStatus]=useState('Loading markets');
   const [feedLive,setFeedLive]=useState(false);
-  const [tick,setTick]=useState<LiveTick|null>(null);
+  const [tick,setTick]=useState<LivePrice|null>(null);
   const [showCustom,setShowCustom]=useState(false);
   const [custom,setCustom]=useState('');
   const [customError,setCustomError]=useState('');
@@ -48,7 +49,22 @@ function Terminal() {
     return()=>{abort.abort();clearTimeout(retry);stop();cancelAnimationFrame(frame);};
   },[]);
   const active=state.tabs.find(t=>t.symbol===state.active)??state.tabs[0]??{symbol:'BTCUSDT',minutes:1};
-  useEffect(()=>{setTick(null);setShowCustom(false);setCustomError('');},[active.symbol,active.minutes]);
+  useEffect(()=>{setShowCustom(false);setCustomError('');},[active.symbol,active.minutes]);
+  // One trade stream per active pair, independent of the chart's timeframe.
+  useEffect(()=>{
+    setTick(null);
+    let frame=0,last:number|undefined;let pending:LivePrice|null=null;
+    const stop=marketStream(`wss://fstream.binance.com/ws/${active.symbol.toLowerCase()}@aggTrade`,message=>{
+      const d=message.data??message;
+      const price=Number(d.p),time=Number(d.T);
+      if(!(price>0)||!Number.isFinite(time))return;
+      const direction=last===undefined||price===last?0:price>last?1:-1;
+      last=price;
+      pending={price,time,direction};
+      if(!frame)frame=requestAnimationFrame(()=>{frame=0;if(pending){setTick(pending);pending=null;}});
+    });
+    return()=>{stop();cancelAnimationFrame(frame);};
+  },[active.symbol]);
   const filtered=useMemo(()=>sortMarkets(pairs,quotes).filter(p=>p.includes(query.toUpperCase())),[pairs,quotes,query]);
   const select=(symbol:string)=>{if(state.tabs.length>=10&&!state.tabs.some(t=>t.symbol===symbol)){setNotice('Maximum 10 tabs. Close a tab to open another pair.');return;}setNotice('');setState(s=>openPair(s,symbol));};
   const timeframe=(minutes:number)=>setState(s=>({...s,tabs:s.tabs.map(t=>t.symbol===s.active?{...t,minutes}:t)}));
@@ -59,7 +75,7 @@ function Terminal() {
   const control='text-t-muted hover:bg-t-border/50 hover:text-t-text';
   return <div data-theme={state.theme} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text">
     <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-t-border bg-t-panel px-4 py-2">
-      <div className="flex items-center gap-2 text-lg font-bold text-t-accent"><svg viewBox="0 0 64 64" className="size-8 shrink-0" role="img" aria-label="DepthLens logo"><circle cx="28" cy="28" r="20" fill="none" stroke="var(--logo-lens)" strokeWidth="5"/><line x1="43" y1="43" x2="58" y2="58" stroke="var(--logo-lens)" strokeWidth="6" strokeLinecap="round"/><rect x="16" y="18" width="20" height="4" rx="2" fill="var(--logo-bid)"/><rect x="16" y="26" width="14" height="4" rx="2" fill="var(--logo-bid)"/><rect x="16" y="34" width="18" height="4" rx="2" fill="var(--logo-ask)"/></svg>DepthLens</div>
+      <Link to="/" className="flex items-center gap-2 text-lg font-bold text-t-accent"><img src={logo.url} alt="DepthLens logo" className="size-8 shrink-0 rounded-md" />DepthLens</Link>
       <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><span data-testid="live-price" className={`text-lg font-semibold ${tick?.direction===1?'text-t-up':tick?.direction===-1?'text-t-down':'text-t-text'}`}><span aria-label={tick?.direction===1?'Price rising':tick?.direction===-1?'Price falling':'Price unchanged'}>{tick?.direction===1?'▲ ':tick?.direction===-1?'▼ ':''}</span>{price!==undefined&&activeSpec?formatPrice(price,activeSpec):'—'}</span>{change!==undefined&&<span className={`text-xs ${change>=0?'text-t-up':'text-t-down'}`}>{change>=0?'+':''}{change.toFixed(2)}% <span className="text-t-muted">24h</span></span>}</div>
       <div className="ml-auto flex items-center gap-2">
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={control} aria-label="Theme" title="Theme"><Palette/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text">{THEMES.map(theme=><DropdownMenuItem key={theme} onSelect={()=>setState(s=>({...s,theme}))} className="capitalize focus:bg-t-border focus:text-t-text">{theme}{state.theme===theme?' ✓':''}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
@@ -91,7 +107,7 @@ function Terminal() {
           {showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>}
         </div>
         {notice&&<div role="alert" className="border-b border-t-border px-3 py-2 text-xs text-t-down">{notice}</div>}
-        <div className="min-h-0 flex-1">{restored&&activeSpec&&<PriceChart symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} onTick={setTick}/>}</div>
+        <div className="min-h-0 flex-1">{restored&&activeSpec&&<PriceChart symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} live={tick}/>}</div>
       </main>
     </div>
   </div>;

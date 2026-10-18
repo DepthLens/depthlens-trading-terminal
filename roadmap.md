@@ -1,11 +1,13 @@
-# Terminal update
-- [x] Correct per-pair price formats, last-price axis labels, and right offset.
-- [x] Enable OHLC magnet and remove the price line and all chart volume data.
-- [x] Move Tools beside tabs, sort/pin markets, and add the supplied logo.
-- [x] Verify BTC, ETH, BNB, DOGE, and 1000SATS real history/axis prices, candle hover, controls, and clean console; 12 tests pass.
-- [x] Remove gallery and replace sidebar with live searchable pairs.
-- [x] Add persisted tabs, per-tab timeframes, and tool switches.
-- [x] Add chart zoom/reset, OHLC hover legend, and tick direction.
-- [x] Smooth trade updates and reconnect all streams.
-- [x] Test rules and all requested browser interactions; 10 tests pass, browser console clean, controlled trade updates verified.
-- [ ] Observe real external trade messages end-to-end: sandbox WebSockets connect but deliver no Binance frames; controlled messages pass.
+# Roadmap
+
+## Done
+- Terminal: pair search + list, tabs (max 10, per-tab timeframe, persisted), Tools dropdown (7 switches only, persisted), themes, OHLC legend, zoom/reload, custom timeframes
+- Live price: one aggTrade stream per active pair, independent of timeframe; chart kline socket reloads per interval; last candle tracks live price
+- DepthLens logo in terminal header, landing page, login/register; favicon from logo
+- Landing page at "/" (hero, 4 feature cards, Not financial advice footer)
+- /login and /register pages (design only, submit → /terminal)
+
+## Open
+- Verify live trade streaming on a real network (sandbox blocks Binance WebSockets; REST works)
+- Order flow tools (Heatmap, Volume Profile, Footprint, DOM, CVD, Whale Trades, Liquidations) — coming soon
+- Real authentication for /login and /register
