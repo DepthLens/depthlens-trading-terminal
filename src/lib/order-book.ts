@@ -59,15 +59,34 @@ export class OrderBookManager {
     this.stop(); this.symbol = symbol; this.source = source; this.enabled = enabled;
     if (!enabled || !source || !symbol) return;
     const token = this.generation;
-    const topic = source === 'bybit' ? `orderbook.200.${symbol}` : `${symbol.toLowerCase()}@depth@100ms`;
+    if (source === 'bybit') {
+      // Prefer the widest band (1000 levels); fall back to 200 if no snapshot arrives.
+      let depth = 1000;
+      const subscribe = () => {
+        this.unsubscribe = connectionManager.subscribe(source, `orderbook.${depth}.${symbol}`, message => {
+          if (token !== this.generation) return;
+          this.bybit(message);
+        }, open => {
+          if (token !== this.generation) return;
+          this.connected = open; this.reset();
+        });
+      };
+      subscribe();
+      this.retry = setTimeout(() => {
+        if (token !== this.generation || this.state === 'Synced') return;
+        this.unsubscribe?.(); this.unsubscribe = undefined; depth = 200; subscribe();
+      }, 4000);
+      return;
+    }
+    const topic = `${symbol.toLowerCase()}@depth@100ms`;
     this.unsubscribe = connectionManager.subscribe(source, topic, message => {
       if (token !== this.generation) return;
-      if (source === 'bybit') this.bybit(message); else this.binance(message.data ?? message);
+      this.binance(message.data ?? message);
     }, open => {
       if (token !== this.generation) return;
       this.connected = open; this.reset();
       this.request?.abort(); clearTimeout(this.retry); this.fetching = false;
-      if (open && source === 'binance') void this.snapshot(token);
+      if (open) void this.snapshot(token);
     });
   }
   private reset() { this.bids.clear(); this.asks.clear(); this.buffer = []; this.lastUpdate = null; this.bybitUpdate = null; this.state = 'Resyncing'; this.updates = []; }
