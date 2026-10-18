@@ -137,8 +137,8 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
   </>;
   return <div className={`relative flex h-full w-full flex-col ${mobile ? 'min-h-0' : 'min-h-80'}`}>
     {mobile
-      ? <button type="button" ref={legendRef as unknown as React.RefObject<HTMLButtonElement>} onClick={()=>setLegendOpen(o=>!o)} aria-expanded={legendOpen} aria-label="OHLC legend, tap to expand or collapse" className="terminal-tabs absolute left-1.5 top-1.5 z-10 flex max-w-[calc(100%-64px)] items-center gap-x-2 overflow-x-auto whitespace-nowrap rounded bg-t-panel/60 px-1.5 py-1 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</button>
-      : <div ref={legendRef} className="pointer-events-none z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</div>}
+      ? <button type="button" ref={legendRef as any} onClick={()=>setLegendOpen(o=>!o)} aria-expanded={legendOpen} aria-label="OHLC legend, tap to expand or collapse" className="terminal-tabs absolute left-1.5 top-1.5 z-10 flex max-w-[calc(100%-64px)] items-center gap-x-2 overflow-x-auto whitespace-nowrap min-h-10 rounded bg-t-panel/60 px-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</button>
+      : <div ref={legendRef as any} className="pointer-events-none z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</div>}
     <div ref={ref} className="min-h-0 w-full flex-1" aria-label={`${symbol} ${minutes} minute candlestick chart`} />
     <div className={mobile ? 'absolute right-1 top-1.5 z-10 flex flex-col gap-1' : 'absolute bottom-12 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-md border border-t-border bg-t-panel/95 p-1'}>
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom In" title="Zoom In" onClick={()=>zoom(0.75)}><ZoomIn /></Button>
