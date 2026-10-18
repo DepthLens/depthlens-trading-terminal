@@ -20,7 +20,7 @@ export function restoreState(raw: string | null): TerminalState {
       if (tabs.length === 10) break;
     }
     if (!tabs.length) return fallback;
-    return { tabs, active: tabs.some(t => t.symbol === d.active) ? d.active : tabs[0].symbol, tools: Object.fromEntries(TOOLS.map(t => [t, d.tools?.[t] === true])), theme: THEMES.includes(d.theme) ? d.theme : 'navy' };
+    return { tabs, active: tabs.some(t => t.symbol === d.active) ? d.active : tabs[0]?.symbol ?? 'BTCUSDT', tools: Object.fromEntries(TOOLS.map(t => [t, d.tools?.[t] === true])), theme: THEMES.includes(d.theme) ? d.theme : 'navy' };
   } catch { return fallback; }
 }
 export function openPair(state: TerminalState, symbol: string): TerminalState {
@@ -32,5 +32,5 @@ export function closePair(state: TerminalState, symbol: string): TerminalState {
   if (state.tabs.length === 1) return state;
   const index = state.tabs.findIndex(t => t.symbol === symbol);
   const tabs = state.tabs.filter(t => t.symbol !== symbol);
-  return { ...state, tabs, active: state.active === symbol ? tabs[Math.max(0, index - 1)].symbol : state.active };
+  return { ...state, tabs, active: state.active === symbol ? (tabs[Math.max(0, index - 1)]?.symbol ?? 'BTCUSDT') : state.active };
 }

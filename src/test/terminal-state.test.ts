@@ -4,7 +4,7 @@ import { aggregate, applyTrade } from '@/lib/chart-data';
 describe('Terminal rules', () => {
   it('allows at most 10 tabs', () => { let s = initialState(); for (let i = 0; i < 15; i++) s = openPair(s, `PAIR${i}USDT`); expect(s.tabs).toHaveLength(10); expect(openPair(s, 'EXTRAUSDT')).toBe(s); });
   it('activates an already open pair without duplicating it', () => { const s = openPair(openPair(initialState(), 'ETHUSDT'), 'BTCUSDT'); expect(s.tabs).toHaveLength(2); expect(s.active).toBe('BTCUSDT'); });
-  it('restores each timeframe, active tab and saved switches', () => { const s = openPair(initialState(), 'ETHUSDT'); s.tabs[0].minutes = 7; s.tabs[1].minutes = 45; s.tools.Heatmap = true; expect(restoreState(JSON.stringify(s))).toEqual(s); });
+  it('restores each timeframe, active tab and saved switches', () => { const s = openPair(initialState(), 'ETHUSDT'); s.tabs = [{symbol:'BTCUSDT',minutes:7},{symbol:'ETHUSDT',minutes:45}]; s.tools['Heatmap'] = true; expect(restoreState(JSON.stringify(s))).toEqual(s); });
   it('keeps all seven tools unlocked and individually switchable', () => { const s = initialState(); for (const t of TOOLS) s.tools[t] = true; expect(Object.values(restoreState(JSON.stringify(s)).tools)).toEqual([true,true,true,true,true,true,true]); });
   it('accepts 7 and 45 minute custom timeframes, rejects invalid values', () => { expect(validMinutes('7')).toBe(7); expect(validMinutes('45')).toBe(45); for (const v of ['0','1441','7.5','7abc']) expect(validMinutes(v)).toBeNull(); });
   it('closing the active tab activates a remaining tab', () => { expect(closePair(openPair(initialState(), 'ETHUSDT'), 'ETHUSDT').active).toBe('BTCUSDT'); });

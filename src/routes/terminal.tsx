@@ -44,7 +44,7 @@ function Terminal() {
     fetch('https://fapi.binance.com/fapi/v1/ticker/24hr',{signal:abort.signal}).then(r=>r.ok?r.json():[]).then(data=>{if(!Array.isArray(data)||abort.signal.aborted)return;setQuotes(prev=>({...Object.fromEntries(data.map(d=>[d.symbol,{price:Number(d.lastPrice),change:Number(d.priceChangePercent)}])),...prev}));}).catch(()=>{});
     return()=>{abort.abort();clearTimeout(retry);stop();cancelAnimationFrame(frame);};
   },[]);
-  const active=state.tabs.find(t=>t.symbol===state.active)??state.tabs[0];
+  const active=state.tabs.find(t=>t.symbol===state.active)??state.tabs[0]??{symbol:'BTCUSDT',minutes:1};
   useEffect(()=>{setTick(null);setShowCustom(false);setCustomError('');},[active.symbol,active.minutes]);
   const filtered=useMemo(()=>pairs.filter(p=>p.includes(query.toUpperCase())),[pairs,query]);
   const select=(symbol:string)=>{if(state.tabs.length>=10&&!state.tabs.some(t=>t.symbol===symbol)){setNotice('Maximum 10 tabs. Close a tab to open another pair.');return;}setNotice('');setState(s=>openPair(s,symbol));};
@@ -61,7 +61,7 @@ function Terminal() {
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className={control}><SlidersHorizontal/>Tools<ChevronDown/></Button></DropdownMenuTrigger>
           <DropdownMenuContent data-theme={state.theme} align="end" className="w-80 border-t-border bg-t-panel p-2 text-t-text">
             <div className="mb-1 flex justify-between px-2 py-2 text-xs font-semibold"><span>Order flow tools</span><span className="text-t-up">Free · Unlocked</span></div>
-            {TOOLS.map(t=><div key={t} className="flex items-center gap-2 px-2 py-2.5"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-[10px] text-t-muted">Coming soon</span><Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
+            {TOOLS.map(t=><div key={t} className="flex items-center gap-2 px-2 py-2.5"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-[10px] text-t-muted">Coming soon</span><Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]??false} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
           </DropdownMenuContent>
         </DropdownMenu>
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={control} aria-label="Theme" title="Theme"><Palette/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text">{THEMES.map(theme=><DropdownMenuItem key={theme} onSelect={()=>setState(s=>({...s,theme}))} className="capitalize focus:bg-t-border focus:text-t-text">{theme}{state.theme===theme?' ✓':''}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
