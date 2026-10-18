@@ -1,5 +1,10 @@
 # Roadmap
 
+## WebSocket leak fix
+- [ ] Central manager, combined active Binance stream, cleanup, 20-second idle/backoff and failover after three failures.
+- [ ] Source/state/socket-count/error/message-age tooltip and lifecycle logs.
+- [ ] Run lifecycle tests and rapid five-pair/five-timeframe switching ten times, followed by a two-minute observation.
+
 ## Done
 - Low-delay frontend: trades apply synchronously through a ref bridge, price/candle/legend paint through animation frames, no price page state or candle pump; virtual market rows refresh independently once per second, with trade latency/age hover and immediate polling recovery. Binance and Bybit payloads tested.
 - Controlled browser verification: 30-second rapid-trade test averaged 18.50 ms (synthetic event timestamps), 474 observed price changes (~15.8/s); all eight timeframes, custom 7m, BTC/ETH/BNB switches, single active trade socket, matched candles, search/scroll/zoom, and status hover passed with zero console/page errors.
