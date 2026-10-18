@@ -35,7 +35,7 @@ export function PriceChart({ symbol, minutes, theme, onTick }: { symbol: string;
     let stopped = false, hovered = false, frame = 0;
     let bars: Bar[] = [], rawBars: Bar[] = [];
     let latest: Bar | undefined;
-    let lastPrice: number | undefined, lastId = -1;
+    let lastPrice: number | undefined, lastId = -1, direction = 0;
     let recentTrades: {time:number;price:number;quantity:number}[] = [];
     let stopStream: (() => void) | undefined;
     let historyRetry: ReturnType<typeof setTimeout> | undefined;
@@ -48,8 +48,7 @@ export function PriceChart({ symbol, minutes, theme, onTick }: { symbol: string;
       candles.update({ ...latest,time });
       volume.update({time,value:latest.volume,color:latest.close>=latest.open?up:down});
       if (!hovered) setLegend({...latest});
-      if (lastPrice !== undefined) tickRef.current({price:latest.close,direction:latest.close>lastPrice?1:latest.close<lastPrice?-1:0});
-      lastPrice = latest.close;
+      tickRef.current({price:latest.close,direction});
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(flush); };
     chart.subscribeCrosshairMove(param => {
@@ -64,6 +63,8 @@ export function PriceChart({ symbol, minutes, theme, onTick }: { symbol: string;
         const id = Number(d.a), time = Number(d.T), price = Number(d.p), quantity = Number(d.q);
         if (id <= lastId || !Number.isFinite(time) || !(price>0) || !(quantity>=0)) return;
         lastId=id;
+        if (lastPrice !== undefined && price !== lastPrice) direction = price > lastPrice ? 1 : -1;
+        lastPrice = price;
         recentTrades.push({time,price,quantity});
         recentTrades = recentTrades.filter(t=>t.time>=time-10000);
         const next = applyTrade(latest,time,price,quantity,minutes);
@@ -126,13 +127,13 @@ export function PriceChart({ symbol, minutes, theme, onTick }: { symbol: string;
   };
   const reset = () => { const chart=chartRef.current;if (!chart) return;chart.timeScale().applyOptions({barSpacing:8,rightOffset:5});chart.priceScale('right').applyOptions({autoScale:true});chart.timeScale().scrollToRealTime(); };
   const change=legend?(legend.close-legend.open)/legend.open*100:0;
-  return <div className="relative h-full min-h-80 w-full">
-    <div ref={ref} className="absolute inset-0" aria-label={`${symbol} ${minutes} minute candlestick chart`} />
-    <div className="pointer-events-none absolute left-3 right-20 top-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums" data-testid="ohlc-legend">
+  return <div className="relative flex h-full min-h-80 w-full flex-col">
+    <div className="pointer-events-none z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs tabular-nums" data-testid="ohlc-legend">
       <span className="font-semibold text-t-text">{symbol} · {minutes}m</span>
       {(['open','high','low','close'] as const).map(key=><span key={key} className={legend&&change<0?'text-t-down':'text-t-up'}><span className="mr-1 capitalize text-t-muted">{key}</span>{legend?format(legend[key]):'—'}</span>)}
       <span className={change<0?'text-t-down':'text-t-up'}>{legend?`${change>=0?'+':''}${change.toFixed(2)}%`:'—'}</span>
     </div>
+    <div ref={ref} className="min-h-0 w-full flex-1" aria-label={`${symbol} ${minutes} minute candlestick chart`} />
     <div className="absolute bottom-12 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-md border border-t-border bg-t-panel/95 p-1">
       <Button variant="ghost" size="icon" className="text-t-text hover:bg-t-border" aria-label="Zoom In" title="Zoom In" onClick={()=>zoom(0.75)}><ZoomIn /></Button>
       <Button variant="ghost" size="icon" className="text-t-text hover:bg-t-border" aria-label="Zoom Out" title="Zoom Out" onClick={()=>zoom(1.3333)}><ZoomOut /></Button>
