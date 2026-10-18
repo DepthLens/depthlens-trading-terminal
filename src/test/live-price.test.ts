@@ -47,6 +47,13 @@ it('publishes every trade synchronously and measures latency using E, not T', ()
   stop(); stream.receive({ p: '200', T: 100001, E: 100001 });
   expect(price).toHaveBeenCalledTimes(20);
 });
+it('retains every trade high and low even when painting once per animation frame', () => {
+  let candle = { time: 60000, open: 100, high: 100, low: 100, close: 100 };
+  const stop = livePriceStream('BTCUSDT', tick => { candle = applyLivePrice(candle, tick.time, tick.price, 1); }, vi.fn());
+  for (const p of ['125', '75', '102']) stream.receive({ s: 'BTCUSDT', p, T: 60001, E: 60001 });
+  expect(candle).toEqual({ time: 60000, open: 100, high: 125, low: 75, close: 102 });
+  stop();
+});
 it('publishes every trade in a Bybit publicTrade batch', () => {
   vi.setSystemTime(100000);
   const price = vi.fn();

@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_KEY, TOOLS } from '@/lib/terminal-state';
 import { marketStream } from '@/lib/market-stream';
 import { LiveQuote, type TradeBridge } from '@/components/LiveQuote';
-import { MarketList } from '@/components/MarketList';
+import { MarketList, QuoteChange } from '@/components/MarketList';
 import { priceSpec, type Market, type PriceSpec, type Quote } from '@/lib/market-data';
 export const Route = createFileRoute('/terminal')({
   head:()=>({meta:[{title:'Terminal — DepthLens'},{name:'description',content:'Live Binance USDT futures charts, personalized tabs, and order flow tools.'},{property:'og:title',content:'Terminal — DepthLens'},{property:'og:description',content:'Follow live futures markets with DepthLens candlestick charts and order flow tools.'},{property:'og:type',content:'website'},{name:'twitter:card',content:'summary_large_image'}]}),component:Terminal,
@@ -62,7 +62,7 @@ function Terminal() {
   return <div data-theme={state.theme} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text">
     <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-t-border bg-t-panel px-4 py-2">
       <Link to="/" className="flex items-center gap-2 text-lg font-bold text-t-accent"><img src={logo.url} alt="DepthLens logo" className="size-8 shrink-0 rounded-md" />DepthLens</Link>
-      <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><LiveQuote symbol={active.symbol} spec={activeSpec} bridge={bridge}/></div>
+      <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><LiveQuote symbol={active.symbol} spec={activeSpec} bridge={bridge}/><QuoteChange symbol={active.symbol} quotes={quotes}/></div>
       <div className="ml-auto flex items-center gap-2">
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem asChild className="focus:bg-t-border focus:text-t-text"><Link to="/"><LogOut/>Logout</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
 

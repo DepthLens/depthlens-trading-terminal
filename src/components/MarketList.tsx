@@ -3,6 +3,20 @@ import { Button } from '@/components/ui/button';
 import { formatPrice, sortMarkets, type PriceSpec, type Quote } from '@/lib/market-data';
 import { visibleMarketRange, MARKET_ROW_HEIGHT } from '@/lib/market-list';
 
+export function QuoteChange({ symbol, quotes }: { symbol: string; quotes: MutableRefObject<Record<string, Quote>> }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const render = () => {
+      const el = ref.current, change = quotes.current[symbol]?.change;
+      if (!el) return;
+      el.textContent = change === undefined ? '' : `${change >= 0 ? '+' : ''}${change.toFixed(2)}% 24h`;
+      el.className = `text-xs ${change !== undefined && change < 0 ? 'text-t-down' : 'text-t-up'}`;
+    };
+    render(); const timer = setInterval(render, 1000); return () => clearInterval(timer);
+  }, [symbol, quotes]);
+  return <span ref={ref} className="text-xs text-t-muted"/>;
+}
+
 export function MarketList({ pairs, quotes, specs, query, active, status, select }: { pairs: string[]; quotes: MutableRefObject<Record<string, Quote>>; specs: Record<string, PriceSpec>; query: string; active: string; status: string; select: (symbol: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [revision, setRevision] = useState(0);
