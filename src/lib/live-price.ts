@@ -84,7 +84,7 @@ export function livePriceStream(symbol: string, onPrice: (tick: LivePrice) => vo
     lastTime[source] = time;
     const direction = last === undefined || price === last ? 0 : price > last ? 1 : -1;
     last = price;
-    onPrice({ price, time, direction, size, side, eventTime, receivedAt, latency, source: 'trade', exchange: source });
+    onPrice({ price, time, direction, ...(size === undefined ? {} : { size }), ...(side === undefined ? {} : { side }), eventTime, receivedAt, latency, source: 'trade', exchange: source });
     status('Live');
   };
 

@@ -2,11 +2,37 @@ export type ConnectionSource = 'binance' | 'bybit';
 export type ConnectionSnapshot = { source: string; state: string; openSockets: number; lastError: string; lastMessageAt: number | null; failures: number; connectedAt: number | null };
 type Options = { exchange?: ConnectionSource; purpose?: 'active' | 'markets'; subscription?: object; onFailure?: (failures: number) => void };
 type Entry = { key: string; url: string; socket?: WebSocket; stopped: boolean; timer?: ReturnType<typeof setTimeout>; idle?: ReturnType<typeof setTimeout>; failures: number; state: string; lastError: string; lastMessageAt: number | null; connectedAt: number | null; stop: (reason: string) => void };
+type Topic = { receive: (data: any) => void; connection: (open: boolean) => void };
 
 // This module is the only WebSocket owner. Retired sockets remain tracked until CLOSED.
 class ConnectionManager {
   private entries = new Map<string, Entry>();
   private sockets = new Set<WebSocket>();
+  private topics = new Map<string, Map<string, Topic>>();
+  private requestId = 0;
+  private command(key: string, topic: string, subscribe: boolean) {
+    const socket = this.entries.get(key)?.socket;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify(key.startsWith('bybit:')
+      ? { op: subscribe ? 'subscribe' : 'unsubscribe', args: [topic] }
+      : { method: subscribe ? 'SUBSCRIBE' : 'UNSUBSCRIBE', params: [topic], id: ++this.requestId }));
+  }
+  // Multiplex optional feeds onto an existing owner; this method never creates a socket.
+  subscribe(exchange: ConnectionSource, topic: string, receive: Topic['receive'], connection: Topic['connection']) {
+    const key = `${exchange}:active`;
+    let topics = this.topics.get(key);
+    if (!topics) { topics = new Map(); this.topics.set(key, topics); }
+    const previous = topics.get(topic);
+    if (previous) previous.connection(false);
+    const item = { receive, connection }; topics.set(topic, item);
+    if (!previous) this.command(key, topic, true);
+    connection(this.entries.get(key)?.socket?.readyState === WebSocket.OPEN);
+    return () => {
+      if (topics.get(topic) !== item) return;
+      this.command(key, topic, false); topics.delete(topic); connection(false);
+      if (!topics.size) this.topics.delete(key);
+    };
+  }
   snapshot(exchange: ConnectionSource = 'binance', purpose = 'active'): ConnectionSnapshot {
     this.prune();
     const entry = this.entries.get(`${exchange}:${purpose}`);
@@ -23,6 +49,7 @@ class ConnectionManager {
       const socket = entry.socket;
       delete entry.socket;
       if (!socket) return;
+      for (const topic of this.topics.get(key)?.values() ?? []) topic.connection(false);
       socket.onopen = null; socket.onmessage = null; socket.onerror = null; socket.onclose = null;
       console.info(`[DepthLens] Socket close ${key}: ${reason}`);
       if (socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) socket.close(1000, reason);
@@ -52,12 +79,19 @@ class ConnectionManager {
         entry.state = 'Open'; entry.connectedAt = Date.now();
         console.info(`[DepthLens] Socket open ${key}: ${url}`);
         if (options.subscription) socket.send(JSON.stringify(options.subscription));
+        for (const [name, topic] of this.topics.get(key) ?? []) { this.command(key, name, true); topic.connection(true); }
       };
       socket.onmessage = event => {
         if (entry.stopped || entry.socket !== socket) return;
         entry.lastMessageAt = Date.now(); entry.failures = 0; entry.state = 'Live'; idle(); status?.(true);
         // Any frame resets the idle watchdog, even a non-JSON heartbeat.
         let data: unknown; try { data = JSON.parse(event.data); } catch { return; }
+        const message = data as { topic?: string; stream?: string; data?: any; e?: string; s?: string } | null;
+        if (message && typeof message === 'object') {
+          const payload = message.data ?? message;
+          const name = message.topic ?? message.stream ?? (payload.e === 'depthUpdate' && typeof payload.s === 'string' ? `${payload.s.toLowerCase()}@depth@100ms` : '');
+          this.topics.get(key)?.get(name)?.receive(message);
+        }
         receive(data);
       };
       socket.onerror = () => failed('Connection error');
@@ -71,7 +105,7 @@ class ConnectionManager {
     open();
     return () => entry.stop('effect cleanup');
   }
-  dispose() { for (const entry of this.entries.values()) entry.stop('hot reload'); this.entries.clear(); }
+  dispose() { for (const entry of this.entries.values()) entry.stop('hot reload'); this.entries.clear(); this.topics.clear(); }
 }
 export const connectionManager: ConnectionManager = import.meta.hot?.data?.['connectionManager'] ?? new ConnectionManager();
 export function marketStream(url: string, onMessage: (data: any) => void, onStatus?: (live: boolean) => void, options: Options = {}) {

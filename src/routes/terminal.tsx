@@ -10,6 +10,7 @@ import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_
 import { marketStream } from '@/lib/market-stream';
 import { LiveQuote, type TradeBridge } from '@/components/LiveQuote';
 import { MarketList, QuoteChange } from '@/components/MarketList';
+import { BookDebug } from '@/components/BookDebug';
 import { priceSpec, type Market, type PriceSpec, type Quote } from '@/lib/market-data';
 export const Route = createFileRoute('/terminal')({
   head:()=>({meta:[{title:'Terminal — DepthLens'},{name:'description',content:'Live Binance USDT futures charts, personalized tabs, and order flow tools.'},{property:'og:title',content:'Terminal — DepthLens'},{property:'og:description',content:'Follow live futures markets with DepthLens candlestick charts and order flow tools.'},{property:'og:type',content:'website'},{name:'twitter:card',content:'summary_large_image'}]}),component:Terminal,
@@ -26,6 +27,7 @@ function Terminal() {
   const [query,setQuery]=useState('');
   const [pairStatus,setPairStatus]=useState('Loading markets');
   const [feedLive,setFeedLive]=useState(false);
+  const [showBookDebug,setShowBookDebug]=useState(false);
 
   const [showProfile,setShowProfile]=useState(false);
   const [showCustom,setShowCustom]=useState(false);
@@ -62,7 +64,7 @@ function Terminal() {
   return <div data-theme={state.theme} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text">
     <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-t-border bg-t-panel px-4 py-2">
       <Link to="/" className="flex items-center gap-2 text-lg font-bold text-t-accent"><img src={logo.url} alt="DepthLens logo" className="size-8 shrink-0 rounded-md" />DepthLens</Link>
-      <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge}/><QuoteChange symbol={active.symbol} quotes={quotes}/></div>
+      <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge} bookEnabled={Boolean(state.tools['Heatmap'] || state.tools['DOM'])}/><QuoteChange symbol={active.symbol} quotes={quotes}/></div>
       <div className="ml-auto flex items-center gap-2">
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem asChild className="focus:bg-t-border focus:text-t-text"><Link to="/"><LogOut/>Logout</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
 
@@ -94,10 +96,11 @@ function Terminal() {
           </DropdownMenuContent>
         </DropdownMenu>
         </div>
+          <Button variant="ghost" size="sm" aria-pressed={showBookDebug} onClick={()=>setShowBookDebug(s=>!s)} className={showBookDebug?'bg-t-border text-t-text':control}>Book debug</Button>
           {showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>}
         </div>
         {notice&&<div role="alert" className="border-b border-t-border px-3 py-2 text-xs text-t-down">{notice}</div>}
-        <div className="min-h-0 flex-1">{restored&&activeSpec&&<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} bridge={bridge}/>}</div>
+        <div className="relative min-h-0 flex-1">{restored&&activeSpec&&<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} bridge={bridge}/>} {showBookDebug&&<BookDebug spec={activeSpec}/>}</div>
       </main>
     </div>
   </div>;
