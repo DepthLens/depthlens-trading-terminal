@@ -19,3 +19,14 @@ export function sortMarkets(pairs: string[], quotes: Record<string, Quote>): str
     return (quotes[b]?.quoteVolume ?? 0) - (quotes[a]?.quoteVolume ?? 0) || a.localeCompare(b);
   });
 }
+/** Bybit v5 linear tickers → list quotes (price24hPcnt is a fraction, turnover24h is quote volume). */
+export function bybitListQuotes(body: any): Record<string, Quote> | null {
+  const list = body?.result?.list;
+  if (body?.retCode !== 0 || !Array.isArray(list)) return null;
+  const out: Record<string, Quote> = {};
+  for (const t of list) {
+    const price = Number(t.lastPrice), change = Number(t.price24hPcnt) * 100;
+    if (typeof t.symbol === 'string' && price > 0 && Number.isFinite(change)) out[t.symbol] = { price, change, quoteVolume: Number(t.turnover24h) || 0 };
+  }
+  return out;
+}

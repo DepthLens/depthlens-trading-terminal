@@ -53,7 +53,7 @@ function Terminal() {
     return()=>{abort.abort();clearInterval(timer);};
   },[listSource]);
   // Warn only when no list prices have arrived for 15 s from either source.
-  useEffect(()=>{const timer=setInterval(()=>setListFailing(lastQuoteAt.current>0?Date.now()-lastQuoteAt.current>15000:false),5000);return()=>clearInterval(timer);},[]);
+  useEffect(()=>{const start=Date.now();const timer=setInterval(()=>setListFailing(Date.now()-Math.max(lastQuoteAt.current,start)>15000),5000);return()=>clearInterval(timer);},[]);
   useEffect(()=>{try{setState(restoreState(localStorage.getItem(STORAGE_KEY)));}catch{}setRestored(true);},[]);
   useEffect(()=>{if(restored)try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch{}},[state,restored]);
   useEffect(()=>{
