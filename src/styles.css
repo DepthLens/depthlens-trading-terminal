@@ -168,7 +168,7 @@
 }
 @theme inline {
   --color-t-bg: var(--t-bg); --color-t-panel: var(--t-panel); --color-t-border: var(--t-border);
-  --color-t-text: var(--t-text); --color-t-muted: var(--t-muted); --color-t-accent: var(--t-accent);
+  --color-t-text: var(--t-text); --color-t-muted: var(--t-muted); --color-t-crosshair: var(--t-crosshair, oklch(0.68 0.05 250)); --color-t-accent: var(--t-accent);
   --color-t-up: var(--t-up); --color-t-down: var(--t-down);
   --color-t-warning: var(--t-warning);
 }

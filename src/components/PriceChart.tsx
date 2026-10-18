@@ -26,8 +26,14 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge }: { sy
     delete el.dataset['lastClose'];
     setStatus('Connecting');
     const text = toColor(el,'--t-muted'), grid = toColor(el,'--t-border'), up = toColor(el,'--t-up'), down = toColor(el,'--t-down');
-    const chart = createChart(el, { autoSize:true, localization:{locale:'en-US'}, layout:{ background:{ color:'transparent' }, textColor:text }, grid:{ vertLines:{color:grid},horzLines:{color:grid} }, crosshair:{mode:CrosshairMode.MagnetOHLC}, rightPriceScale:{visible:true,borderColor:grid,scaleMargins:{top:0.08,bottom:0.08}}, timeScale:{borderColor:grid,timeVisible:true,barSpacing:8,rightOffset:8} });
+    const soft = toColor(el,'--t-muted').replace('rgb(','rgba(').replace(')',',0.75)'), labelBg = toColor(el,'--t-border');
+    const line = { color: soft, width: 1 as const, style: LineStyle.Dashed, visible: true, labelVisible: true, labelBackgroundColor: labelBg };
+    // Magnet mode must be present on every chart creation; theme/pair/timeframe all recreate the chart here.
+    const crosshairOptions = { mode: CrosshairMode.MagnetOHLC, vertLine: line, horzLine: line };
+    const chart = createChart(el, { autoSize:true, localization:{locale:'en-US'}, layout:{ background:{ color:'transparent' }, textColor:text }, grid:{ vertLines:{color:grid},horzLines:{color:grid} }, crosshair:crosshairOptions, rightPriceScale:{visible:true,borderColor:grid,scaleMargins:{top:0.08,bottom:0.08}}, timeScale:{borderColor:grid,timeVisible:true,barSpacing:8,rightOffset:8} });
     chartRef.current = chart;
+    chart.applyOptions({ crosshair: crosshairOptions });
+    (el as any).__crosshairMode = chart.options().crosshair.mode;
     const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:true,priceLineStyle:LineStyle.Dotted,lastValueVisible:true});
     let stopped = false, hovered = false, frame = 0, ready = false;
     let bars: Bar[] = [], rawBars: Bar[] = [];
@@ -76,11 +82,11 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge }: { sy
       const k=d.k;
       const b: Bar = {time:Number(k.t),open:Number(k.o),high:Number(k.h),low:Number(k.l),close:Number(k.c)};
       if (!Number.isFinite(b.time) || !Number.isFinite(b.close)) return;
-      // Klines may complete historical candles, but cannot set the active trade price.
-      const bucket = Math.floor(b.time / (minutes * 60000)) * minutes * 60000;
-      if (!ready || !latest || bucket >= latest.time) return;
-      if (NATIVE[minutes]) candles.update({ ...b, time: (b.time / 1000) as UTCTimestamp }, true);
-
+      // Live price comes only from trades; a closed kline only corrects that candle's final OHLC.
+      if (!k.x || !ready || !latest || !NATIVE[minutes]) return;
+      if (b.time > latest.time) return;
+      candles.update({ ...b, time: (b.time / 1000) as UTCTimestamp }, b.time < latest.time);
+      if (b.time === latest.time) { latest = b; schedule(); }
     };
     bridge.current.kline = handle;
     const load = async () => {
