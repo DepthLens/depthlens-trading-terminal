@@ -1,190 +1,91 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { PriceChart } from "@/components/PriceChart";
-import g1 from "@/assets/g1.jpg";
-import g2 from "@/assets/g2.jpg";
-import g3 from "@/assets/g3.jpg";
-
-export const Route = createFileRoute("/terminal")({
-  head: () => ({
-    meta: [
-      { title: "Terminal — DepthLens" },
-      { name: "description", content: "Live Binance USDT futures candlestick chart with order flow tools." },
-      { property: "og:title", content: "Terminal — DepthLens" },
-      { property: "og:description", content: "Live Binance futures charts and order flow tools." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
-  component: Terminal,
+import { createFileRoute } from '@tanstack/react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Search, X, SlidersHorizontal, ChevronDown, Activity, Palette } from 'lucide-react';
+import { PriceChart, type LiveTick } from '@/components/PriceChart';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_KEY, THEMES, TOOLS } from '@/lib/terminal-state';
+import { marketStream } from '@/lib/market-stream';
+export const Route = createFileRoute('/terminal')({
+  head:()=>({meta:[{title:'Terminal — DepthLens'},{name:'description',content:'Live Binance USDT futures charts, personalized tabs, and order flow tools.'},{property:'og:title',content:'Terminal — DepthLens'},{property:'og:description',content:'Follow live futures markets with DepthLens candlestick charts and order flow tools.'},{property:'og:type',content:'website'},{name:'twitter:card',content:'summary_large_image'}]}),component:Terminal,
 });
-
-const TFS: { label: string; min: number }[] = [
-  { label: "1m", min: 1 }, { label: "5m", min: 5 }, { label: "10", min: 10 }, { label: "15m", min: 15 },
-  { label: "30", min: 30 }, { label: "1h", min: 60 }, { label: "4h", min: 240 }, { label: "1d", min: 1440 },
-];
-const TOOLS = ["Heatmap", "Footprint", "DOM", "CVD", "Volume Profile", "Whale Trades", "Liquidations"];
-const THEMES = ["navy", "light", "midnight", "ocean"];
-const GALLERY = [
-  { src: g1, label: "Depth heatmap" },
-  { src: g2, label: "Trading desk" },
-  { src: g3, label: "Volume profile" },
-];
-
+const TFS=[{label:'1m',min:1},{label:'5m',min:5},{label:'10',min:10},{label:'15m',min:15},{label:'30',min:30},{label:'1h',min:60},{label:'4h',min:240},{label:'1d',min:1440}];
+type Quote={price:number;change:number};
 function Terminal() {
-  const [symbol, setSymbol] = useState("BTCUSDT");
-  const [minutes, setMinutes] = useState(1);
-  const [theme, setTheme] = useState("navy");
-  const [pairs, setPairs] = useState<string[]>([]);
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [custom, setCustom] = useState("");
-  const [showCustom, setShowCustom] = useState(false);
-  const [ticker, setTicker] = useState<{ price: number; change: number } | null>(null);
-  const [zoom, setZoom] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("https://fapi.binance.com/fapi/v1/exchangeInfo")
-      .then((r) => r.json())
-      .then((d) =>
-        setPairs(
-          d.symbols
-            .filter((s: any) => s.quoteAsset === "USDT" && s.contractType === "PERPETUAL" && s.status === "TRADING")
-            .map((s: any) => s.symbol)
-            .sort(),
-        ),
-      )
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    setTicker(null);
-    let ws: WebSocket | null = null;
-    let closed = false;
-    let t: ReturnType<typeof setTimeout>;
-    const connect = () => {
-      ws = new WebSocket(`wss://fstream.binance.com/ws/${symbol.toLowerCase()}@ticker`);
-      ws.onmessage = (e) => {
-        const d = JSON.parse(e.data);
-        setTicker({ price: +d.c, change: +d.P });
-      };
-      ws.onclose = () => { if (!closed) t = setTimeout(connect, 2000); };
-      ws.onerror = () => ws?.close();
-    };
-    connect();
-    return () => { closed = true; clearTimeout(t); ws?.close(); };
-  }, [symbol]);
-
-  const filtered = useMemo(
-    () => pairs.filter((p) => p.includes(query.toUpperCase())).slice(0, 80),
-    [pairs, query],
-  );
-
-  const applyCustom = () => {
-    const n = parseInt(custom, 10);
-    if (n >= 1 && n <= 1440) { setMinutes(n); setShowCustom(false); }
-  };
-
-  const isPreset = TFS.some((t) => t.min === minutes);
-  const btn = "rounded-md px-2.5 py-1 text-xs font-medium transition-colors";
-  const on = "bg-t-accent text-t-bg";
-  const off = "text-t-muted hover:text-t-text hover:bg-t-border/50";
-
-  return (
-    <div data-theme={theme} className="flex h-screen flex-col bg-t-bg text-t-text">
-      <header className="flex flex-wrap items-center gap-4 border-b border-t-border bg-t-panel px-4 py-2">
-        <span className="text-lg font-bold tracking-tight text-t-accent">DepthLens</span>
-
-        <div className="relative">
-          <input
-            value={open ? query : symbol}
-            onFocus={() => { setOpen(true); setQuery(""); }}
-            onBlur={() => setTimeout(() => setOpen(false), 150)}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search pair"
-            className="w-40 rounded-md border border-t-border bg-t-bg px-3 py-1.5 text-sm font-semibold outline-none focus:border-t-accent"
-          />
-          {open && (
-            <ul className="absolute z-20 mt-1 max-h-72 w-40 overflow-auto rounded-md border border-t-border bg-t-panel shadow-lg">
-              {filtered.map((p) => (
-                <li key={p}>
-                  <button
-                    onMouseDown={() => { setSymbol(p); setOpen(false); }}
-                    className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-t-border/60 ${p === symbol ? "text-t-accent" : ""}`}
-                  >{p}</button>
-                </li>
-              ))}
-              {!filtered.length && <li className="px-3 py-2 text-xs text-t-muted">No pairs</li>}
-            </ul>
-          )}
-        </div>
-
-        <div className="flex items-baseline gap-2 tabular-nums">
-          <span className="text-lg font-semibold">{ticker ? ticker.price.toLocaleString(undefined, { maximumFractionDigits: 6 }) : "—"}</span>
-          {ticker && (
-            <span className={`text-sm font-medium ${ticker.change >= 0 ? "text-t-up" : "text-t-down"}`}>
-              {ticker.change >= 0 ? "+" : ""}{ticker.change.toFixed(2)}%
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1">
-          {TFS.map((t) => (
-            <button key={t.label} onClick={() => setMinutes(t.min)} className={`${btn} ${minutes === t.min ? on : off}`}>{t.label}</button>
-          ))}
-          <div className="relative">
-            <button onClick={() => setShowCustom((s) => !s)} className={`${btn} ${!isPreset ? on : off}`}>
-              {!isPreset ? `${minutes}m` : "Custom"}
-            </button>
-            {showCustom && (
-              <div className="absolute z-20 mt-1 flex gap-1 rounded-md border border-t-border bg-t-panel p-2 shadow-lg">
-                <input
-                  autoFocus type="number" min={1} max={1440} value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && applyCustom()}
-                  placeholder="min"
-                  className="w-20 rounded border border-t-border bg-t-bg px-2 py-1 text-sm outline-none"
-                />
-                <button onClick={applyCustom} className={`${btn} ${on}`}>Go</button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="ml-auto flex items-center gap-1">
-          {THEMES.map((t) => (
-            <button key={t} onClick={() => setTheme(t)} className={`${btn} capitalize ${theme === t ? on : off}`}>{t}</button>
-          ))}
-        </div>
-      </header>
-
-      <div className="flex min-h-0 flex-1">
-        <aside className="flex w-36 flex-col gap-1 border-r border-t-border bg-t-panel p-2">
-          {TOOLS.map((t) => (
-            <button key={t} className="rounded-md px-3 py-2 text-left text-xs font-medium text-t-muted hover:bg-t-border/50 hover:text-t-text">{t}</button>
-          ))}
-        </aside>
-
-        <main className="min-w-0 flex-1 p-2">
-          <PriceChart symbol={symbol} minutes={minutes} theme={theme} />
-        </main>
-
-        <aside className="hidden w-60 flex-col gap-2 overflow-auto border-l border-t-border bg-t-panel p-3 lg:flex">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-t-muted">Gallery</h2>
-          {GALLERY.map((g) => (
-            <button key={g.label} onClick={() => setZoom(g.src)} className="group overflow-hidden rounded-md border border-t-border text-left">
-              <img src={g.src} alt={g.label} loading="lazy" width={992} height={672} className="aspect-[3/2] w-full object-cover transition-transform group-hover:scale-105" />
-              <span className="block px-2 py-1 text-xs text-t-muted">{g.label}</span>
-            </button>
-          ))}
-        </aside>
+  const [state,setState]=useState(initialState);
+  const [restored,setRestored]=useState(false);
+  const [pairs,setPairs]=useState<string[]>([]);
+  const [quotes,setQuotes]=useState<Record<string,Quote>>({});
+  const [query,setQuery]=useState('');
+  const [pairStatus,setPairStatus]=useState('Loading markets');
+  const [feedLive,setFeedLive]=useState(false);
+  const [tick,setTick]=useState<LiveTick|null>(null);
+  const [showCustom,setShowCustom]=useState(false);
+  const [custom,setCustom]=useState('');
+  const [customError,setCustomError]=useState('');
+  const [notice,setNotice]=useState('');
+  useEffect(()=>{try{setState(restoreState(localStorage.getItem(STORAGE_KEY)));}catch{}setRestored(true);},[]);
+  useEffect(()=>{if(restored)try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch{}},[state,restored]);
+  useEffect(()=>{
+    const abort=new AbortController();let retry:ReturnType<typeof setTimeout>|undefined;
+    const load=async()=>{try{
+      const r=await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo',{signal:abort.signal});if(!r.ok)throw new Error();
+      const d=await r.json();if(!Array.isArray(d.symbols))throw new Error();
+      setPairs(d.symbols.filter((s:{quoteAsset:string;contractType:string;status:string})=>s.quoteAsset==='USDT'&&s.contractType==='PERPETUAL'&&s.status==='TRADING').map((s:{symbol:string})=>s.symbol).sort());setPairStatus('');
+    }catch{if(!abort.signal.aborted){setPairStatus('Markets unavailable · retrying');retry=setTimeout(load,5000);}}};void load();
+    let frame=0;const pending:Record<string,Quote>={};
+    const stop=marketStream('wss://fstream.binance.com/ws/!miniTicker@arr',data=>{
+      if(!Array.isArray(data))return;
+      for(const d of data){const price=Number(d.c),open=Number(d.o);if(typeof d.s==='string'&&price>0&&open>0)pending[d.s]={price,change:(price-open)/open*100};}
+      if(!frame)frame=requestAnimationFrame(()=>{frame=0;setQuotes(prev=>({...prev,...pending}));for(const key of Object.keys(pending))delete pending[key];});
+    },setFeedLive);
+    // Seed quotes immediately; the single array stream subsequently updates them.
+    fetch('https://fapi.binance.com/fapi/v1/ticker/24hr',{signal:abort.signal}).then(r=>r.ok?r.json():[]).then(data=>{if(!Array.isArray(data)||abort.signal.aborted)return;setQuotes(prev=>({...Object.fromEntries(data.map(d=>[d.symbol,{price:Number(d.lastPrice),change:Number(d.priceChangePercent)}])),...prev}));}).catch(()=>{});
+    return()=>{abort.abort();clearTimeout(retry);stop();cancelAnimationFrame(frame);};
+  },[]);
+  const active=state.tabs.find(t=>t.symbol===state.active)??state.tabs[0];
+  useEffect(()=>{setTick(null);setShowCustom(false);setCustomError('');},[active.symbol,active.minutes]);
+  const filtered=useMemo(()=>pairs.filter(p=>p.includes(query.toUpperCase())),[pairs,query]);
+  const select=(symbol:string)=>{if(state.tabs.length>=10&&!state.tabs.some(t=>t.symbol===symbol)){setNotice('Maximum 10 tabs. Close a tab to open another pair.');return;}setNotice('');setState(s=>openPair(s,symbol));};
+  const timeframe=(minutes:number)=>setState(s=>({...s,tabs:s.tabs.map(t=>t.symbol===s.active?{...t,minutes}:t)}));
+  const applyCustom=()=>{const n=validMinutes(custom);if(n===null){setCustomError('Enter a whole number from 1 to 1440.');return;}timeframe(n);setShowCustom(false);setCustomError('');};
+  const price=tick?.price??quotes[active.symbol]?.price;
+  const change=quotes[active.symbol]?.change;
+  const control='text-t-muted hover:bg-t-border/50 hover:text-t-text';
+  return <div data-theme={state.theme} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text">
+    <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-t-border bg-t-panel px-4 py-2">
+      <div className="flex items-center gap-2 text-lg font-bold text-t-accent"><Activity className="size-5"/>DepthLens</div>
+      <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><span data-testid="live-price" className={`text-lg font-semibold ${tick?.direction===1?'text-t-up':tick?.direction===-1?'text-t-down':'text-t-text'}`}><span aria-label={tick?.direction===1?'Price rising':tick?.direction===-1?'Price falling':'Price unchanged'}>{tick?.direction===1?'▲ ':tick?.direction===-1?'▼ ':''}</span>{price?.toLocaleString('en-US',{maximumFractionDigits:8})??'—'}</span>{change!==undefined&&<span className={`text-xs ${change>=0?'text-t-up':'text-t-down'}`}>{change>=0?'+':''}{change.toFixed(2)}% <span className="text-t-muted">24h</span></span>}</div>
+      <div className="ml-auto flex items-center gap-2">
+        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className={control}><SlidersHorizontal/>Tools<ChevronDown/></Button></DropdownMenuTrigger>
+          <DropdownMenuContent data-theme={state.theme} align="end" className="w-80 border-t-border bg-t-panel p-2 text-t-text">
+            <div className="mb-1 flex justify-between px-2 py-2 text-xs font-semibold"><span>Order flow tools</span><span className="text-t-up">Free · Unlocked</span></div>
+            {TOOLS.map(t=><div key={t} className="flex items-center gap-2 px-2 py-2.5"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-[10px] text-t-muted">Coming soon</span><Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={control} aria-label="Theme" title="Theme"><Palette/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text">{THEMES.map(theme=><DropdownMenuItem key={theme} onSelect={()=>setState(s=>({...s,theme}))} className="capitalize focus:bg-t-border focus:text-t-text">{theme}{state.theme===theme?' ✓':''}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
       </div>
-
-      {zoom && (
-        <div onClick={() => setZoom(null)} className="fixed inset-0 z-50 flex items-center justify-center bg-t-bg/90 p-8">
-          <img src={zoom} alt="" className="max-h-full max-w-full rounded-lg border border-t-border" />
+    </header>
+    <div className="flex min-h-0 flex-1">
+      <aside className="flex w-44 shrink-0 flex-col border-r border-t-border bg-t-panel sm:w-60 lg:w-72">
+        <div className="border-b border-t-border p-3"><div className="relative"><Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-t-muted"/><input aria-label="Search futures pairs" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search pairs" className="h-9 w-full rounded-md border border-t-border bg-t-bg pl-8 pr-2 text-sm outline-none focus:border-t-accent"/></div></div>
+        <div className="flex items-center justify-between px-3 py-2 text-[10px] uppercase text-t-muted"><span>USDT Futures</span><span>{pairs.length} pairs</span></div>
+        <div className="min-h-0 flex-1 overflow-y-auto">{filtered.map(p=>{const q=quotes[p];return <Button key={p} variant="ghost" onClick={()=>select(p)} aria-label={`Open ${p}`} className={`flex h-auto min-h-12 w-full justify-between gap-1 rounded-none border-l-2 px-3 py-2 ${active.symbol===p?'border-t-accent bg-t-border/35 text-t-text':'border-transparent text-t-text hover:bg-t-border/30'}`}><span className="min-w-0 truncate text-xs font-semibold">{p.replace('USDT','')}<span className="block text-left text-[9px] font-normal text-t-muted">USDT</span></span><span className="min-w-0 text-right tabular-nums"><span className="block truncate text-xs">{q?.price.toLocaleString('en-US',{maximumFractionDigits:8})??'—'}</span><span className={`block text-[10px] ${q&&q.change<0?'text-t-down':'text-t-up'}`}>{q?`${q.change>=0?'+':''}${q.change.toFixed(2)}%`:'—'}</span></span></Button>;})}{!filtered.length&&<p role="status" className="px-3 py-4 text-xs text-t-muted">{pairStatus||'No matching pairs'}</p>}</div>
+        <div className="border-t border-t-border px-3 py-2 text-[10px] text-t-muted"><span className={feedLive?'text-t-up':'text-t-down'}>● </span>{feedLive?'Binance Futures · Live':'Binance Futures · Reconnecting'}</div>
+      </aside>
+      <main className="flex min-w-0 flex-1 flex-col">
+        <div role="tablist" aria-label="Open pairs" className="flex h-11 shrink-0 overflow-x-auto border-b border-t-border bg-t-panel pt-1">
+          {state.tabs.map(t=><div key={t.symbol} className={`flex shrink-0 items-center border-r border-t-border ${t.symbol===active.symbol?'border-t-2 border-t-t-accent bg-t-bg':'border-t-2 border-t-transparent'}`}><Button role="tab" aria-selected={t.symbol===active.symbol} variant="ghost" onClick={()=>select(t.symbol)} className={`h-full rounded-none px-3 text-xs ${t.symbol===active.symbol?'text-t-text':control}`}>{t.symbol}<span className="text-[10px] text-t-muted">{t.minutes}m</span></Button><Button variant="ghost" size="icon" className={`mr-1 size-6 ${control}`} aria-label={`Close ${t.symbol}`} title={`Close ${t.symbol}`} disabled={state.tabs.length===1} onClick={()=>{setNotice('');setState(s=>closePair(s,t.symbol));}}><X className="size-3"/></Button></div>)}
         </div>
-      )}
+        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-t-border px-2 py-2">
+          {TFS.map(t=><Button key={t.label} variant="ghost" size="sm" aria-pressed={active.minutes===t.min} onClick={()=>timeframe(t.min)} className={`px-2.5 ${active.minutes===t.min?'bg-t-accent text-t-bg hover:bg-t-accent/90':control}`}>{t.label}</Button>)}
+          <Button variant="ghost" size="sm" aria-expanded={showCustom} onClick={()=>{setCustom(String(active.minutes));setShowCustom(s=>!s);}} className={!TFS.some(t=>t.min===active.minutes)?'bg-t-accent text-t-bg':control}>{!TFS.some(t=>t.min===active.minutes)?`${active.minutes}m · Custom`:'Custom'}<ChevronDown/></Button>
+          {showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>}
+        </div>
+        {notice&&<div role="alert" className="border-b border-t-border px-3 py-2 text-xs text-t-down">{notice}</div>}
+        <div className="min-h-0 flex-1">{restored&&<PriceChart symbol={active.symbol} minutes={active.minutes} theme={state.theme} onTick={setTick}/>}</div>
+      </main>
     </div>
-  );
+  </div>;
 }
