@@ -48,7 +48,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symb
       const time = (latest.time / 1000) as UTCTimestamp;
       candles.update({ ...latest,time });
       candles.applyOptions({priceLineColor:latest.close>=latest.open?up:down});
-      el.dataset.lastClose = formatPrice(latest.close, priceFormat);
+      el.dataset['lastClose'] = formatPrice(latest.close, priceFormat);
       if (!hovered) setLegend({...latest});
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(flush); };
