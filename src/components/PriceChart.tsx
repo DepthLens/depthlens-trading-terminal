@@ -38,6 +38,7 @@ export function PriceChart({ symbol, minutes, theme, onTick }: { symbol: string;
     let lastPrice: number | undefined, lastId = -1, direction = 0;
     let recentTrades: {time:number;price:number;quantity:number}[] = [];
     let stopStream: (() => void) | undefined;
+    let stopTrades: (() => void) | undefined;
     let historyRetry: ReturnType<typeof setTimeout> | undefined;
     const abort = new AbortController();
     const interval = NATIVE[minutes] ?? '1m';
@@ -109,14 +110,15 @@ export function PriceChart({ symbol, minutes, theme, onTick }: { symbol: string;
         volume.setData(bars.map(b=>({time:(b.time/1000) as UTCTimestamp,value:b.volume,color:b.close>=b.open?up:down})));
         if (latest) { setLegend({...latest}); tickRef.current({price:latest.close,direction:0}); lastPrice=latest.close; }
         chart.timeScale().scrollToRealTime();
-        stopStream=marketStream(`wss://fstream.binance.com/stream?streams=${symbol.toLowerCase()}@kline_${interval}/${symbol.toLowerCase()}@aggTrade`,handle, live=>{ if (!stopped) setStatus(live?'Live':'Reconnecting'); });
+        stopStream=marketStream(`wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${interval}`,handle);
+        stopTrades=marketStream(`wss://fstream.binance.com/ws/${symbol.toLowerCase()}@aggTrade`,handle, live=>{ if (!stopped) setStatus(live?'Live':'Reconnecting'); });
       } catch {
         if (stopped) return;
         setStatus('History unavailable · retrying'); historyRetry=setTimeout(load,5000);
       }
     };
     void load();
-    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);stopStream?.();cancelAnimationFrame(frame);chartRef.current=null;chart.remove(); };
+    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);stopStream?.();stopTrades?.();cancelAnimationFrame(frame);chartRef.current=null;chart.remove(); };
   },[symbol,minutes,theme]);
   const zoom = (factor: number) => {
     const scale=chartRef.current?.timeScale(), range=scale?.getVisibleLogicalRange();
