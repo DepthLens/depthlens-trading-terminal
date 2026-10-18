@@ -1,4 +1,8 @@
 # Terminal update
+- [ ] Correct per-pair price formats, last-price axis labels, and right offset.
+- [ ] Enable OHLC magnet and remove the price line and all chart volume data.
+- [ ] Move Tools beside tabs, sort/pin markets, and add the supplied logo.
+- [ ] Verify five pairs, low prices, candle hover, controls, and console.
 - [x] Remove gallery and replace sidebar with live searchable pairs.
 - [x] Add persisted tabs, per-tab timeframes, and tool switches.
 - [x] Add chart zoom/reset, OHLC hover legend, and tick direction.
