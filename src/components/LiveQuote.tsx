@@ -23,6 +23,7 @@ export function SourceSelect({ mode, onChange, className = 'h-6 rounded border b
 const SOURCE_NAMES: Record<string, string> = { binance: 'Binance', bybit: 'Bybit', poll: 'Polling' };
 export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false, compact = false, mode: controlledMode, onModeChange, onSourceChange }: { symbol: string; minutes: number; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge>; bookEnabled?: boolean; compact?: boolean; mode?: SourceMode | null; onModeChange?: (next: SourceMode) => void; onSourceChange?: (source: TradeSource | 'poll') => void }) {
   const sizeClass = compact ? 'text-sm' : 'text-lg';
+  const sizeRef = useRef(sizeClass); sizeRef.current = sizeClass;
   const sourceChangeRef = useRef(onSourceChange); sourceChangeRef.current = onSourceChange;
   const [sourceName, setSourceName] = useState('');
   const priceRef = useRef<HTMLSpanElement>(null);
@@ -54,7 +55,7 @@ export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false, 
         const tick = bridge.current.latest, el = priceRef.current, format = specRef.current;
         if (!tick || !el || !format) return;
         el.textContent = `${tick.direction > 0 ? '▲ ' : tick.direction < 0 ? '▼ ' : ''}${formatPrice(tick.price, format)}`;
-        el.className = `${sizeClass} font-semibold ${tick.direction > 0 ? 'text-t-up' : tick.direction < 0 ? 'text-t-down' : 'text-t-text'}`;
+        el.className = `${sizeRef.current} font-semibold ${tick.direction > 0 ? 'text-t-up' : tick.direction < 0 ? 'text-t-down' : 'text-t-text'}`;
         el.setAttribute('aria-label', tick.direction > 0 ? 'Price rising' : tick.direction < 0 ? 'Price falling' : 'Price unchanged');
         el.dataset['price'] = String(tick.price);
         el.dataset['exchange'] = tick.exchange ?? 'poll';
