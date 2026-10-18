@@ -150,7 +150,7 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
         for (let ci = 0; ci < N; ci++) {
           const col = cols[ci]!;
           if (col.gap) continue;
-          const x = (ci + 0.5) * colW;
+          const x = x0 + (ci + 0.5) * colW;
           for (const [bucket, t] of col.trades) {
             for (const [vol, color] of [[t.buy, cUp], [t.sell, cDown]] as const) {
               if (vol < c.minBubble) continue;
@@ -172,7 +172,7 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
       for (let ci = 0; ci < N; ci++) {
         const col = cols[ci]!;
         if (col.gap || !Number.isFinite(col.price)) { started = false; continue; }
-        const x = (ci + 0.5) * colW, y = priceToY(col.price, top, band, H);
+        const x = x0 + (ci + 0.5) * colW, y = priceToY(col.price, top, band, H);
         if (started) ctx.lineTo(x, y); else ctx.moveTo(x, y);
         started = true;
       }
