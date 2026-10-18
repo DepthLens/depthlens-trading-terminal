@@ -10,5 +10,9 @@
 - /login and /register pages (design only, submit → /terminal)
 
 ## Open
+- Remove trade rendering delays and page-wide price state; preserve every trade's candle extremes.
+- Virtualize market rows with isolated one-second ticker rendering.
+- Add status hover latency and last-update readouts; support Binance/Bybit trade payloads and immediate fallback recovery.
+- Verify busy-pair trade frequency, 30-second average latency, and timeframe/pair switching.
 - Order flow tools (Heatmap, Volume Profile, Footprint, DOM, CVD, Whale Trades, Liquidations) — coming soon
 - Real authentication for /login and /register
