@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Live order book engine
-- [ ] Shared-socket subscriptions, Bybit snapshot/delta book, Binance buffered snapshot/sequence resync.
-- [ ] Active-pair/source and Heatmap/DOM gating; toggleable Book debug panel, no drawing.
-- [ ] Unit tests and live BTCUSDT/small-pair checks, ten pair switches, socket/error checks.
+- [x] Shared-socket subscriptions, Bybit snapshot/delta book, Binance buffered snapshot/sequence resync.
+- [x] Active-pair/source and Heatmap/DOM gating; toggleable Book debug panel, no drawing.
+- [x] 35 tests pass. Real Bybit and Binance BTCUSDT/DOGEUSDT books Synced with bid below ask and approximately 9–10 updates/s; ten pair changes reset and synchronize, at most three sockets, zero console errors; disabling tools clears the book without closing the trade connection.
 
 ## WebSocket leak fix
 - [x] Central manager, combined active Binance stream, cleanup, 20-second idle/backoff and failover after three failures.
