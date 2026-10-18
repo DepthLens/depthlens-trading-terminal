@@ -1,5 +1,5 @@
 // Browser APIs are only accessed when callers start a stream from an effect.
-export function marketStream(url: string, onMessage: (data: any) => void, onStatus?: (live: boolean) => void, idleMs?: number) {
+export function marketStream(url: string, onMessage: (data: any) => void, onStatus?: (live: boolean) => void, idleMs?: number, subscription?: object) {
   let socket: WebSocket | undefined;
   let stopped = false;
   let retry: ReturnType<typeof setTimeout> | undefined;
@@ -14,7 +14,7 @@ export function marketStream(url: string, onMessage: (data: any) => void, onStat
     console.info('[DepthLens] Connecting', url);
     socket = new WebSocket(url);
     armIdle();
-    socket.onopen = () => { console.info('[DepthLens] Connected', url); delay = 1000; onStatus?.(true); };
+    socket.onopen = () => { console.info('[DepthLens] Connected', url); delay = 1000; if (subscription) socket?.send(JSON.stringify(subscription)); onStatus?.(true); };
     socket.onmessage = event => {
       if (stopped) return;
       let data: unknown;
