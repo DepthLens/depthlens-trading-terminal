@@ -53,3 +53,22 @@ it('never exceeds three sockets across the two exchanges and purposes', () => {
   vi.advanceTimersByTime(100); expect(FakeSocket.instances).toHaveLength(3);
   expect(connectionManager.snapshot().openSockets).toBe(3); stops.forEach(stop => stop());
 });
+it('cleans up StrictMode-style mounting and hot reload without stale delivery or retries', () => {
+  const receive = vi.fn();
+  const firstStop = marketStream('wss://first', receive);
+  const first = FakeSocket.instances[0]; if (!first) throw new Error();
+  const stale = first.onmessage;
+  firstStop(); const secondStop = marketStream('wss://second', receive);
+  stale?.({data:'{"price":100}'}); expect(receive).not.toHaveBeenCalled();
+  first.readyState = 3; vi.advanceTimersByTime(25); expect(FakeSocket.instances).toHaveLength(2);
+  connectionManager.dispose(); secondStop();
+  vi.advanceTimersByTime(120000); expect(FakeSocket.instances).toHaveLength(2);
+});
+it('adds a small random delay to exponential retries', () => {
+  vi.mocked(Math.random).mockReturnValue(0.5);
+  const stop = marketStream('wss://jitter', vi.fn());
+  const socket = FakeSocket.instances[0]; if (!socket) throw new Error();
+  socket.onerror?.(); socket.readyState = 3;
+  vi.advanceTimersByTime(1124); expect(FakeSocket.instances).toHaveLength(1);
+  vi.advanceTimersByTime(1); expect(FakeSocket.instances).toHaveLength(2); stop();
+});
