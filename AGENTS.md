@@ -19,3 +19,4 @@
 - order-book.ts owns the single active liquidity book and sequence recovery; optional topics multiplex through the existing active exchange socket, never create a connection, and book diagnostics rerender only their own panel.
 - Only correct historical chart candles that already exist in the rendered series; stream timestamps can precede or skip loaded history and must not cause chart exceptions.
 - Heatmap state lives in browser-safe `heatmap-data.ts` (one-second typed-array columns, USDT notional, 60-minute cap); `Heatmap.tsx` only draws via offscreen ImageData and rAF, receives trades through the LiveQuote bridge (`heat`), and never opens sockets.
+- Phone layout switches via useTerminalMobile (narrow or touch-landscape) + data-mobile/`mobile:` variant; desktop markup stays separate so it never changes.
