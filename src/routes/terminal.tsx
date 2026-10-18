@@ -121,7 +121,7 @@ function Terminal() {
         <div className="border-t border-t-border px-3 py-2 text-[10px] text-t-muted"><span className={feedLive?'text-t-up':'text-t-down'}>● </span>{feedLive?'Binance Futures · Live':'Binance Futures · Reconnecting'}</div>
       </aside>}
       <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-11 shrink-0 border-b border-t-border bg-t-panel">
+        <div className="flex h-11 shrink-0 border-b border-t-border bg-t-panel mobile:h-12">
         <div role="tablist" aria-label="Open pairs" className="terminal-tabs flex min-w-0 flex-1 overflow-x-auto pt-1" onWheel={e=>{if(e.currentTarget.scrollWidth>e.currentTarget.clientWidth){e.currentTarget.scrollLeft+=e.deltaY||e.deltaX;}}}>
           {state.tabs.map(t=><div key={t.symbol} className={`flex shrink-0 items-center border-r border-t-border ${t.symbol===active.symbol?'border-t-2 border-t-t-accent bg-t-bg':'border-t-2 border-t-transparent'}`}><Button role="tab" aria-selected={t.symbol===active.symbol} variant="ghost" onClick={()=>select(t.symbol)} className={`h-full rounded-none px-3 text-xs ${t.symbol===active.symbol?'text-t-text':control}`}>{t.symbol}<span className="text-[10px] text-t-muted mobile:text-xs">{t.minutes}m</span></Button><Button variant="ghost" size="icon" className={`mr-1 size-6 mobile:mr-0 mobile:size-10 ${control}`} aria-label={`Close ${t.symbol}`} title={`Close ${t.symbol}`} disabled={state.tabs.length===1} onClick={()=>{setNotice('');setState(s=>closePair(s,t.symbol));}}><X className="size-3"/></Button></div>)}
         </div>
