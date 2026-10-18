@@ -12,3 +12,4 @@
 - Terminal settings live exclusively in browser localStorage through `terminal-state.ts`; this terminal does not require a backend.
 - Keep chart aggregation in browser-safe `chart-data.ts` and WebSocket lifecycle in `market-stream.ts` so rules are testable and all sockets clean up on tab changes.
 - PriceChart owns the active symbol's kline and aggTrade connections; market quotes use one shared miniTicker array stream to avoid inactive-tab subscriptions.
+- Keep exchange price formatting and pinned quote-volume sorting in browser-safe `market-data.ts`; chart bars contain only OHLC so no volume indicator data is maintained.
