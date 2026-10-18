@@ -77,6 +77,7 @@ export function livePriceStream(symbol: string, onPrice: (tick: LivePrice) => vo
     const receivedAt = Date.now();
     const latency = Math.round(receivedAt + clockOffset(source) - eventTime);
     record(source, latency, receivedAt);
+    if (mode !== 'auto' && source === mode && current !== mode) { select(mode); close(mode === 'binance' ? 'bybit' : 'binance'); }
     if (current === null) select(source); // Auto: first source to trade drives the price while comparing.
     if (source !== current) return;
     if (time < lastTime[source]) return;
