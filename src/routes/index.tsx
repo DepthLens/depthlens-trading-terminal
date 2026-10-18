@@ -10,6 +10,8 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "DepthLens crypto order flow terminal for Binance futures." },
       { property: "og:title", content: "DepthLens — Crypto Order Flow" },
       { property: "og:description", content: "Live Binance futures charts and order flow tools." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
 });
