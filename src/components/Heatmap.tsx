@@ -201,7 +201,7 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
         const t = cols[ci]!.time;
         if (t % 60000 >= COLUMN_MS || ci % labelEvery !== 0) continue;
         const d = new Date(t);
-        ctx.fillText(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, (ci + 0.5) * colW, H + 16);
+        ctx.fillText(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, x0 + (ci + 0.5) * colW, H + 16);
       }
 
       // Price tag on the right axis, green/red by direction.
@@ -270,7 +270,7 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
       const rows = Math.max(20, Math.round(view.current.rows));
       const band = rows * bs, top = view.current.center + band / 2;
       const cols = buffer.columns.slice(-c.windowMin * 60);
-      const ci = Math.floor(((e.clientX - rect.left) / W) * (c.windowMin * 60));
+      const ci = Math.floor((e.clientX - rect.left - (W - cols.length * (W / (c.windowMin * 60)))) / (W / (c.windowMin * 60)));
       const r = Math.floor(((e.clientY - rect.top) / H) * rows);
       const col = cols[ci];
       if (!col || e.clientX - rect.left > W || e.clientY - rect.top > H || r < 0 || r >= rows) { tip.style.display = 'none'; return; }
