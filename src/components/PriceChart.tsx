@@ -27,7 +27,7 @@ export function PriceChart({ symbol, minutes, theme, onTick }: { symbol: string;
     if (!el) return;
     setLegend(null); setStatus('Connecting');
     const text = toColor(el,'--t-muted'), grid = toColor(el,'--t-border'), up = toColor(el,'--t-up'), down = toColor(el,'--t-down');
-    const chart = createChart(el, { autoSize:true, layout:{ background:{ color:'transparent' }, textColor:text }, grid:{ vertLines:{color:grid},horzLines:{color:grid} }, rightPriceScale:{borderColor:grid,scaleMargins:{top:0.13,bottom:0.25}}, timeScale:{borderColor:grid,timeVisible:true,barSpacing:8,rightOffset:5} });
+    const chart = createChart(el, { autoSize:true, localization:{locale:'en-US'}, layout:{ background:{ color:'transparent' }, textColor:text }, grid:{ vertLines:{color:grid},horzLines:{color:grid} }, rightPriceScale:{borderColor:grid,scaleMargins:{top:0.13,bottom:0.25}}, timeScale:{borderColor:grid,timeVisible:true,barSpacing:8,rightOffset:5} });
     chartRef.current = chart;
     const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false});
     const volume = chart.addSeries(HistogramSeries,{priceScaleId:'volume',priceFormat:{type:'volume'}});
