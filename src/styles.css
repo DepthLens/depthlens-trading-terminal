@@ -179,3 +179,4 @@
 .terminal-pairs::-webkit-scrollbar-thumb { background: var(--t-border); border-radius: 4px; }
 .terminal-pairs::-webkit-scrollbar-track { background: transparent; }
 .terminal-pairs::-webkit-scrollbar-button { display: none; }
+@custom-variant mobile (&:where([data-mobile], [data-mobile] *));
