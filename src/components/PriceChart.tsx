@@ -24,6 +24,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge }: { sy
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    delete el.dataset['lastClose'];
     setStatus('Connecting');
     const text = toColor(el,'--t-muted'), grid = toColor(el,'--t-border'), up = toColor(el,'--t-up'), down = toColor(el,'--t-down');
     const chart = createChart(el, { autoSize:true, localization:{locale:'en-US'}, layout:{ background:{ color:'transparent' }, textColor:text }, grid:{ vertLines:{color:grid},horzLines:{color:grid} }, crosshair:{mode:CrosshairMode.MagnetOHLC}, rightPriceScale:{visible:true,borderColor:grid,scaleMargins:{top:0.08,bottom:0.08}}, timeScale:{borderColor:grid,timeVisible:true,barSpacing:8,rightOffset:8} });
