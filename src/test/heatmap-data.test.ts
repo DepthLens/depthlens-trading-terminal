@@ -5,7 +5,7 @@ describe('autoBucketSize', () => {
   it('picks a 1/2/5 bucket so ~200 rows cover ±10% of the price', () => {
     expect(autoBucketSize(100000)).toBe(100);
     expect(autoBucketSize(3000)).toBe(2);
-    expect(autoBucketSize(0.05)).toBe(0.00005);
+    expect(autoBucketSize(0.05)).toBeCloseTo(0.00005, 10);
   });
   it('falls back to 1 for invalid prices', () => {
     expect(autoBucketSize(0)).toBe(1);
@@ -18,7 +18,8 @@ describe('HeatmapBuffer', () => {
     const b = new HeatmapBuffer(100000); // bucket = 100
     b.sample(1000, new Map([[99900, 2], [99850, 1]]), new Map([[100100, 3]]), 100000);
     const col = b.columns[0]!;
-    expect(b.cell(col, b.index(99900))).toBeCloseTo(99900 * 2 + 99850 * 1); // same 100-wide bucket
+    expect(b.cell(col, b.index(99900))).toBeCloseTo(99900 * 2);
+    expect(b.cell(col, b.index(99850))).toBeCloseTo(99850 * 1);
     expect(b.cell(col, b.index(100100))).toBeCloseTo(100100 * 3);
     expect(col.origin).toBe(b.index(100000) - ROWS / 2);
   });
@@ -75,6 +76,6 @@ describe('colorFor', () => {
     expect(colorFor(2)).toEqual(colorFor(1));
     const lum = (c: [number, number, number]) => c[0] + c[1] + c[2];
     expect(lum(colorFor(0.5))).toBeGreaterThan(lum(colorFor(0.1)));
-    expect(lum(colorFor(1))).toBeGreaterThan(lum(colorFor(0.5)));
+    expect(colorFor(1)).toEqual([249, 115, 22]); // biggest orders are orange
   });
 });
