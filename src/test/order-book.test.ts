@@ -27,7 +27,7 @@ it('Bybit delta deletes zero sizes and replaces or inserts nonzero sizes', () =>
 });
 it('runs only with Heatmap/DOM enablement and unsubscribes/resets on pair or source changes', () => {
   book.configure('BTCUSDT', 'bybit', false); expect(transport.subscribe).not.toHaveBeenCalled();
-  book.setEnabled(true); expect(transport.subscribe.mock.calls[0]?.slice(0, 2)).toEqual(['bybit', 'orderbook.200.BTCUSDT']);
+  book.setEnabled(true); expect(transport.subscribe.mock.calls[0]?.slice(0, 2)).toEqual(['bybit', 'orderbook.1000.BTCUSDT']);
   transport.receive?.({ type: 'snapshot', data: { s: 'BTCUSDT', u: 1, b: [['99', '2']], a: [['101', '3']] } });
   const old = transport.receive; book.setActive('DOGEUSDT', 'bybit');
   expect(transport.stop).toHaveBeenCalledTimes(1); expect(book.debug()).toMatchObject({ state: 'Resyncing', bidLevels: 0, askLevels: 0 });
