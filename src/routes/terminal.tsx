@@ -24,7 +24,7 @@ function Terminal() {
   const [query,setQuery]=useState('');
   const [pairStatus,setPairStatus]=useState('Loading markets');
   const [feedLive,setFeedLive]=useState(false);
-  const [tick,setTick]=useState<LivePrice|null>(null);
+  const [tick,setTick]=useState<(LivePrice & {symbol:string})|null>(null);
   const [priceStatus,setPriceStatus]=useState<PriceStatus>('Offline');
   const [showProfile,setShowProfile]=useState(false);
   const [showCustom,setShowCustom]=useState(false);
@@ -59,7 +59,7 @@ function Terminal() {
     let frame=0;let pending:LivePrice|null=null;
     const stop=livePriceStream(active.symbol,next=>{
       pending=next;
-      if(!frame)frame=requestAnimationFrame(()=>{frame=0;if(pending){setTick(pending);pending=null;}});
+      if(!frame)frame=requestAnimationFrame(()=>{frame=0;if(pending){setTick({...pending,symbol:active.symbol});pending=null;}});
     },setPriceStatus);
     return()=>{stop();cancelAnimationFrame(frame);};
   },[active.symbol]);
@@ -68,7 +68,8 @@ function Terminal() {
   const timeframe=(minutes:number)=>setState(s=>({...s,tabs:s.tabs.map(t=>t.symbol===s.active?{...t,minutes}:t)}));
   const applyCustom=()=>{const n=validMinutes(custom);if(n===null){setCustomError('Enter a whole number from 1 to 1440.');return;}timeframe(n);setShowCustom(false);setCustomError('');};
   const activeSpec=priceSpecs[active.symbol];
-  const price=tick?.price;
+  const activeTick=tick?.symbol===active.symbol?tick:null;
+  const price=activeTick?.price;
   const change=quotes[active.symbol]?.change;
   const control='text-t-muted hover:bg-t-border/50 hover:text-t-text';
   return <div data-theme={state.theme} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text">
@@ -109,7 +110,7 @@ function Terminal() {
           {showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>}
         </div>
         {notice&&<div role="alert" className="border-b border-t-border px-3 py-2 text-xs text-t-down">{notice}</div>}
-        <div className="min-h-0 flex-1">{restored&&activeSpec&&<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} live={tick}/>}</div>
+        <div className="min-h-0 flex-1">{restored&&activeSpec&&<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} live={activeTick}/>}</div>
       </main>
     </div>
   </div>;
