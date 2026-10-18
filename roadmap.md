@@ -1,5 +1,10 @@
 # Roadmap
 
+## Live order book engine
+- [ ] Shared-socket subscriptions, Bybit snapshot/delta book, Binance buffered snapshot/sequence resync.
+- [ ] Active-pair/source and Heatmap/DOM gating; toggleable Book debug panel, no drawing.
+- [ ] Unit tests and live BTCUSDT/small-pair checks, ten pair switches, socket/error checks.
+
 ## WebSocket leak fix
 - [x] Central manager, combined active Binance stream, cleanup, 20-second idle/backoff and failover after three failures.
 - [x] Source/state/socket-count/error/message-age tooltip and lifecycle logs.
