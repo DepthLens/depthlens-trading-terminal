@@ -64,6 +64,6 @@ export function livePriceStream(symbol: string, onPrice: (tick: LivePrice) => vo
     const price = Number(data.p), time = Number(data.T), eventTime = Number(data.E ?? data.T);
     if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(time) || !Number.isFinite(eventTime)) return;
     publish(price, time, eventTime); status('Live');
-  }, live => { if (!live && !fallbackActive) status('Offline'); }, { exchange: 'binance', purpose: 'active', onFailure: fallback });
+  }, live => { if (live || !fallbackActive) status(live ? 'Live' : 'Offline'); }, { exchange: 'binance', purpose: 'active', onFailure: fallback });
   return () => { stopped = true; stopPolling(); stopBybit?.(); stopPrimary(); };
 }

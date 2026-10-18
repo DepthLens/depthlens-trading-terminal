@@ -73,8 +73,8 @@ class ConnectionManager {
   }
   dispose() { for (const entry of this.entries.values()) entry.stop('hot reload'); this.entries.clear(); }
 }
-export const connectionManager = new ConnectionManager();
+export const connectionManager: ConnectionManager = import.meta.hot?.data['connectionManager'] ?? new ConnectionManager();
 export function marketStream(url: string, onMessage: (data: any) => void, onStatus?: (live: boolean) => void, options: Options = {}) {
   return connectionManager.connect(url, onMessage, onStatus, options);
 }
-if (import.meta.hot) import.meta.hot.dispose(() => connectionManager.dispose());
+if (import.meta.hot) import.meta.hot.dispose(data => { connectionManager.dispose(); data['connectionManager'] = connectionManager; });
