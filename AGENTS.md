@@ -13,3 +13,5 @@
 - Keep chart aggregation in browser-safe `chart-data.ts` and WebSocket lifecycle in `market-stream.ts` so rules are testable and all sockets clean up on tab changes.
 - PriceChart owns interval-specific klines; the terminal uses browser-safe live-price.ts for one active-symbol aggTrade feed with polling fallback, independent of timeframe, so stale feeds cannot affect the price. Market quotes share one miniTicker array stream.
 - Keep exchange price formatting and pinned quote-volume sorting in browser-safe `market-data.ts`; chart bars contain only OHLC so no volume indicator data is maintained.
+- LiveQuote owns the active trade connection and a ref bridge to PriceChart; apply every trade before animation-frame painting and never put live price or OHLC in page state, to isolate high-frequency work.
+- MarketList virtualizes fixed-height rows via market-list.ts and reads ticker refs once per second in its own component, so quote updates cannot rerender the terminal or chart.

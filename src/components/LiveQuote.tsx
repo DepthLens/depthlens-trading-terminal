@@ -4,7 +4,7 @@ import { formatPrice, type PriceSpec } from '@/lib/market-data';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export type TradeBridge = { latest: LivePrice | null; receive: ((tick: LivePrice) => void) | null };
-export function LiveQuote({ symbol, spec, bridge }: { symbol: string; spec?: PriceSpec; bridge: MutableRefObject<TradeBridge> }) {
+export function LiveQuote({ symbol, spec, bridge }: { symbol: string; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge> }) {
   const priceRef = useRef<HTMLSpanElement>(null);
   const latencyRef = useRef<HTMLDivElement>(null);
   const ageRef = useRef<HTMLDivElement>(null);
@@ -25,10 +25,10 @@ export function LiveQuote({ symbol, spec, bridge }: { symbol: string; spec?: Pri
         el.textContent = `${tick.direction > 0 ? '▲ ' : tick.direction < 0 ? '▼ ' : ''}${formatPrice(tick.price, format)}`;
         el.className = `text-lg font-semibold ${tick.direction > 0 ? 'text-t-up' : tick.direction < 0 ? 'text-t-down' : 'text-t-text'}`;
         el.setAttribute('aria-label', tick.direction > 0 ? 'Price rising' : tick.direction < 0 ? 'Price falling' : 'Price unchanged');
-        el.dataset.price = String(tick.price);
-        el.dataset.eventTime = String(tick.eventTime ?? '');
-        el.dataset.latency = String(tick.latency ?? '');
-        el.dataset.source = tick.source ?? 'trade';
+        el.dataset['price'] = String(tick.price);
+        el.dataset['eventTime'] = String(tick.eventTime ?? '');
+        el.dataset['latency'] = String(tick.latency ?? '');
+        el.dataset['source'] = tick.source ?? 'trade';
       });
     }, setStatus);
     return () => { stop(); cancelAnimationFrame(frame); bridge.current.latest = null; };
