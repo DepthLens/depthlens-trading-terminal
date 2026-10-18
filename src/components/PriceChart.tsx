@@ -3,7 +3,6 @@ import { createChart, CandlestickSeries, CrosshairMode, LineStyle, type IChartAp
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { aggregate, applyLivePrice, NATIVE, type Bar } from '@/lib/chart-data';
-import { marketStream } from '@/lib/market-stream';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 export { aggregate } from '@/lib/chart-data';
 import type { TradeBridge } from '@/components/LiveQuote';
@@ -33,7 +32,6 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge }: { sy
     let stopped = false, hovered = false, frame = 0, ready = false;
     let bars: Bar[] = [], rawBars: Bar[] = [];
     let latest: Bar | undefined;
-    let stopStream: (() => void) | undefined;
     let historyRetry: ReturnType<typeof setTimeout> | undefined;
     const abort = new AbortController();
     const interval = NATIVE[minutes] ?? '1m';
@@ -84,6 +82,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge }: { sy
       if (NATIVE[minutes]) candles.update({ ...b, time: (b.time / 1000) as UTCTimestamp }, true);
 
     };
+    bridge.current.kline = handle;
     const load = async () => {
       try {
         const response=await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${NATIVE[minutes]?1000:1500}`,{signal:abort.signal});
@@ -101,14 +100,14 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge }: { sy
         pendingTrades = [];
         flush();
         chart.timeScale().scrollToRealTime();
-        stopStream=marketStream(`wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${interval}`,handle, live=>{ if (!stopped) setStatus(live?'Live':'Reconnecting'); });
+        setStatus('Chart ready');
       } catch {
         if (stopped) return;
         setStatus('History unavailable · retrying'); historyRetry=setTimeout(load,5000);
       }
     };
     void load();
-    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);stopStream?.();cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;chartRef.current=null;chart.remove(); };
+    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;if(bridge.current.kline===handle)bridge.current.kline=null;chartRef.current=null;chart.remove(); };
   },[symbol,minutes,theme,priceFormat.precision,priceFormat.minMove,bridge]);
 
   const zoom = (factor: number) => {

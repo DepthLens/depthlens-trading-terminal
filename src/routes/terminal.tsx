@@ -47,7 +47,7 @@ function Terminal() {
       if(!Array.isArray(data))return;
       for(const d of data){const price=Number(d.c),open=Number(d.o);if(typeof d.s==='string'&&price>0&&open>0)quotes.current[d.s]={price,change:(price-open)/open*100,quoteVolume:Number(d.q)||0};}
 
-    },setFeedLive);
+    },setFeedLive,{exchange:'binance',purpose:'markets'});
     // Seed quotes immediately; the single array stream subsequently updates them.
     fetch('https://fapi.binance.com/fapi/v1/ticker/24hr',{signal:abort.signal}).then(r=>r.ok?r.json():[]).then(data=>{if(!Array.isArray(data)||abort.signal.aborted)return;quotes.current={...Object.fromEntries(data.map(d=>[d.symbol,{price:Number(d.lastPrice),change:Number(d.priceChangePercent),quoteVolume:Number(d.quoteVolume)||0}])),...quotes.current};}).catch(()=>{});
     return()=>{abort.abort();clearTimeout(retry);stop();};
@@ -62,7 +62,7 @@ function Terminal() {
   return <div data-theme={state.theme} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text">
     <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-t-border bg-t-panel px-4 py-2">
       <Link to="/" className="flex items-center gap-2 text-lg font-bold text-t-accent"><img src={logo.url} alt="DepthLens logo" className="size-8 shrink-0 rounded-md" />DepthLens</Link>
-      <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><LiveQuote symbol={active.symbol} spec={activeSpec} bridge={bridge}/><QuoteChange symbol={active.symbol} quotes={quotes}/></div>
+      <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge}/><QuoteChange symbol={active.symbol} quotes={quotes}/></div>
       <div className="ml-auto flex items-center gap-2">
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem asChild className="focus:bg-t-border focus:text-t-text"><Link to="/"><LogOut/>Logout</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
 
