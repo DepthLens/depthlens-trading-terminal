@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { Search, X, SlidersHorizontal, ChevronDown, UserRound, LogOut } from 'lucide-react';
+import { Search, X, SlidersHorizontal, ChevronDown, UserRound, LogOut, List, Settings } from 'lucide-react';
 import { PriceChart } from '@/components/PriceChart';
 import { Heatmap } from '@/components/Heatmap';
 import logo from '@/assets/depthlens-logo.png.asset.json';
@@ -9,7 +9,9 @@ import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_KEY, TOOLS } from '@/lib/terminal-state';
 import { marketStream } from '@/lib/market-stream';
-import { LiveQuote, type TradeBridge } from '@/components/LiveQuote';
+import { LiveQuote, SourceSelect, useSourceMode, type TradeBridge } from '@/components/LiveQuote';
+import { useTerminalMobile } from '@/hooks/use-terminal-mobile';
+import { bybitListQuotes } from '@/lib/market-data';
 import { MarketList, QuoteChange } from '@/components/MarketList';
 import { BookDebug } from '@/components/BookDebug';
 import { priceSpec, type Market, type PriceSpec, type Quote } from '@/lib/market-data';
@@ -35,6 +37,23 @@ function Terminal() {
   const [custom,setCustom]=useState('');
   const [customError,setCustomError]=useState('');
   const [notice,setNotice]=useState('');
+  const mobile=useTerminalMobile();
+  const [mode,changeMode]=useSourceMode();
+  const [showPairs,setShowPairs]=useState(false);
+  const [listSource,setListSource]=useState<'binance'|'bybit'>('binance');
+  const listSourceRef=useRef(listSource);listSourceRef.current=listSource;
+  const lastQuoteAt=useRef(0);
+  const [listFailing,setListFailing]=useState(false);
+  // The pair list follows the active price source: Bybit tickers are polled every 2 s while Bybit is active.
+  useEffect(()=>{
+    if(listSource!=='bybit')return;
+    const abort=new AbortController();
+    const poll=()=>fetch('https://api.bybit.com/v5/market/tickers?category=linear',{signal:abort.signal}).then(r=>r.ok?r.json():null).then(d=>{const next=bybitListQuotes(d);if(next&&!abort.signal.aborted){Object.assign(quotes.current,next);lastQuoteAt.current=Date.now();}}).catch(()=>{});
+    void poll();const timer=setInterval(poll,2000);
+    return()=>{abort.abort();clearInterval(timer);};
+  },[listSource]);
+  // Warn only when no list prices have arrived for 15 s from either source.
+  useEffect(()=>{const timer=setInterval(()=>setListFailing(lastQuoteAt.current>0?Date.now()-lastQuoteAt.current>15000:false),5000);return()=>clearInterval(timer);},[]);
   useEffect(()=>{try{setState(restoreState(localStorage.getItem(STORAGE_KEY)));}catch{}setRestored(true);},[]);
   useEffect(()=>{if(restored)try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch{}},[state,restored]);
   useEffect(()=>{
@@ -48,16 +67,18 @@ function Terminal() {
 
     const stop=marketStream('wss://fstream.binance.com/ws/!miniTicker@arr',data=>{
       if(!Array.isArray(data))return;
+      if(listSourceRef.current==='bybit')return;
+      lastQuoteAt.current=Date.now();
       for(const d of data){const price=Number(d.c),open=Number(d.o);if(typeof d.s==='string'&&price>0&&open>0)quotes.current[d.s]={price,change:(price-open)/open*100,quoteVolume:Number(d.q)||0};}
 
     },setFeedLive,{exchange:'binance',purpose:'markets'});
     // Seed quotes immediately; the single array stream subsequently updates them.
-    fetch('https://fapi.binance.com/fapi/v1/ticker/24hr',{signal:abort.signal}).then(r=>r.ok?r.json():[]).then(data=>{if(!Array.isArray(data)||abort.signal.aborted)return;quotes.current={...Object.fromEntries(data.map(d=>[d.symbol,{price:Number(d.lastPrice),change:Number(d.priceChangePercent),quoteVolume:Number(d.quoteVolume)||0}])),...quotes.current};}).catch(()=>{});
+    fetch('https://fapi.binance.com/fapi/v1/ticker/24hr',{signal:abort.signal}).then(r=>r.ok?r.json():[]).then(data=>{if(!Array.isArray(data)||abort.signal.aborted)return;lastQuoteAt.current=lastQuoteAt.current||Date.now();quotes.current={...Object.fromEntries(data.map(d=>[d.symbol,{price:Number(d.lastPrice),change:Number(d.priceChangePercent),quoteVolume:Number(d.quoteVolume)||0}])),...quotes.current};}).catch(()=>{});
     return()=>{abort.abort();clearTimeout(retry);stop();};
   },[]);
   const active=state.tabs.find(t=>t.symbol===state.active)??state.tabs[0]??{symbol:'BTCUSDT',minutes:1};
   useEffect(()=>{setShowCustom(false);setCustomError('');},[active.symbol,active.minutes]);
-  const select=(symbol:string)=>{if(state.tabs.length>=10&&!state.tabs.some(t=>t.symbol===symbol)){setNotice('Maximum 10 tabs. Close a tab to open another pair.');return;}setNotice('');setState(s=>openPair(s,symbol));};
+  const select=(symbol:string)=>{setShowPairs(false);if(state.tabs.length>=10&&!state.tabs.some(t=>t.symbol===symbol)){setNotice('Maximum 10 tabs. Close a tab to open another pair.');return;}setNotice('');setState(s=>openPair(s,symbol));};
   const timeframe=(minutes:number)=>setState(s=>({...s,tabs:s.tabs.map(t=>t.symbol===s.active?{...t,minutes}:t)}));
   const applyCustom=()=>{const n=validMinutes(custom);if(n===null){setCustomError('Enter a whole number from 1 to 1440.');return;}timeframe(n);setShowCustom(false);setCustomError('');};
   const activeSpec=priceSpecs[active.symbol];
