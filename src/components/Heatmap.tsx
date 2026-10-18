@@ -263,7 +263,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
     let dragging = false, lastY = 0;
     const touches = new Map<number, number>();
     let pinchStart = 0, pinchRows = 0;
-    const spread = () => { const ys = [...touches.values()]; return Math.abs(ys[0] - ys[1]); };
+    const spread = () => { const ys = [...touches.values()]; return Math.abs((ys[0] ?? 0) - (ys[1] ?? 0)); };
     const onDown = (e: PointerEvent) => {
       if (e.pointerType === 'touch') {
         touches.set(e.pointerId, e.clientY);
