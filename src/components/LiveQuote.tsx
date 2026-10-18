@@ -3,12 +3,13 @@ import { livePriceStream, priceDiagnostics, type LivePrice, type PriceStatus, ty
 import { NATIVE } from '@/lib/chart-data';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { orderBook } from '@/lib/order-book';
 
 const SOURCE_KEY = 'depthlens.source.v1';
 const MODES: { value: SourceMode; label: string }[] = [{ value: 'auto', label: 'Auto' }, { value: 'binance', label: 'Binance' }, { value: 'bybit', label: 'Bybit' }];
 
 export type TradeBridge = { latest: LivePrice | null; receive: ((tick: LivePrice) => void) | null; kline?: ((data: any) => void) | null };
-export function LiveQuote({ symbol, minutes, spec, bridge }: { symbol: string; minutes: number; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge> }) {
+export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false }: { symbol: string; minutes: number; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge>; bookEnabled?: boolean }) {
   const priceRef = useRef<HTMLSpanElement>(null);
   const diagnosticsRef = useRef<HTMLDivElement>(null);
   const sourceRef = useRef<TradeSource | 'poll'>('binance');
@@ -19,6 +20,7 @@ export function LiveQuote({ symbol, minutes, spec, bridge }: { symbol: string; m
   const [mode, setMode] = useState<SourceMode | null>(null);
   useEffect(() => { const saved = localStorage.getItem(SOURCE_KEY); setMode(saved === 'binance' || saved === 'bybit' || saved === 'auto' ? saved : 'auto'); }, []);
   const changeMode = (next: SourceMode) => { localStorage.setItem(SOURCE_KEY, next); setMode(next); };
+  useEffect(() => { orderBook.setEnabled(bookEnabled); }, [bookEnabled]);
   useEffect(() => {
     if (!mode) return;
     let frame = 0;
@@ -41,8 +43,8 @@ export function LiveQuote({ symbol, minutes, spec, bridge }: { symbol: string; m
         el.dataset['price'] = String(tick.price);
         el.dataset['exchange'] = tick.exchange ?? 'poll';
       });
-    }, setStatus, NATIVE[minutes] ?? '1m', data => bridge.current.kline?.(data), source => { sourceRef.current = source; }, mode);
-    return () => { stop(); cancelAnimationFrame(frame); };
+    }, setStatus, NATIVE[minutes] ?? '1m', data => bridge.current.kline?.(data), source => { sourceRef.current = source; orderBook.setActive(symbol, source === 'poll' ? null : source); }, mode);
+    return () => { orderBook.setActive('', null); stop(); cancelAnimationFrame(frame); };
   }, [symbol, minutes, bridge, mode]);
   useEffect(() => {
     if (!hovered) return;
