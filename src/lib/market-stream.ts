@@ -1,7 +1,7 @@
 export type ConnectionSource = 'binance' | 'bybit';
-export type ConnectionSnapshot = { source: string; state: string; openSockets: number; lastError: string; lastMessageAt: number | null; failures: number };
+export type ConnectionSnapshot = { source: string; state: string; openSockets: number; lastError: string; lastMessageAt: number | null; failures: number; connectedAt: number | null };
 type Options = { exchange?: ConnectionSource; purpose?: 'active' | 'markets'; subscription?: object; onFailure?: (failures: number) => void };
-type Entry = { key: string; url: string; socket?: WebSocket; stopped: boolean; timer?: ReturnType<typeof setTimeout>; idle?: ReturnType<typeof setTimeout>; failures: number; state: string; lastError: string; lastMessageAt: number | null; stop: (reason: string) => void };
+type Entry = { key: string; url: string; socket?: WebSocket; stopped: boolean; timer?: ReturnType<typeof setTimeout>; idle?: ReturnType<typeof setTimeout>; failures: number; state: string; lastError: string; lastMessageAt: number | null; connectedAt: number | null; stop: (reason: string) => void };
 
 // This module is the only WebSocket owner. Retired sockets remain tracked until CLOSED.
 class ConnectionManager {
@@ -10,13 +10,13 @@ class ConnectionManager {
   snapshot(exchange: ConnectionSource = 'binance', purpose = 'active'): ConnectionSnapshot {
     this.prune();
     const entry = this.entries.get(`${exchange}:${purpose}`);
-    return { source: exchange === 'binance' ? 'Binance' : 'Bybit', state: entry?.state ?? 'Offline', openSockets: this.sockets.size, lastError: entry?.lastError ?? 'None', lastMessageAt: entry?.lastMessageAt ?? null, failures: entry?.failures ?? 0 };
+    return { source: exchange === 'binance' ? 'Binance' : 'Bybit', state: entry?.state ?? 'Offline', openSockets: this.sockets.size, lastError: entry?.lastError ?? 'None', lastMessageAt: entry?.lastMessageAt ?? null, failures: entry?.failures ?? 0, connectedAt: entry?.connectedAt ?? null };
   }
   private prune() { for (const socket of this.sockets) if (socket.readyState === WebSocket.CLOSED) this.sockets.delete(socket); }
   connect(url: string, receive: (data: any) => void, status?: (live: boolean) => void, options: Options = {}) {
     const key = `${options.exchange ?? 'binance'}:${options.purpose ?? 'active'}`;
     this.entries.get(key)?.stop('replaced');
-    const entry: Entry = { key, url, stopped: false, failures: 0, state: 'Connecting', lastError: 'None', lastMessageAt: null, stop: () => {} };
+    const entry: Entry = { key, url, stopped: false, failures: 0, state: 'Connecting', lastError: 'None', lastMessageAt: null, connectedAt: null, stop: () => {} };
     this.entries.set(key, entry);
     const close = (reason: string) => {
       clearTimeout(entry.idle);
@@ -31,7 +31,7 @@ class ConnectionManager {
     const failed = (reason: string) => {
       if (entry.stopped) return;
       close(reason);
-      entry.state = 'Reconnecting'; entry.lastError = reason; entry.failures++;
+      entry.state = 'Reconnecting'; entry.connectedAt = null; entry.lastError = reason; entry.failures++;
       status?.(false); options.onFailure?.(entry.failures);
       if (!entry.stopped) entry.timer = setTimeout(open, Math.min(1000 * 2 ** (entry.failures - 1), 30000) + Math.floor(Math.random() * 250));
     };
@@ -49,7 +49,7 @@ class ConnectionManager {
       entry.socket = socket; this.sockets.add(socket); idle();
       socket.onopen = () => {
         if (entry.stopped || entry.socket !== socket) return;
-        entry.state = 'Open';
+        entry.state = 'Open'; entry.connectedAt = Date.now();
         console.info(`[DepthLens] Socket open ${key}: ${url}`);
         if (options.subscription) socket.send(JSON.stringify(options.subscription));
       };
