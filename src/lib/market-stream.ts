@@ -21,7 +21,7 @@ class ConnectionManager {
     const close = (reason: string) => {
       clearTimeout(entry.idle);
       const socket = entry.socket;
-      entry.socket = undefined;
+      delete entry.socket;
       if (!socket) return;
       socket.onopen = null; socket.onmessage = null; socket.onerror = null; socket.onclose = null;
       console.info(`[DepthLens] Socket close ${key}: ${reason}`);
