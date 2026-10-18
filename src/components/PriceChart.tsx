@@ -37,6 +37,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge }: { sy
     const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:true,priceLineStyle:LineStyle.Dotted,lastValueVisible:true});
     let stopped = false, hovered = false, frame = 0, ready = false;
     let bars: Bar[] = [], rawBars: Bar[] = [];
+    const renderedTimes = new Set<number>();
     let latest: Bar | undefined;
     let historyRetry: ReturnType<typeof setTimeout> | undefined;
     const abort = new AbortController();
@@ -58,6 +59,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge }: { sy
       if (stopped || !ready || !latest) return;
       const time = (latest.time / 1000) as UTCTimestamp;
       candles.update({ ...latest,time });
+      renderedTimes.add(latest.time);
       candles.applyOptions({priceLineColor:latest.close>=latest.open?up:down});
       el.dataset['lastClose'] = formatPrice(latest.close, priceFormat);
       if (!hovered) setLegend({...latest});
@@ -85,6 +87,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge }: { sy
       // Live price comes only from trades; a closed kline only corrects that candle's final OHLC.
       if (!k.x || !ready || !latest || !NATIVE[minutes]) return;
       if (b.time > latest.time) return;
+      if (b.time < latest.time && !renderedTimes.has(b.time)) return;
       candles.update({ ...b, time: (b.time / 1000) as UTCTimestamp }, b.time < latest.time);
       if (b.time === latest.time) { latest = b; schedule(); }
     };
@@ -100,6 +103,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge }: { sy
         bars=NATIVE[minutes]?rawBars:aggregate(rawBars,minutes);
         latest=bars.at(-1);
         candles.setData(bars.map(b=>({...b,time:(b.time/1000) as UTCTimestamp})));
+        for (const bar of bars) renderedTimes.add(bar.time);
         ready = true;
         if (!pendingTrades.length && bridge.current.latest) pendingTrades.push(bridge.current.latest);
         for (const tick of pendingTrades) receive(tick);

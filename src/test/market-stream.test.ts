@@ -72,3 +72,29 @@ it('adds a small random delay to exponential retries', () => {
   vi.advanceTimersByTime(1124); expect(FakeSocket.instances).toHaveLength(1);
   vi.advanceTimersByTime(1); expect(FakeSocket.instances).toHaveLength(2); stop();
 });
+it('multiplexes book subscriptions onto existing sockets without opening an extra socket', () => {
+  const receive = vi.fn(), connection = vi.fn();
+  const unsubscribe = connectionManager.subscribe('bybit', 'orderbook.200.BTCUSDT', receive, connection);
+  expect(FakeSocket.instances).toHaveLength(0);
+  const stop = marketStream('wss://bybit', vi.fn(), undefined, { exchange: 'bybit' });
+  const socket = FakeSocket.instances[0]; if (!socket) throw new Error();
+  socket.readyState = 1; socket.onopen?.();
+  expect(socket.send).toHaveBeenCalledWith(JSON.stringify({ op: 'subscribe', args: ['orderbook.200.BTCUSDT'] }));
+  const data = { topic: 'orderbook.200.BTCUSDT', type: 'snapshot', data: { b: [], a: [] } };
+  socket.onmessage?.({ data: JSON.stringify(data) }); expect(receive).toHaveBeenCalledWith(data);
+  unsubscribe(); expect(socket.send).toHaveBeenLastCalledWith(JSON.stringify({ op: 'unsubscribe', args: ['orderbook.200.BTCUSDT'] }));
+  socket.onmessage?.({ data: JSON.stringify(data) }); expect(receive).toHaveBeenCalledTimes(1);
+  expect(FakeSocket.instances).toHaveLength(1); stop();
+});
+it('replays Binance depth subscription after reconnect and uses SUBSCRIBE/UNSUBSCRIBE', () => {
+  const connection = vi.fn();
+  const stop = marketStream('wss://binance', vi.fn());
+  const socket = FakeSocket.instances[0]; if (!socket) throw new Error(); socket.readyState = 1; socket.onopen?.();
+  const unsubscribe = connectionManager.subscribe('binance', 'btcusdt@depth@100ms', vi.fn(), connection);
+  expect(JSON.parse(socket.send.mock.calls.at(-1)?.[0] ?? '{}')).toMatchObject({ method: 'SUBSCRIBE', params: ['btcusdt@depth@100ms'] });
+  socket.onerror?.(); socket.readyState = 3; vi.advanceTimersByTime(1000);
+  const next = FakeSocket.instances.at(-1); if (!next) throw new Error(); next.readyState = 1; next.onopen?.();
+  expect(JSON.parse(next.send.mock.calls.at(-1)?.[0] ?? '{}')).toMatchObject({ method: 'SUBSCRIBE', params: ['btcusdt@depth@100ms'] });
+  expect(connection).toHaveBeenLastCalledWith(true);
+  unsubscribe(); expect(JSON.parse(next.send.mock.calls.at(-1)?.[0] ?? '{}')).toMatchObject({ method: 'UNSUBSCRIBE' }); stop();
+});

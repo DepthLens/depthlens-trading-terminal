@@ -100,7 +100,7 @@ function Terminal() {
           {showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>}
         </div>
         {notice&&<div role="alert" className="border-b border-t-border px-3 py-2 text-xs text-t-down">{notice}</div>}
-        <div className="min-h-0 flex-1">{restored&&activeSpec&&<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} bridge={bridge}/>}</div>
+        <div className="relative min-h-0 flex-1">{restored&&activeSpec&&<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} bridge={bridge}/>} {showBookDebug&&<BookDebug spec={activeSpec}/>}</div>
       </main>
     </div>
   </div>;

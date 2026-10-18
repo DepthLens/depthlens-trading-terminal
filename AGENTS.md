@@ -16,3 +16,5 @@
 - Keep exchange price formatting and pinned quote-volume sorting in browser-safe `market-data.ts`; chart bars contain only OHLC so no volume indicator data is maintained.
 - LiveQuote owns the active trade connection and a ref bridge to PriceChart; apply every trade before animation-frame painting and never put live price or OHLC in page state, to isolate high-frequency work.
 - MarketList virtualizes fixed-height rows via market-list.ts and reads ticker refs once per second in its own component, so quote updates cannot rerender the terminal or chart.
+- order-book.ts owns the single active liquidity book and sequence recovery; optional topics multiplex through the existing active exchange socket, never create a connection, and book diagnostics rerender only their own panel.
+- Only correct historical chart candles that already exist in the rendered series; stream timestamps can precede or skip loaded history and must not cause chart exceptions.
