@@ -42,7 +42,7 @@ export class OrderBookManager {
   private source: ConnectionSource | null = null;
   private enabled = false;
   private state: BookDebug['state'] = 'Resyncing';
-  private unsubscribe?: () => void;
+  private unsubscribe: (() => void) | undefined;
   private request?: AbortController;
   private retry?: ReturnType<typeof setTimeout>;
   private generation = 0;

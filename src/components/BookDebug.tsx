@@ -3,7 +3,7 @@ import { orderBook } from '@/lib/order-book';
 import { connectionManager } from '@/lib/market-stream';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 
-export function BookDebug({ spec }: { spec?: PriceSpec }) {
+export function BookDebug({ spec }: { spec: PriceSpec | undefined }) {
   const [book, setBook] = useState(() => orderBook.debug());
   useEffect(() => { const timer = setInterval(() => setBook(orderBook.debug()), 250); return () => clearInterval(timer); }, []);
   const price = (n: number | null) => n === null ? '—' : spec ? formatPrice(n, spec) : String(n);
