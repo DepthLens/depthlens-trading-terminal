@@ -130,7 +130,7 @@ export function PriceChart({ symbol, minutes, theme }: { symbol: string; minutes
         else {
           bars = aggregate(parsed, minutes);
           const ms = minutes * 60_000;
-          const lastBucket = bars.length ? bars[bars.length - 1].time : 0;
+          const lastBucket = bars[bars.length - 1]?.time ?? 0;
           oneMin = parsed.filter((x) => Math.floor(x.time / ms) * ms === lastBucket);
         }
         setAll();
