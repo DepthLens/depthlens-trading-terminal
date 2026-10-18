@@ -8,7 +8,7 @@ import { orderBook } from '@/lib/order-book';
 const SOURCE_KEY = 'depthlens.source.v1';
 const MODES: { value: SourceMode; label: string }[] = [{ value: 'auto', label: 'Auto' }, { value: 'binance', label: 'Binance' }, { value: 'bybit', label: 'Bybit' }];
 
-export type TradeBridge = { latest: LivePrice | null; receive: ((tick: LivePrice) => void) | null; kline?: ((data: any) => void) | null };
+export type TradeBridge = { latest: LivePrice | null; receive: ((tick: LivePrice) => void) | null; kline?: ((data: any) => void) | null; heat?: ((tick: LivePrice) => void) | null };
 export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false }: { symbol: string; minutes: number; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge>; bookEnabled?: boolean }) {
   const priceRef = useRef<HTMLSpanElement>(null);
   const diagnosticsRef = useRef<HTMLDivElement>(null);
@@ -33,6 +33,7 @@ export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false }
       // Every trade reaches the candle immediately; only painting waits for the frame.
       bridge.current.latest = tick;
       bridge.current.receive?.(tick);
+      bridge.current.heat?.(tick);
       if (!frame) frame = requestAnimationFrame(() => {
         frame = 0;
         const tick = bridge.current.latest, el = priceRef.current, format = specRef.current;
