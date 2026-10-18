@@ -17,13 +17,14 @@ function readVar(el: HTMLElement, name: string) {
 }
 
 function toColor(el: HTMLElement, name: string) {
-  // Resolve oklch var to rgb via a probe element (canvas needs a concrete color).
-  const probe = document.createElement("span");
-  probe.style.color = `var(${name})`;
-  el.appendChild(probe);
-  const c = getComputedStyle(probe).color;
-  probe.remove();
-  return c || readVar(el, name);
+  // lightweight-charts can't parse oklch; paint one pixel and read back rgb.
+  const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+  const raw = readVar(el, name);
+  if (!ctx || !raw) return "#888888";
+  ctx.fillStyle = raw;
+  ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 export function aggregate(bars: Bar[], minutes: number): Bar[] {
