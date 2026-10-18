@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, CandlestickSeries, CrosshairMode, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
+import { createChart, CandlestickSeries, CrosshairMode, LineStyle, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { aggregate, applyTrade, NATIVE, type Bar } from '@/lib/chart-data';
+import { aggregate, applyLivePrice, NATIVE, type Bar } from '@/lib/chart-data';
 import { marketStream } from '@/lib/market-stream';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 export { aggregate } from '@/lib/chart-data';
-export type LivePrice = { price: number; time: number; direction: number };
+import type { LivePrice } from '@/lib/live-price';
+export type { LivePrice } from '@/lib/live-price';
 function toColor(el: HTMLElement, name: string) {
   const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
   const raw = getComputedStyle(el).getPropertyValue(name).trim();
@@ -18,6 +19,7 @@ function toColor(el: HTMLElement, name: string) {
 export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; live: LivePrice | null }) {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const flushRef = useRef<(() => void) | null>(null);
   const liveRef = useRef(live);
   liveRef.current = live;
   const [legend, setLegend] = useState<Bar | null>(null);
@@ -29,7 +31,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symb
     const text = toColor(el,'--t-muted'), grid = toColor(el,'--t-border'), up = toColor(el,'--t-up'), down = toColor(el,'--t-down');
     const chart = createChart(el, { autoSize:true, localization:{locale:'en-US'}, layout:{ background:{ color:'transparent' }, textColor:text }, grid:{ vertLines:{color:grid},horzLines:{color:grid} }, crosshair:{mode:CrosshairMode.MagnetOHLC}, rightPriceScale:{visible:true,borderColor:grid,scaleMargins:{top:0.08,bottom:0.08}}, timeScale:{borderColor:grid,timeVisible:true,barSpacing:8,rightOffset:8} });
     chartRef.current = chart;
-    const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:false,lastValueVisible:true});
+    const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:true,priceLineStyle:LineStyle.Dotted,lastValueVisible:true});
     let stopped = false, hovered = false, frame = 0;
     let bars: Bar[] = [], rawBars: Bar[] = [];
     let latest: Bar | undefined;
@@ -42,12 +44,15 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symb
       if (stopped || !latest) return;
       // The last candle always tracks the live trade price, whatever the timeframe.
       const lv = liveRef.current;
-      if (lv) latest = applyTrade(latest, lv.time, lv.price, minutes);
+      if (lv) latest = applyLivePrice(latest, lv.time, lv.price, minutes);
       const time = (latest.time / 1000) as UTCTimestamp;
       candles.update({ ...latest,time });
+      candles.applyOptions({priceLineColor:latest.close>=latest.open?up:down});
+      el.dataset.lastClose = formatPrice(latest.close, priceFormat);
       if (!hovered) setLegend({...latest});
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(flush); };
+    flushRef.current = flush;
     chart.subscribeCrosshairMove(param => {
       const data = param.seriesData.get(candles);
       hovered = Boolean(param.point && param.time !== undefined && data && 'open' in data);
@@ -84,7 +89,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symb
         bars=NATIVE[minutes]?rawBars:aggregate(rawBars,minutes);
         latest=bars.at(-1);
         candles.setData(bars.map(b=>({...b,time:(b.time/1000) as UTCTimestamp})));
-        if (latest) setLegend({...latest});
+        flush();
         chart.timeScale().scrollToRealTime();
         stopStream=marketStream(`wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${interval}`,handle, live=>{ if (!stopped) setStatus(live?'Live':'Reconnecting'); });
       } catch {
@@ -95,8 +100,9 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symb
     void load();
     // Kline messages alone arrive too slowly to animate trades; pump the live price in.
     const pump = setInterval(schedule, 250);
-    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);clearInterval(pump);stopStream?.();cancelAnimationFrame(frame);chartRef.current=null;chart.remove(); };
+    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);clearInterval(pump);stopStream?.();cancelAnimationFrame(frame);flushRef.current=null;chartRef.current=null;chart.remove(); };
   },[symbol,minutes,theme,priceFormat.precision,priceFormat.minMove]);
+  useEffect(() => { flushRef.current?.(); }, [live]);
   const zoom = (factor: number) => {
     const scale=chartRef.current?.timeScale(), range=scale?.getVisibleLogicalRange();
     if (!scale || !range) return;
