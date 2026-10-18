@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { createChart, CandlestickSeries, CrosshairMode, LineStyle, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,7 @@ import { aggregate, applyLivePrice, NATIVE, type Bar } from '@/lib/chart-data';
 import { marketStream } from '@/lib/market-stream';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 export { aggregate } from '@/lib/chart-data';
-import type { LivePrice } from '@/lib/live-price';
+import type { TradeBridge } from '@/components/LiveQuote';
 export type { LivePrice } from '@/lib/live-price';
 function toColor(el: HTMLElement, name: string) {
   const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
@@ -16,35 +16,41 @@ function toColor(el: HTMLElement, name: string) {
   const [r,g,b] = ctx.getImageData(0,0,1,1).data;
   return `rgb(${r},${g},${b})`;
 }
-export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; live: LivePrice | null }) {
+export function PriceChart({ symbol, minutes, theme, priceFormat, bridge }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge> }) {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const flushRef = useRef<(() => void) | null>(null);
-  const liveRef = useRef(live);
-  liveRef.current = live;
-  const [legend, setLegend] = useState<Bar | null>(null);
+  const legendRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('Connecting');
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    setLegend(null); setStatus('Connecting');
+    setStatus('Connecting');
     const text = toColor(el,'--t-muted'), grid = toColor(el,'--t-border'), up = toColor(el,'--t-up'), down = toColor(el,'--t-down');
     const chart = createChart(el, { autoSize:true, localization:{locale:'en-US'}, layout:{ background:{ color:'transparent' }, textColor:text }, grid:{ vertLines:{color:grid},horzLines:{color:grid} }, crosshair:{mode:CrosshairMode.MagnetOHLC}, rightPriceScale:{visible:true,borderColor:grid,scaleMargins:{top:0.08,bottom:0.08}}, timeScale:{borderColor:grid,timeVisible:true,barSpacing:8,rightOffset:8} });
     chartRef.current = chart;
     const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:true,priceLineStyle:LineStyle.Dotted,lastValueVisible:true});
-    let stopped = false, hovered = false, frame = 0;
+    let stopped = false, hovered = false, frame = 0, ready = false;
     let bars: Bar[] = [], rawBars: Bar[] = [];
     let latest: Bar | undefined;
     let stopStream: (() => void) | undefined;
     let historyRetry: ReturnType<typeof setTimeout> | undefined;
     const abort = new AbortController();
     const interval = NATIVE[minutes] ?? '1m';
+    let pendingTrades: {time: number; price: number}[] = [];
+    const setLegend = (bar: Bar | null) => {
+      const el = legendRef.current; if (!el) return;
+      const change = bar ? (bar.close - bar.open) / bar.open * 100 : 0;
+      for (const key of ['open','high','low','close'] as const) {
+        const value = el.querySelector<HTMLElement>(`[data-value="${key}"]`);
+        if (value) { value.textContent = bar ? formatPrice(bar[key], priceFormat) : '—'; value.className = change < 0 ? 'text-t-down' : 'text-t-up'; }
+      }
+      const value = el.querySelector<HTMLElement>('[data-value="change"]');
+      if (value) { value.textContent = bar ? `${change >= 0 ? '+' : ''}${change.toFixed(2)}%` : '—'; value.className = change < 0 ? 'text-t-down' : 'text-t-up'; }
+    };
+    setLegend(null);
     const flush = () => {
       frame = 0;
-      if (stopped || !latest) return;
-      // The last candle always tracks the live trade price, whatever the timeframe.
-      const lv = liveRef.current;
-      if (lv) latest = applyLivePrice(latest, lv.time, lv.price, minutes);
+      if (stopped || !ready || !latest) return;
       const time = (latest.time / 1000) as UTCTimestamp;
       candles.update({ ...latest,time });
       candles.applyOptions({priceLineColor:latest.close>=latest.open?up:down});
@@ -52,7 +58,13 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symb
       if (!hovered) setLegend({...latest});
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(flush); };
-    flushRef.current = flush;
+    const receive = (tick: {time: number; price: number}) => {
+      if (stopped) return;
+      if (!ready) { pendingTrades.push(tick); return; }
+      latest = latest ? applyLivePrice(latest, tick.time, tick.price, minutes) : { time: Math.floor(tick.time / (minutes * 60000)) * minutes * 60000, open: tick.price, high: tick.price, low: tick.price, close: tick.price };
+      schedule();
+    };
+    bridge.current.receive = receive;
     chart.subscribeCrosshairMove(param => {
       const data = param.seriesData.get(candles);
       hovered = Boolean(param.point && param.time !== undefined && data && 'open' in data);
@@ -65,18 +77,11 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symb
       const k=d.k;
       const b: Bar = {time:Number(k.t),open:Number(k.o),high:Number(k.h),low:Number(k.l),close:Number(k.c)};
       if (!Number.isFinite(b.time) || !Number.isFinite(b.close)) return;
-      if (NATIVE[minutes]) {
-        if (latest && b.time<latest.time) return;
-        latest=b;
-      } else {
-        const bucket=Math.floor(b.time/(minutes*60000))*minutes*60000;
-        if (latest && bucket<latest.time) return;
-        rawBars=rawBars.filter(x=>x.time>=bucket && x.time!==b.time); rawBars.push(b); rawBars.sort((a,b)=>a.time-b.time);
-        const updated=aggregate(rawBars,minutes).at(-1);
-        if (!updated) return;
-        latest=updated;
-      }
-      schedule();
+      // Klines may complete historical candles, but cannot set the active trade price.
+      const bucket = Math.floor(b.time / (minutes * 60000)) * minutes * 60000;
+      if (!ready || !latest || bucket >= latest.time) return;
+      if (NATIVE[minutes]) candles.update({ ...b, time: (b.time / 1000) as UTCTimestamp }, true);
+
     };
     const load = async () => {
       try {
@@ -89,6 +94,10 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symb
         bars=NATIVE[minutes]?rawBars:aggregate(rawBars,minutes);
         latest=bars.at(-1);
         candles.setData(bars.map(b=>({...b,time:(b.time/1000) as UTCTimestamp})));
+        ready = true;
+        if (!pendingTrades.length && bridge.current.latest) pendingTrades.push(bridge.current.latest);
+        for (const tick of pendingTrades) receive(tick);
+        pendingTrades = [];
         flush();
         chart.timeScale().scrollToRealTime();
         stopStream=marketStream(`wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${interval}`,handle, live=>{ if (!stopped) setStatus(live?'Live':'Reconnecting'); });
@@ -98,11 +107,9 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symb
       }
     };
     void load();
-    // Kline messages alone arrive too slowly to animate trades; pump the live price in.
-    const pump = setInterval(schedule, 250);
-    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);clearInterval(pump);stopStream?.();cancelAnimationFrame(frame);flushRef.current=null;chartRef.current=null;chart.remove(); };
-  },[symbol,minutes,theme,priceFormat.precision,priceFormat.minMove]);
-  useEffect(() => { flushRef.current?.(); }, [live]);
+    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);stopStream?.();cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;chartRef.current=null;chart.remove(); };
+  },[symbol,minutes,theme,priceFormat.precision,priceFormat.minMove,bridge]);
+
   const zoom = (factor: number) => {
     const scale=chartRef.current?.timeScale(), range=scale?.getVisibleLogicalRange();
     if (!scale || !range) return;
@@ -111,12 +118,11 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, live }: { symb
     scale.setVisibleLogicalRange({from:mid-width/2,to:mid+width/2});
   };
   const reset = () => { const chart=chartRef.current;if (!chart) return;chart.timeScale().applyOptions({barSpacing:8,rightOffset:8});chart.priceScale('right').applyOptions({autoScale:true});chart.timeScale().scrollToRealTime(); };
-  const change=legend?(legend.close-legend.open)/legend.open*100:0;
   return <div className="relative flex h-full min-h-80 w-full flex-col">
-    <div className="pointer-events-none z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs tabular-nums" data-testid="ohlc-legend">
+    <div ref={legendRef} className="pointer-events-none z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs tabular-nums" data-testid="ohlc-legend">
       <span className="font-semibold text-t-text">{symbol} · {minutes}m</span>
-      {(['open','high','low','close'] as const).map(key=><span key={key} className={legend&&change<0?'text-t-down':'text-t-up'}><span className="mr-1 capitalize text-t-muted">{key}</span>{legend?formatPrice(legend[key],priceFormat):'—'}</span>)}
-      <span className={change<0?'text-t-down':'text-t-up'}>{legend?`${change>=0?'+':''}${change.toFixed(2)}%`:'—'}</span>
+      {(['open','high','low','close'] as const).map(key=><span key={key}><span className="mr-1 capitalize text-t-muted">{key}</span><span data-value={key}>—</span></span>)}
+      <span data-value="change">—</span>
     </div>
     <div ref={ref} className="min-h-0 w-full flex-1" aria-label={`${symbol} ${minutes} minute candlestick chart`} />
     <div className="absolute bottom-12 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-md border border-t-border bg-t-panel/95 p-1">
