@@ -142,3 +142,30 @@
     color: var(--color-foreground);
   }
 }
+
+/* DepthLens terminal themes */
+:root, [data-theme="navy"] {
+  --t-bg: oklch(0.18 0.05 260); --t-panel: oklch(0.22 0.055 260); --t-border: oklch(0.32 0.06 260);
+  --t-text: oklch(0.95 0.01 250); --t-muted: oklch(0.68 0.04 255); --t-accent: oklch(0.72 0.14 230);
+  --t-up: oklch(0.74 0.16 165); --t-down: oklch(0.65 0.2 20);
+}
+[data-theme="light"] {
+  --t-bg: oklch(0.97 0.01 250); --t-panel: oklch(1 0 0); --t-border: oklch(0.88 0.02 255);
+  --t-text: oklch(0.25 0.06 260); --t-muted: oklch(0.5 0.04 258); --t-accent: oklch(0.45 0.15 260);
+  --t-up: oklch(0.6 0.15 160); --t-down: oklch(0.58 0.2 25);
+}
+[data-theme="midnight"] {
+  --t-bg: oklch(0.12 0.01 260); --t-panel: oklch(0.16 0.012 260); --t-border: oklch(0.26 0.015 260);
+  --t-text: oklch(0.93 0 0); --t-muted: oklch(0.6 0.01 260); --t-accent: oklch(0.8 0.15 85);
+  --t-up: oklch(0.74 0.16 165); --t-down: oklch(0.65 0.2 20);
+}
+[data-theme="ocean"] {
+  --t-bg: oklch(0.2 0.04 210); --t-panel: oklch(0.24 0.045 210); --t-border: oklch(0.34 0.05 210);
+  --t-text: oklch(0.95 0.01 200); --t-muted: oklch(0.7 0.04 205); --t-accent: oklch(0.8 0.13 190);
+  --t-up: oklch(0.78 0.15 160); --t-down: oklch(0.68 0.18 30);
+}
+@theme inline {
+  --color-t-bg: var(--t-bg); --color-t-panel: var(--t-panel); --color-t-border: var(--t-border);
+  --color-t-text: var(--t-text); --color-t-muted: var(--t-muted); --color-t-accent: var(--t-accent);
+  --color-t-up: var(--t-up); --color-t-down: var(--t-down);
+}
