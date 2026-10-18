@@ -8,6 +8,7 @@
 - /login and /register pages (design only, submit → /terminal)
 
 ## Open
+- Current update: resilient live-price fallback, dotted price line, orderflow placement, minute labels, Profile menu, subtle scrolling, and end-to-end checks.
 - Verify live trade streaming on a real network (sandbox blocks Binance WebSockets; REST works)
 - Order flow tools (Heatmap, Volume Profile, Footprint, DOM, CVD, Whale Trades, Liquidations) — coming soon
 - Real authentication for /login and /register
