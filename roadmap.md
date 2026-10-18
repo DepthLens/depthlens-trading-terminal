@@ -31,3 +31,6 @@
 - Binance primary availability verification: primary sockets did not deliver trades during this environment's stress run; automatic Bybit recovery and real trades passed. Immediate primary recovery is covered by tests and controlled Binance frames.
 - Order flow tools (Heatmap, Volume Profile, Footprint, DOM, CVD, Whale Trades, Liquidations) — coming soon
 - Real authentication for /login and /register
+
+## Mobile layout
+- [x] All 10 mobile items done and tested at 360/390/412, landscape and 1366

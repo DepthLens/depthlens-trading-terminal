@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { Crosshair } from 'lucide-react';
+import { Crosshair, Settings2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HeatmapBuffer, colorFor, percentile, COLUMN_MS } from '@/lib/heatmap-data';
 import { orderBook } from '@/lib/order-book';
@@ -23,7 +23,10 @@ function compact(n: number): string {
   return n.toFixed(0);
 }
 
-export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge> }) {
+export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: string; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge>; mobile?: boolean }) {
+  const [showSettings, setShowSettings] = useState(false);
+  const mobileRef = useRef(mobile); mobileRef.current = mobile;
+  const redrawRef = useRef<(() => void) | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [collected, setCollected] = useState(0);
@@ -37,6 +40,7 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
   const controls = useRef({ intensity, windowMin, grouping, minBubble, bubblesOn });
   controls.current = { intensity, windowMin, grouping, minBubble, bubblesOn };
   const specRef = useRef(spec); specRef.current = spec;
+  useEffect(() => { redrawRef.current?.(); }, [intensity, windowMin, grouping, minBubble, bubblesOn]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -77,7 +81,8 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
     const draw = () => {
       frame = 0;
       if (stopped || hidden) return;
-      if (!dirty) { schedule(); return; }
+      // Phones only draw when something changed (battery); desktop keeps its loop.
+      if (!dirty) { if (!mobileRef.current) schedule(); return; }
       dirty = false;
       const dpr = window.devicePixelRatio || 1;
       const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
@@ -226,11 +231,14 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
         ctx.fillStyle = cMuted; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText(`Collecting data… ${(cols.length / 60).toFixed(1)} min`, W / 2, 18);
       }
-      schedule();
+      if (!mobileRef.current) schedule();
     };
     const schedule = () => { if (!frame && !stopped) frame = requestAnimationFrame(draw); };
     // Redraw at least once per second (new column) and on every control change.
-    const pulse = setInterval(() => { dirty = true; schedule(); }, COLUMN_MS);
+    let pulses = 0;
+    // Phones redraw every 2 seconds to save battery; collection stays at one column per second.
+    const pulse = setInterval(() => { if (mobileRef.current && ++pulses % 2) return; dirty = true; schedule(); }, COLUMN_MS);
+    redrawRef.current = () => { dirty = true; schedule(); };
     schedule();
 
     // Wheel zoom on the price axis (and plot), anchored at the cursor price.
@@ -253,8 +261,25 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
 
     // Drag to pan the price range.
     let dragging = false, lastY = 0;
-    const onDown = (e: PointerEvent) => { dragging = true; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); };
+    const touches = new Map<number, number>();
+    let pinchStart = 0, pinchRows = 0;
+    const spread = () => { const ys = [...touches.values()]; return Math.abs((ys[0] ?? 0) - (ys[1] ?? 0)); };
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') {
+        touches.set(e.pointerId, e.clientY);
+        if (touches.size === 2) { dragging = false; pinchStart = Math.max(10, spread()); pinchRows = view.current.rows; canvas.setPointerCapture(e.pointerId); return; }
+      }
+      dragging = true; lastY = e.clientY; canvas.setPointerCapture(e.pointerId);
+    };
     const onMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
+        touches.set(e.pointerId, e.clientY);
+        if (touches.size === 2) {
+          // Pinch zooms the price range (fingers apart = fewer rows = zoom in).
+          view.current.rows = Math.min(800, Math.max(20, pinchRows * pinchStart / Math.max(10, spread())));
+          dirty = true; schedule(); return;
+        }
+      }
       const rect = canvas.getBoundingClientRect();
       const W = rect.width - AXIS_W, H = rect.height - AXIS_H;
       if (dragging) {
@@ -283,11 +308,12 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
       tip.style.top = `${Math.max(4, e.clientY - rect.top - 12)}px`;
       tip.textContent = `${specRef.current ? formatPrice(cellPrice, specRef.current) : cellPrice.toFixed(2)} · ${d.toLocaleTimeString('en-US')} · ${col.gap ? 'gap' : `${compact(v)} USDT`}`;
     };
-    const onUp = () => { dragging = false; };
+    const onUp = (e: PointerEvent) => { touches.delete(e.pointerId); dragging = false; };
     const onLeave = () => { if (tooltipRef.current) tooltipRef.current.style.display = 'none'; };
     canvas.addEventListener('pointerdown', onDown);
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onUp);
     canvas.addEventListener('pointerleave', onLeave);
 
     return () => {
@@ -298,14 +324,21 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointercancel', onUp);
+      redrawRef.current = null;
       canvas.removeEventListener('pointerleave', onLeave);
       if (bridge.current.heat === onTrade) bridge.current.heat = null;
     };
   }, [symbol, bridge]);
 
-  const center = () => { view.current.center = bridge.current.latest?.price ?? NaN; view.current.rows = DEFAULT_ROWS; };
+  const center = () => { view.current.center = bridge.current.latest?.price ?? NaN; view.current.rows = DEFAULT_ROWS; redrawRef.current?.(); };
   const control = 'text-t-muted hover:bg-t-border/50 hover:text-t-text';
-  return <div className="relative flex h-full min-h-80 w-full flex-col" data-testid="heatmap">
+  return <div className={`relative flex h-full w-full flex-col ${mobile ? 'min-h-0' : 'min-h-80'}`} data-testid="heatmap">
+    {mobile ? <div className="flex h-11 shrink-0 items-center gap-2 border-b border-t-border px-2 text-xs">
+      <span className="min-w-0 flex-1 truncate font-semibold text-t-text">{symbol} · Heatmap · {windowMin}m</span>
+      <Button variant="ghost" size="sm" onClick={center} className={`h-10 px-3 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-4" />Center</Button>
+      <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)} className={`size-10 ${control}`} aria-label="Heatmap settings"><Settings2 /></Button>
+    </div> : <>
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-t-border px-3 py-1.5 text-xs">
       <span className="font-semibold text-t-text">{symbol} · Heatmap</span>
       <label className="flex items-center gap-1.5 text-t-muted">Intensity
@@ -325,10 +358,31 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
       </label>
       <Button variant="ghost" size="sm" onClick={center} className={`h-6 px-2 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-3" />Center</Button>
     </div>
+    </>}
     <div className="relative min-h-0 flex-1">
-      <canvas ref={canvasRef} className="block size-full" aria-label={`${symbol} order book heatmap`} />
+      <canvas ref={canvasRef} className={`block size-full ${mobile ? 'touch-none' : ''}`} aria-label={`${symbol} order book heatmap`} />
       <div ref={tooltipRef} data-testid="heatmap-tooltip" className="pointer-events-none absolute z-10 hidden rounded border border-t-border bg-t-panel/95 px-2 py-1 text-[10px] tabular-nums text-t-text" />
-      {collected < 60 && <span role="status" className="pointer-events-none absolute bottom-2 left-3 text-[10px] text-t-muted">● Collecting data… {(collected / 60).toFixed(1)} min</span>}
+      {collected < 60 && <span role="status" className="pointer-events-none absolute bottom-2 left-3 text-[10px] mobile:text-xs text-t-muted">● Collecting data… {(collected / 60).toFixed(1)} min</span>}
     </div>
+    {mobile && showSettings && <div className="fixed inset-0 z-50 flex flex-col justify-end bg-t-bg/70" onClick={() => setShowSettings(false)}>
+      <div role="dialog" aria-modal="true" aria-label="Heatmap settings" onClick={e => e.stopPropagation()} className="space-y-4 rounded-t-xl border-t border-t-border bg-t-panel px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-sm text-t-text">
+        <div className="flex items-center justify-between"><h2 className="font-semibold">Heatmap settings</h2><Button variant="ghost" size="icon" className={`size-10 ${control}`} aria-label="Close heatmap settings" onClick={() => setShowSettings(false)}><X /></Button></div>
+        <label className="flex h-10 items-center gap-3 text-t-muted">Intensity
+          <input type="range" min={0.2} max={3} step={0.1} value={intensity} onChange={e => setIntensity(Number(e.target.value))} aria-label="Intensity" className="h-10 flex-1 accent-current" />
+        </label>
+        <div className="space-y-1"><span className="text-t-muted">Time window</span><div className="grid grid-cols-4 gap-2" role="group" aria-label="Time window">
+          {WINDOWS.map(w => <Button key={w} variant="ghost" aria-pressed={windowMin === w} onClick={() => setWindowMin(w)} className={`h-10 text-sm ${windowMin === w ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{w}m</Button>)}
+        </div></div>
+        <div className="space-y-1"><span className="text-t-muted">Grouping</span><div className="grid grid-cols-4 gap-2" role="group" aria-label="Grouping">
+          {GROUPINGS.map(gr => <Button key={gr} variant="ghost" aria-pressed={grouping === gr} onClick={() => setGrouping(gr)} className={`h-10 text-sm ${grouping === gr ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>x{gr}</Button>)}
+        </div></div>
+        <label className="flex h-10 items-center justify-between gap-3 text-t-muted">Min bubble size (USDT)
+          <input type="number" min={0} step={1000} value={minBubble} onChange={e => setMinBubble(Math.max(0, Number(e.target.value) || 0))} aria-label="Minimum bubble size" className="h-10 w-28 rounded border border-t-border bg-t-bg px-2 text-sm text-t-text" />
+        </label>
+        <label className="flex h-10 items-center justify-between gap-3 text-t-muted">Trade bubbles
+          <input type="checkbox" checked={bubblesOn} onChange={e => setBubblesOn(e.target.checked)} aria-label="Toggle trade bubbles" className="size-5 accent-current" />
+        </label>
+      </div>
+    </div>}
   </div>;
 }
