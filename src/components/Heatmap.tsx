@@ -141,9 +141,10 @@ export function Heatmap({ symbol, spec, bridge }: { symbol: string; spec: PriceS
       }
       offCtx.putImageData(img, 0, 0);
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(off, 0, 0, N, rows, 0, 0, W, H);
-
+      // Columns keep a fixed width and anchor to the right edge; the view scrolls left as history grows.
       const colW = W / (c.windowMin * 60);
+      const x0 = W - N * colW;
+      ctx.drawImage(off, 0, 0, N, rows, x0, 0, N * colW, H);
       // Trade bubbles: radius ∝ sqrt(volume), green buyer / red seller aggressor.
       if (c.bubblesOn) {
         for (let ci = 0; ci < N; ci++) {
