@@ -17,3 +17,7 @@ export function applyTrade(bar: Bar | undefined, time: number, price: number, mi
   if (bucket < bar.time) return bar;
   return { ...bar, high: Math.max(bar.high, price), low: Math.min(bar.low, price), close: price };
 }
+// A delayed trade must not let the kline feed replace the displayed live price.
+export function applyLivePrice(bar: Bar, time: number, price: number, minutes: number): Bar {
+  return applyTrade(bar, Math.max(bar.time, time), price, minutes);
+}

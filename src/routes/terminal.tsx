@@ -1,18 +1,19 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Search, X, SlidersHorizontal, ChevronDown, Palette } from 'lucide-react';
+import { Search, X, SlidersHorizontal, ChevronDown, UserRound, LogOut } from 'lucide-react';
 import { PriceChart, type LivePrice } from '@/components/PriceChart';
 import logo from '@/assets/depthlens-logo.png.asset.json';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_KEY, THEMES, TOOLS } from '@/lib/terminal-state';
+import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_KEY, TOOLS } from '@/lib/terminal-state';
 import { marketStream } from '@/lib/market-stream';
+import { livePriceStream, type PriceStatus } from '@/lib/live-price';
 import { priceSpec, formatPrice, sortMarkets, type Market, type PriceSpec, type Quote } from '@/lib/market-data';
 export const Route = createFileRoute('/terminal')({
   head:()=>({meta:[{title:'Terminal — DepthLens'},{name:'description',content:'Live Binance USDT futures charts, personalized tabs, and order flow tools.'},{property:'og:title',content:'Terminal — DepthLens'},{property:'og:description',content:'Follow live futures markets with DepthLens candlestick charts and order flow tools.'},{property:'og:type',content:'website'},{name:'twitter:card',content:'summary_large_image'}]}),component:Terminal,
 });
-const TFS=[{label:'1m',min:1},{label:'5m',min:5},{label:'10',min:10},{label:'15m',min:15},{label:'30',min:30},{label:'1h',min:60},{label:'4h',min:240},{label:'1d',min:1440}];
+const TFS=[{label:'1m',min:1},{label:'5m',min:5},{label:'10m',min:10},{label:'15m',min:15},{label:'30m',min:30},{label:'1h',min:60},{label:'4h',min:240},{label:'1d',min:1440}];
 
 function Terminal() {
   const [state,setState]=useState(initialState);
@@ -23,7 +24,9 @@ function Terminal() {
   const [query,setQuery]=useState('');
   const [pairStatus,setPairStatus]=useState('Loading markets');
   const [feedLive,setFeedLive]=useState(false);
-  const [tick,setTick]=useState<LivePrice|null>(null);
+  const [tick,setTick]=useState<(LivePrice & {symbol:string})|null>(null);
+  const [priceStatus,setPriceStatus]=useState<PriceStatus>('Offline');
+  const [showProfile,setShowProfile]=useState(false);
   const [showCustom,setShowCustom]=useState(false);
   const [custom,setCustom]=useState('');
   const [customError,setCustomError]=useState('');
@@ -53,16 +56,11 @@ function Terminal() {
   // One trade stream per active pair, independent of the chart's timeframe.
   useEffect(()=>{
     setTick(null);
-    let frame=0,last:number|undefined;let pending:LivePrice|null=null;
-    const stop=marketStream(`wss://fstream.binance.com/ws/${active.symbol.toLowerCase()}@aggTrade`,message=>{
-      const d=message.data??message;
-      const price=Number(d.p),time=Number(d.T);
-      if(!(price>0)||!Number.isFinite(time))return;
-      const direction=last===undefined||price===last?0:price>last?1:-1;
-      last=price;
-      pending={price,time,direction};
-      if(!frame)frame=requestAnimationFrame(()=>{frame=0;if(pending){setTick(pending);pending=null;}});
-    });
+    let frame=0;let pending:LivePrice|null=null;
+    const stop=livePriceStream(active.symbol,next=>{
+      pending=next;
+      if(!frame)frame=requestAnimationFrame(()=>{frame=0;if(pending){setTick({...pending,symbol:active.symbol});pending=null;}});
+    },setPriceStatus);
     return()=>{stop();cancelAnimationFrame(frame);};
   },[active.symbol]);
   const filtered=useMemo(()=>sortMarkets(pairs,quotes).filter(p=>p.includes(query.toUpperCase())),[pairs,quotes,query]);
@@ -70,44 +68,49 @@ function Terminal() {
   const timeframe=(minutes:number)=>setState(s=>({...s,tabs:s.tabs.map(t=>t.symbol===s.active?{...t,minutes}:t)}));
   const applyCustom=()=>{const n=validMinutes(custom);if(n===null){setCustomError('Enter a whole number from 1 to 1440.');return;}timeframe(n);setShowCustom(false);setCustomError('');};
   const activeSpec=priceSpecs[active.symbol];
-  const price=tick?.price??quotes[active.symbol]?.price;
+  const activeTick=tick?.symbol===active.symbol?tick:null;
+  const price=activeTick?.price;
   const change=quotes[active.symbol]?.change;
   const control='text-t-muted hover:bg-t-border/50 hover:text-t-text';
   return <div data-theme={state.theme} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text">
     <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-t-border bg-t-panel px-4 py-2">
       <Link to="/" className="flex items-center gap-2 text-lg font-bold text-t-accent"><img src={logo.url} alt="DepthLens logo" className="size-8 shrink-0 rounded-md" />DepthLens</Link>
-      <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><span data-testid="live-price" className={`text-lg font-semibold ${tick?.direction===1?'text-t-up':tick?.direction===-1?'text-t-down':'text-t-text'}`}><span aria-label={tick?.direction===1?'Price rising':tick?.direction===-1?'Price falling':'Price unchanged'}>{tick?.direction===1?'▲ ':tick?.direction===-1?'▼ ':''}</span>{price!==undefined&&activeSpec?formatPrice(price,activeSpec):'—'}</span>{change!==undefined&&<span className={`text-xs ${change>=0?'text-t-up':'text-t-down'}`}>{change>=0?'+':''}{change.toFixed(2)}% <span className="text-t-muted">24h</span></span>}</div>
+      <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><span data-testid="live-price" className={`text-lg font-semibold ${tick?.direction===1?'text-t-up':tick?.direction===-1?'text-t-down':'text-t-text'}`}><span aria-label={tick?.direction===1?'Price rising':tick?.direction===-1?'Price falling':'Price unchanged'}>{tick?.direction===1?'▲ ':tick?.direction===-1?'▼ ':''}</span>{price!==undefined&&activeSpec?formatPrice(price,activeSpec):'—'}</span><span role="status" data-testid="price-status" className={`flex items-center gap-1 text-[10px] ${priceStatus==='Live'?'text-t-up':priceStatus==='Polling'?'text-t-warning':'text-t-down'}`}><span aria-hidden="true" className="size-1.5 rounded-full bg-current"/>{priceStatus}</span>{change!==undefined&&<span className={`text-xs ${change>=0?'text-t-up':'text-t-down'}`}>{change>=0?'+':''}{change.toFixed(2)}% <span className="text-t-muted">24h</span></span>}</div>
       <div className="ml-auto flex items-center gap-2">
-        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={control} aria-label="Theme" title="Theme"><Palette/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text">{THEMES.map(theme=><DropdownMenuItem key={theme} onSelect={()=>setState(s=>({...s,theme}))} className="capitalize focus:bg-t-border focus:text-t-text">{theme}{state.theme===theme?' ✓':''}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
+        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem asChild className="focus:bg-t-border focus:text-t-text"><Link to="/"><LogOut/>Logout</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+
       </div>
     </header>
+    {showProfile&&<div role="dialog" aria-modal="true" aria-label="Profile" className="fixed inset-0 z-50 flex items-center justify-center bg-t-bg/80 p-4"><div className="w-full max-w-sm rounded-md border border-t-border bg-t-panel p-5"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Profile</h2><Button variant="ghost" size="icon" className={control} aria-label="Close profile" onClick={()=>setShowProfile(false)}><X/></Button></div><div className="flex items-center gap-3 py-6"><UserRound className="size-10 rounded-full border border-t-border p-2 text-t-accent"/><span>Guest</span></div><Button asChild variant="outline" className="border-t-border bg-t-bg text-t-text"><Link to="/">Logout</Link></Button></div></div>}
+
     <div className="flex min-h-0 flex-1">
       <aside className="flex w-44 shrink-0 flex-col border-r border-t-border bg-t-panel sm:w-60 lg:w-72">
         <div className="border-b border-t-border p-3"><div className="relative"><Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-t-muted"/><input aria-label="Search futures pairs" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search pairs" className="h-9 w-full rounded-md border border-t-border bg-t-bg pl-8 pr-2 text-sm outline-none focus:border-t-accent"/></div></div>
         <div className="flex items-center justify-between px-3 py-2 text-[10px] uppercase text-t-muted"><span>USDT Futures</span><span>{pairs.length} pairs</span></div>
-        <div className="min-h-0 flex-1 overflow-y-auto">{filtered.map(p=>{const q=quotes[p];return <Button key={p} variant="ghost" onClick={()=>select(p)} aria-label={`Open ${p}`} className={`flex h-auto min-h-12 w-full justify-between gap-1 rounded-none border-l-2 px-3 py-2 ${active.symbol===p?'border-t-accent bg-t-border/35 text-t-text':'border-transparent text-t-text hover:bg-t-border/30'}`}><span className="min-w-0 truncate text-xs font-semibold">{p.replace(/USDT$/, '')}USDT<span className="block text-left text-[9px] font-normal text-t-muted">Perp</span></span><span className="min-w-0 text-right tabular-nums"><span className="block truncate text-xs">{q&&priceSpecs[p]?formatPrice(q.price,priceSpecs[p]):'—'}</span><span className={`block text-[10px] ${q&&q.change<0?'text-t-down':'text-t-up'}`}>{q?`${q.change>=0?'+':''}${q.change.toFixed(2)}%`:'—'}</span></span></Button>;})}{!filtered.length&&<p role="status" className="px-3 py-4 text-xs text-t-muted">{pairStatus||'No matching pairs'}</p>}</div>
+        <div className="terminal-pairs min-h-0 flex-1 overflow-y-auto">{filtered.map(p=>{const q=quotes[p];return <Button key={p} variant="ghost" onClick={()=>select(p)} aria-label={`Open ${p}`} className={`flex h-auto min-h-12 w-full justify-between gap-1 rounded-none border-l-2 px-3 py-2 ${active.symbol===p?'border-t-accent bg-t-border/35 text-t-text':'border-transparent text-t-text hover:bg-t-border/30'}`}><span className="min-w-0 truncate text-xs font-semibold">{p.replace(/USDT$/, '')}USDT<span className="block text-left text-[9px] font-normal text-t-muted">Perp</span></span><span className="min-w-0 text-right tabular-nums"><span className="block truncate text-xs">{q&&priceSpecs[p]?formatPrice(q.price,priceSpecs[p]):'—'}</span><span className={`block text-[10px] ${q&&q.change<0?'text-t-down':'text-t-up'}`}>{q?`${q.change>=0?'+':''}${q.change.toFixed(2)}%`:'—'}</span></span></Button>;})}{!filtered.length&&<p role="status" className="px-3 py-4 text-xs text-t-muted">{pairStatus||'No matching pairs'}</p>}</div>
         <div className="border-t border-t-border px-3 py-2 text-[10px] text-t-muted"><span className={feedLive?'text-t-up':'text-t-down'}>● </span>{feedLive?'Binance Futures · Live':'Binance Futures · Reconnecting'}</div>
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-11 shrink-0 border-b border-t-border bg-t-panel">
-        <div role="tablist" aria-label="Open pairs" className="flex min-w-0 flex-1 overflow-x-auto pt-1">
+        <div role="tablist" aria-label="Open pairs" className="terminal-tabs flex min-w-0 flex-1 overflow-x-auto pt-1" onWheel={e=>{if(e.currentTarget.scrollWidth>e.currentTarget.clientWidth){e.currentTarget.scrollLeft+=e.deltaY||e.deltaX;}}}>
           {state.tabs.map(t=><div key={t.symbol} className={`flex shrink-0 items-center border-r border-t-border ${t.symbol===active.symbol?'border-t-2 border-t-t-accent bg-t-bg':'border-t-2 border-t-transparent'}`}><Button role="tab" aria-selected={t.symbol===active.symbol} variant="ghost" onClick={()=>select(t.symbol)} className={`h-full rounded-none px-3 text-xs ${t.symbol===active.symbol?'text-t-text':control}`}>{t.symbol}<span className="text-[10px] text-t-muted">{t.minutes}m</span></Button><Button variant="ghost" size="icon" className={`mr-1 size-6 ${control}`} aria-label={`Close ${t.symbol}`} title={`Close ${t.symbol}`} disabled={state.tabs.length===1} onClick={()=>{setNotice('');setState(s=>closePair(s,t.symbol));}}><X className="size-3"/></Button></div>)}
         </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-t-border px-2 py-2">
+          {TFS.map(t=><Button key={t.label} variant="ghost" size="sm" aria-pressed={active.minutes===t.min} onClick={()=>timeframe(t.min)} className={`px-2.5 ${active.minutes===t.min?'bg-t-accent text-t-bg hover:bg-t-accent/90':control}`}>{t.label}</Button>)}
+          <Button variant="ghost" size="sm" aria-expanded={showCustom} onClick={()=>{setCustom(String(active.minutes));setShowCustom(s=>!s);}} className={!TFS.some(t=>t.min===active.minutes)?'bg-t-accent text-t-bg':control}>{!TFS.some(t=>t.min===active.minutes)?`${active.minutes}m · Custom`:'Custom'}<ChevronDown/></Button>
         <div className="flex shrink-0 items-center px-2">
-        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className={control}><SlidersHorizontal/>Tools<ChevronDown/></Button></DropdownMenuTrigger>
+        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className={control}><SlidersHorizontal/>orderflow<ChevronDown/></Button></DropdownMenuTrigger>
           <DropdownMenuContent data-theme={state.theme} align="end" className="w-80 border-t-border bg-t-panel p-2 text-t-text">
             <div className="mb-1 flex justify-between px-2 py-2 text-xs font-semibold"><span>Order flow tools</span><span className="text-t-up">Free · Unlocked</span></div>
             {TOOLS.map(t=><div key={t} className="flex items-center gap-2 px-2 py-2.5"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-[10px] text-t-muted">Coming soon</span><Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]??false} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
           </DropdownMenuContent>
         </DropdownMenu>
-        </div></div>
-        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-t-border px-2 py-2">
-          {TFS.map(t=><Button key={t.label} variant="ghost" size="sm" aria-pressed={active.minutes===t.min} onClick={()=>timeframe(t.min)} className={`px-2.5 ${active.minutes===t.min?'bg-t-accent text-t-bg hover:bg-t-accent/90':control}`}>{t.label}</Button>)}
-          <Button variant="ghost" size="sm" aria-expanded={showCustom} onClick={()=>{setCustom(String(active.minutes));setShowCustom(s=>!s);}} className={!TFS.some(t=>t.min===active.minutes)?'bg-t-accent text-t-bg':control}>{!TFS.some(t=>t.min===active.minutes)?`${active.minutes}m · Custom`:'Custom'}<ChevronDown/></Button>
+        </div>
           {showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>}
         </div>
         {notice&&<div role="alert" className="border-b border-t-border px-3 py-2 text-xs text-t-down">{notice}</div>}
-        <div className="min-h-0 flex-1">{restored&&activeSpec&&<PriceChart symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} live={tick}/>}</div>
+        <div className="min-h-0 flex-1">{restored&&activeSpec&&<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} live={activeTick}/>}</div>
       </main>
     </div>
   </div>;

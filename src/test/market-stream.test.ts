@@ -11,6 +11,14 @@ class FakeSocket {
 }
 afterEach(() => { vi.unstubAllGlobals();vi.useRealTimers();FakeSocket.instances=[]; });
 describe('Market connections', () => {
+  it('reconnects after five seconds without messages and clears the watchdog on cleanup', () => {
+    vi.useFakeTimers();vi.stubGlobal('WebSocket', FakeSocket);
+    const status=vi.fn();const stop=marketStream('wss://example.test',vi.fn(),status,5000);
+    vi.advanceTimersByTime(4999);expect(FakeSocket.instances[0]?.close).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);expect(FakeSocket.instances[0]?.close).toHaveBeenCalledOnce();expect(status).toHaveBeenLastCalledWith(false);
+    vi.advanceTimersByTime(1000);expect(FakeSocket.instances).toHaveLength(2);
+    stop();vi.advanceTimersByTime(60000);expect(FakeSocket.instances).toHaveLength(2);
+  });
   it('reconnects a dropped socket and stops reconnecting on cleanup', () => {
     vi.useFakeTimers();vi.stubGlobal('WebSocket', FakeSocket);
     const receive=vi.fn();const stop=marketStream('wss://fstream.binance.com/ws/btcusdt@aggTrade',receive);

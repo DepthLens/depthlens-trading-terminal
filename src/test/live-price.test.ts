@@ -1,0 +1,37 @@
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { livePriceStream } from '@/lib/live-price';
+import { applyLivePrice } from '@/lib/chart-data';
+const stream = vi.hoisted(() => ({ receive: (_data: any) => {}, status: (_live: boolean) => {}, stop: vi.fn() }));
+vi.mock('@/lib/market-stream', () => ({ marketStream: vi.fn((_url, receive, status) => { stream.receive = receive; stream.status = status; return stream.stop; }) }));
+beforeEach(() => { vi.useFakeTimers(); stream.stop.mockClear(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+it('falls back after exactly five silent seconds and polls again every one second', async () => {
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ price: '100', time: 60000 }) });
+  vi.stubGlobal('fetch', fetcher);
+  const price = vi.fn(), status = vi.fn();
+  const stop = livePriceStream('BTCUSDT', price, status);
+  await vi.advanceTimersByTimeAsync(4999); expect(fetcher).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1); expect(fetcher).toHaveBeenCalledTimes(1); expect(status).toHaveBeenLastCalledWith('Polling');
+  expect(fetcher.mock.calls[0]?.[0]).toBe('https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT');
+  await vi.advanceTimersByTimeAsync(999); expect(fetcher).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1); expect(fetcher).toHaveBeenCalledTimes(2);
+  stop(); await vi.advanceTimersByTimeAsync(10000); expect(fetcher).toHaveBeenCalledTimes(2); expect(stream.stop).toHaveBeenCalledOnce();
+});
+it('falls back on failure, goes Offline on failed polling, and recovers to WebSocket Live', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Offline')));
+  const price = vi.fn(), status = vi.fn();
+  const stop = livePriceStream('ETHUSDT', price, status);
+  stream.status(false); await vi.advanceTimersByTimeAsync(0);
+  expect(status).toHaveBeenLastCalledWith('Offline');
+  stream.receive({ p: '200', T: 60000 });
+  expect(status).toHaveBeenLastCalledWith('Live'); expect(price).toHaveBeenLastCalledWith({ price: 200, time: 60000, direction: 0 });
+  const calls = vi.mocked(fetch).mock.calls.length;
+  await vi.advanceTimersByTimeAsync(1000); expect(vi.mocked(fetch).mock.calls).toHaveLength(calls);
+  stop();
+});
+it('keeps the last candle equal to the active price for every timeframe, including delayed ticks', () => {
+  for (const minutes of [1, 5, 10, 15, 30, 45, 60, 240, 1440]) {
+    const result = applyLivePrice({ time: 86400000, open: 100, high: 110, low: 90, close: 105 }, 86399000, 99, minutes);
+    expect(result.close).toBe(99); expect(result.time).toBe(86400000);
+  }
+});
