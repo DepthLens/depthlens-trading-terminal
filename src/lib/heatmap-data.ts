@@ -1,6 +1,6 @@
 // Browser-safe heatmap buffer: one order book snapshot column per second, typed arrays, 60 minutes max.
 export type TradeSide = 'Buy' | 'Sell';
-export type Column = { time: number; origin: number; data: Float32Array; trades: Map<number, { buy: number; sell: number }>; price: number; gap: boolean };
+export type Column = { time: number; origin: number; data: Float32Array; trades: Map<number, { buy: number; sell: number }>; price: number; gap: boolean; priceOnly?: boolean };
 export const COLUMN_MS = 1000;
 export const MAX_COLUMNS = 3600; // 60 minutes of one-second columns
 export const ROWS = 1024; // buckets per column, centered on the price at sample time
@@ -75,11 +75,25 @@ export class HeatmapBuffer {
     if (this.cols.length > MAX_COLUMNS) this.cols.splice(0, this.cols.length - MAX_COLUMNS);
   }
   markGap(time: number, price: number) { this.sample(time, new Map(), new Map(), price, true); }
+  // Add a price/trades-only history column (backfill); never any book colors.
+  priceColumn(time: number, price: number, trades: Map<number, { buy: number; sell: number }>) {
+    const origin = this.index(price) - ROWS / 2;
+    this.cols.push({ time, origin, data: new Float32Array(ROWS), trades, price, gap: false, priceOnly: true });
+    if (this.cols.length > MAX_COLUMNS) this.cols.splice(0, this.cols.length - MAX_COLUMNS);
+  }
+  // Merge older columns (restore/backfill) in front of live ones, sorted by time, deduped.
+  merge(older: Column[]) {
+    if (!older.length) return;
+    const seen = new Set(this.cols.map(c => c.time));
+    const fresh = older.filter(c => !seen.has(c.time));
+    this.cols = [...fresh, ...this.cols].sort((a, b) => a.time - b.time);
+    if (this.cols.length > MAX_COLUMNS) this.cols.splice(0, this.cols.length - MAX_COLUMNS);
+  }
   get columns(): readonly Column[] { return this.cols; }
   // Liquidity at an absolute bucket index for one column.
   cell(column: Column, bucketIndex: number): number {
     const i = bucketIndex - column.origin;
-    return i >= 0 && i < ROWS ? column.data[i]! : 0;
+    return i >= 0 && i < ROWS ? (column.data[i] ?? 0) : 0;
   }
   // Grouped cell: sum of `grouping` adjacent buckets ending at the row's band.
   groupedCell(column: Column, rowTopIndex: number, grouping: number): number {

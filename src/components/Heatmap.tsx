@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { Crosshair, Settings2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { HeatmapBuffer, colorFor, percentile, COLUMN_MS } from '@/lib/heatmap-data';
+import { colorFor, percentile, COLUMN_MS } from '@/lib/heatmap-data';
+import { getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
 import { orderBook } from '@/lib/order-book';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 import type { TradeBridge } from '@/components/LiveQuote';
@@ -30,6 +31,8 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [collected, setCollected] = useState(0);
+  const [priceOnlyFrom, setPriceOnlyFrom] = useState<number | null>(null);
+  const labelRef = useRef<number | null>(null);
   const [intensity, setIntensity] = useState(1);
   const [windowMin, setWindowMin] = useState<number>(15);
   const [grouping, setGrouping] = useState<number>(1);
@@ -49,7 +52,10 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
     if (!ctx) return;
     const off = document.createElement('canvas');
     const offCtx = off.getContext('2d')!;
-    let buffer = new HeatmapBuffer(bridge.current.latest?.price ?? NaN);
+    // History lives in the module-level store keyed by source:symbol; remounts,
+    // tab switches and setting changes never clear it. Only a source change does.
+    let entry = getHeatmapEntry(orderBook.debug().source as HeatSource, symbol, bridge.current.latest?.price ?? NaN);
+    let buffer = entry.buffer;
     let source = orderBook.debug().source;
     let stopped = false, hidden = document.hidden, frame = 0, dirty = true;
     view.current = { center: NaN, rows: DEFAULT_ROWS };
@@ -63,15 +69,23 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
     // One snapshot column per second; keep collecting while hidden, marking the gap.
     const timer = setInterval(() => {
       const dbg = orderBook.debug();
-      if (dbg.source !== source) { source = dbg.source; buffer = new HeatmapBuffer(bridge.current.latest?.price ?? NaN); view.current.center = NaN; }
+      if (dbg.source !== source) { source = dbg.source; entry = getHeatmapEntry(source as HeatSource, symbol, bridge.current.latest?.price ?? NaN); buffer = entry.buffer; view.current.center = NaN; }
       const price = bridge.current.latest?.price ?? dbg.bestBid ?? NaN;
       if (!Number.isFinite(price)) return;
       if (hidden) buffer.markGap(Date.now(), price);
       else if (dbg.enabled && dbg.state === 'Synced') buffer.sample(Date.now(), orderBook.bids.levels, orderBook.asks.levels, price);
       else return;
       setCollected(buffer.columns.length);
+      // "Price and trades only" label: shown while backfilled columns are visible.
+      const cols = buffer.columns;
+      const hasPriceOnly = cols.some(c => c.priceOnly);
+      const bookStart = cols.find(c => !c.priceOnly && !c.gap)?.time ?? null;
+      const label = hasPriceOnly && bookStart !== null ? bookStart : hasPriceOnly ? -1 : null;
+      if (label !== labelRef.current) { labelRef.current = label; setPriceOnlyFrom(label); }
       dirty = true;
     }, COLUMN_MS);
+    // Persist all buffers to IndexedDB every 10 seconds.
+    const persistTimer = setInterval(persistHeatmaps, 10000);
 
     const onVisibility = () => { hidden = document.hidden; if (!hidden) dirty = true; };
     document.addEventListener('visibilitychange', onVisibility);
@@ -318,7 +332,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
 
     return () => {
       stopped = true;
-      clearInterval(timer); clearInterval(pulse); cancelAnimationFrame(frame);
+      clearInterval(timer); clearInterval(pulse); clearInterval(persistTimer); cancelAnimationFrame(frame);
       document.removeEventListener('visibilitychange', onVisibility);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('pointerdown', onDown);
@@ -363,6 +377,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
       <canvas ref={canvasRef} className={`block size-full ${mobile ? 'touch-none' : ''}`} aria-label={`${symbol} order book heatmap`} />
       <div ref={tooltipRef} data-testid="heatmap-tooltip" className="pointer-events-none absolute z-10 hidden rounded border border-t-border bg-t-panel/95 px-2 py-1 text-[10px] tabular-nums text-t-text" />
       {collected < 60 && <span role="status" className="pointer-events-none absolute bottom-2 left-3 text-[10px] mobile:text-xs text-t-muted">● Collecting data… {(collected / 60).toFixed(1)} min</span>}
+      {priceOnlyFrom !== null && <span data-testid="price-only-label" className="pointer-events-none absolute bottom-2 right-3 text-[10px] mobile:text-xs text-t-muted">Price and trades only.{priceOnlyFrom > 0 ? ` Order book colors start at ${new Date(priceOnlyFrom).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}</span>}
     </div>
     {mobile && showSettings && <div className="fixed inset-0 z-50 flex flex-col justify-end bg-t-bg/70" onClick={() => setShowSettings(false)}>
       <div role="dialog" aria-modal="true" aria-label="Heatmap settings" onClick={e => e.stopPropagation()} className="space-y-4 rounded-t-xl border-t border-t-border bg-t-panel px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-sm text-t-text">

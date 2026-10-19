@@ -6,6 +6,12 @@
 - [x] Controls: intensity, 5/15/30/60m window, x1/x2/x5/x10 grouping, min bubble, bubbles toggle, Center, wheel zoom + drag pan, hover tooltip, hidden-tab gap marking.
 - [x] Verified: BTCUSDT cells/bubbles/legend/tag render, tooltip shows price·time·size, zoom/pan/intensity/grouping/window all work, ETH/SOL/BNB switches reset and remount, off→candle chart→on, 46 tests pass, zero console errors, ≤3 sockets.
 
+## Heatmap history
+- [x] Module-level store keyed by source:symbol; window/grouping/intensity/bubble/timeframe changes, tool toggles and tab switches never clear it; only a source change clears.
+- [x] IndexedDB persistence every 10s; restore on load if under 60 minutes old, close time marked as a dim gap stripe.
+- [x] Backfill on open: 1m klines for the price line, recent aggTrades for bubbles (Binance max 10 requests, Bybit one), once per pair+source per 5 minutes, 429/418 pauses 60s; "Price and trades only. Order book colors start at HH:MM" label; no invented book colors.
+- [x] Verified: settings changed 5x each with history intact, refresh restored history with the label, off/on kept history, 52 tests pass, zero console errors.
+
 ## Live order book engine
 - [x] Shared-socket subscriptions, Bybit snapshot/delta book, Binance buffered snapshot/sequence resync.
 - [x] Active-pair/source and Heatmap/DOM gating; toggleable Book debug panel, no drawing.

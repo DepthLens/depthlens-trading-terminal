@@ -13,6 +13,7 @@ Read this file before any change. It applies to every future request.
 - Tools (orderflow) menu with switches
 - Order book engine and Book debug panel
 - Heatmap view (cells, trade bubbles, controls, zoom/pan, tooltip)
+- Heatmap history: module-level buffer per source+pair that never resets (only a source change clears it), IndexedDB restore after refresh with a dim gap stripe, 60-minute price/trade backfill, "Price and trades only" label
 - Mobile layout (below 768px and phone landscape): Pairs bottom sheet, compact one-row top bar with settings menu, scrollable tabs and timeframe row, Tools icon with Book debug inside, tap-to-expand OHLC legend, floating chart buttons, single status indicator, heatmap controls sheet, safe areas
 - Front page, login and register pages
 - DepthLens logo and favicon
