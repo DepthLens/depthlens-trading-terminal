@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Volume Profile
-- [ ] Cached active-source 1m volume data, tick-aligned histogram and live trade additions without sockets.
-- [ ] Candle overlay, POC/VAH/VAL, hover details, saved desktop/mobile settings and Heatmap hiding.
-- [ ] Verify pairs/timeframes/settings/zoom/pan and protected desktop/mobile smoke tests.
+- [x] Cached active-source 1m volume data, tick-aligned histogram and live trade additions without sockets.
+- [x] Candle overlay, POC/VAH/VAL, hover details, saved desktop/mobile settings and Heatmap hiding.
+- [x] Verified BTC/ETH/DOGE at 1m/5m/15m, all settings and persistence, zoom/pan/tooltip, moving BTC price, Heatmap on/off, desktop and 390x844 phone. Bybit run had no console errors; Auto run encountered one Binance remote-close error. All 62 tests pass.
 
 ## Heatmap view
 - [x] Buffer: 1s book snapshots, USDT notional buckets, 60 min typed-array history, Bybit orderbook.1000→200 fallback, "Collecting data… X min".
@@ -40,7 +40,7 @@
 
 ## Open
 - Binance primary availability verification: primary sockets did not deliver trades during this environment's stress run; automatic Bybit recovery and real trades passed. Immediate primary recovery is covered by tests and controlled Binance frames.
-- Order flow tools (Heatmap, Volume Profile, Footprint, DOM, CVD, Whale Trades, Liquidations) — coming soon
+- Remaining order flow tools (Footprint, DOM drawing, CVD, Whale Trades, Liquidations) — coming soon
 - Real authentication for /login and /register
 
 ## Mobile layout

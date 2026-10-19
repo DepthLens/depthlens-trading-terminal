@@ -27,7 +27,7 @@ describe('Volume Profile rules',()=>{
   it('retains every live trade received while history is loading without extra requests',async()=>{
     vi.resetModules();const m=await import('@/lib/volume-profile');const now=Date.now();
     const fetcher=vi.fn(async()=>{
-      for(const [size,side] of [[4,'Buy'],[3,'Sell']] as const)m.addProfileTrade('BTCUSDT',{time:now,price:12,size,side,source:'trade',exchange:'binance',receivedAt:now});
+      for(const [size,side] of [[4,'Buy'],[3,'Sell']] as const)m.addProfileTrade('BTCUSDT',{time:now,price:12,direction:0,size,side,source:'trade',exchange:'binance',receivedAt:now});
       return {ok:true,status:200,json:async()=>[]};
     });vi.stubGlobal('fetch',fetcher);
     await m.loadProfile('binance','BTCUSDT');const data=m.profileData('binance','BTCUSDT');
