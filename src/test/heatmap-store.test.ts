@@ -25,7 +25,7 @@ describe('HeatmapBuffer history rules', () => {
   });
   it('merge keeps the 60 minute cap', () => {
     const b = new HeatmapBuffer(100000);
-    b.sample(MAX_COLUMNS * 1000, new Map(), new Map(), 100000);
+    for (let i = 0; i < MAX_COLUMNS; i++) b.sample(100000 + i * 1000, new Map(), new Map(), 100000);
     const older = Array.from({ length: 100 }, (_, i) => ({ time: i * 1000, origin: 0, data: new Float32Array(0), trades: new Map(), price: 100000, gap: false, priceOnly: true }));
     b.merge(older);
     expect(b.columns.length).toBe(MAX_COLUMNS);
