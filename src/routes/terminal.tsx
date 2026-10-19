@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Search, X, SlidersHorizontal, ChevronDown, UserRound, LogOut, List, Settings } from 'lucide-react';
 import { PriceChart } from '@/components/PriceChart';
 import { Heatmap } from '@/components/Heatmap';
+import { VolumeProfileGear, VolumeProfileSettingsPanel } from '@/components/VolumeProfileSettings';
+import { PROFILE_DEFAULT, PROFILE_KEY, restoreProfile, type ProfileSettings } from '@/lib/volume-profile';
 import logo from '@/assets/depthlens-logo.png.asset.json';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -31,6 +33,10 @@ function Terminal() {
   const [pairStatus,setPairStatus]=useState('Loading markets');
   const [feedLive,setFeedLive]=useState(false);
   const [showBookDebug,setShowBookDebug]=useState(false);
+  const [profileSettings,setProfileSettings]=useState<ProfileSettings>({...PROFILE_DEFAULT});
+  const [showProfileSettings,setShowProfileSettings]=useState(false);
+  useEffect(()=>{setProfileSettings(restoreProfile(localStorage.getItem(PROFILE_KEY)));},[]);
+  const changeProfileSettings=(next:ProfileSettings)=>{setProfileSettings(next);localStorage.setItem(PROFILE_KEY,JSON.stringify(next));};
 
   const [showProfile,setShowProfile]=useState(false);
   const [showCustom,setShowCustom]=useState(false);
@@ -88,7 +94,7 @@ function Terminal() {
   return <div data-theme={state.theme} data-mobile={mobile||undefined} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text mobile:min-h-0 mobile:pt-[env(safe-area-inset-top)] mobile:pr-[env(safe-area-inset-right)] mobile:pb-[env(safe-area-inset-bottom)] mobile:pl-[env(safe-area-inset-left)]">
     {mobile?<header className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b border-t-border bg-t-panel px-2 py-1">
       <Link to="/" className="flex h-10 items-center gap-1.5 text-sm font-bold text-t-accent"><img src={logo.url} alt="DepthLens logo" className="size-7 shrink-0 rounded-md" /><span className="max-[379px]:sr-only">DepthLens</span></Link>
-      <div className="flex min-w-0 items-center gap-2 overflow-hidden tabular-nums"><div className="flex min-w-0 flex-col leading-tight"><span className="truncate text-xs font-semibold">{active.symbol}</span><div className="flex min-w-0 items-center gap-2 whitespace-nowrap"><LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge} bookEnabled={Boolean(state.tools['Heatmap'] || state.tools['DOM'])} mode={mode} onModeChange={changeMode} onSourceChange={src=>setListSource(src==='bybit'?'bybit':'binance')} compact/></div></div></div>
+      <div className="flex min-w-0 items-center gap-2 overflow-hidden tabular-nums"><div className="flex min-w-0 flex-col leading-tight"><span className="truncate text-xs font-semibold">{active.symbol}</span><div className="flex min-w-0 items-center gap-2 whitespace-nowrap"><LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge} bookEnabled={Boolean(state.tools['Heatmap'] || state.tools['DOM'])} profileEnabled={Boolean(state.tools['Volume Profile'])} mode={mode} onModeChange={changeMode} onSourceChange={src=>setListSource(src==='bybit'?'bybit':'binance')} compact/></div></div></div>
       <div className="flex shrink-0 items-center gap-0.5">
         <Button variant="ghost" size="icon" className={`size-10 ${control}`} aria-label="Pairs" title="Pairs" onClick={()=>setShowPairs(true)}><List/></Button>
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`size-10 ${control}`} aria-label="Settings" title="Settings"><Settings/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} data-mobile="" align="end" className="w-64 space-y-3 border-t-border bg-t-panel p-3 text-sm text-t-text">
@@ -99,7 +105,7 @@ function Terminal() {
       </div>
     </header>:<header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-t-border bg-t-panel px-4 py-2">
       <Link to="/" className="flex items-center gap-2 text-lg font-bold text-t-accent"><img src={logo.url} alt="DepthLens logo" className="size-8 shrink-0 rounded-md" />DepthLens</Link>
-      <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge} bookEnabled={Boolean(state.tools['Heatmap'] || state.tools['DOM'])} mode={mode} onModeChange={changeMode} onSourceChange={src=>setListSource(src==='bybit'?'bybit':'binance')}/><QuoteChange symbol={active.symbol} quotes={quotes}/></div>
+      <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge} bookEnabled={Boolean(state.tools['Heatmap'] || state.tools['DOM'])} profileEnabled={Boolean(state.tools['Volume Profile'])} mode={mode} onModeChange={changeMode} onSourceChange={src=>setListSource(src==='bybit'?'bybit':'binance')}/><QuoteChange symbol={active.symbol} quotes={quotes}/></div>
       <div className="ml-auto flex items-center gap-2">
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem asChild className="focus:bg-t-border focus:text-t-text"><Link to="/"><LogOut/>Logout</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
 
@@ -134,7 +140,7 @@ function Terminal() {
           <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`mx-1 size-10 shrink-0 border border-t-border ${control}`} aria-label="Orderflow tools" title="Orderflow tools"><SlidersHorizontal/></Button></DropdownMenuTrigger>
             <DropdownMenuContent data-theme={state.theme} data-mobile="" align="end" className="w-[min(20rem,calc(100vw-1rem))] border-t-border bg-t-panel p-2 text-t-text">
               <div className="mb-1 flex justify-between px-2 py-2 text-xs font-semibold"><span>Order flow tools</span><span className="text-t-up">Free · Unlocked</span></div>
-              {TOOLS.map(t=><div key={t} className="flex min-h-10 items-center gap-2 px-2 py-1"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-xs text-t-muted">Coming soon</span><Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]??false} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
+              {TOOLS.map(t=><div key={t} className="flex min-h-10 items-center gap-2 px-2 py-1"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-xs text-t-muted">{t!=='Volume Profile'&&'Coming soon'}</span>{t==='Volume Profile'&&<VolumeProfileGear onClick={()=>setShowProfileSettings(true)}/>}<Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]??false} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
               <div className="mt-1 flex min-h-10 items-center gap-2 border-t border-t-border px-2 pt-2"><label htmlFor="tool-book-debug" className="flex-1 text-sm">Book debug</label><Switch id="tool-book-debug" aria-label="Book debug" checked={showBookDebug} onCheckedChange={setShowBookDebug} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -146,7 +152,7 @@ function Terminal() {
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className={control}><SlidersHorizontal/>orderflow<ChevronDown/></Button></DropdownMenuTrigger>
           <DropdownMenuContent data-theme={state.theme} align="end" className="w-80 border-t-border bg-t-panel p-2 text-t-text">
             <div className="mb-1 flex justify-between px-2 py-2 text-xs font-semibold"><span>Order flow tools</span><span className="text-t-up">Free · Unlocked</span></div>
-            {TOOLS.map(t=><div key={t} className="flex items-center gap-2 px-2 py-2.5"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-[10px] text-t-muted">Coming soon</span><Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]??false} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
+            {TOOLS.map(t=><div key={t} className="flex items-center gap-2 px-2 py-2.5"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-[10px] text-t-muted">{t!=='Volume Profile'&&'Coming soon'}</span>{t==='Volume Profile'&&<VolumeProfileGear onClick={()=>setShowProfileSettings(true)}/>}<Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]??false} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
           </DropdownMenuContent>
         </DropdownMenu>
         </div>
@@ -155,8 +161,9 @@ function Terminal() {
         </div>
         </>}
         {notice&&<div role="alert" className="border-b border-t-border px-3 py-2 text-xs text-t-down">{notice}</div>}
-        <div className="relative min-h-0 flex-1">{restored&&activeSpec&&(state.tools['Heatmap']?<Heatmap key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={mobile}/>:<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} bridge={bridge} mobile={mobile}/>)} {showBookDebug&&<BookDebug spec={activeSpec}/>}</div>
+        <div className="relative min-h-0 flex-1">{restored&&activeSpec&&(state.tools['Heatmap']?<Heatmap key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={mobile}/>:<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} bridge={bridge} mobile={mobile} volumeProfile={Boolean(state.tools['Volume Profile'])} profileSettings={profileSettings} source={listSource}/>)} {showBookDebug&&<BookDebug spec={activeSpec}/>}</div>
       </main>
     </div>
+    {showProfileSettings&&<VolumeProfileSettingsPanel settings={profileSettings} onChange={changeProfileSettings} onClose={()=>setShowProfileSettings(false)} mobile={mobile} theme={state.theme}/>}
   </div>;
 }

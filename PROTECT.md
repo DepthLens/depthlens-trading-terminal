@@ -11,6 +11,7 @@ Read this file before any change. It applies to every future request.
 - Candle chart: live candle, OHLC legend, magnet crosshair, Zoom In, Zoom Out, Reload
 - Live price line with axis tag
 - Tools (orderflow) menu with switches
+- Volume Profile candle overlay: active-source cached 1m history, live trade volume, tick-aligned histogram, POC/VAH/VAL, hover details, saved settings and mobile sheet; hidden during Heatmap, no extra sockets.
 - Order book engine and Book debug panel
 - Heatmap view (cells, trade bubbles, controls, zoom/pan, tooltip)
 - Heatmap history: module-level buffer per source+pair that never resets (only a source change clears it), IndexedDB restore after refresh with a dim gap stripe, 60-minute price/trade backfill, "Price and trades only" label
