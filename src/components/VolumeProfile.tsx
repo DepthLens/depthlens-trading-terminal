@@ -25,7 +25,7 @@ export function VolumeProfile({ chartRef, hostRef, source, symbol, settings, spe
       const from=s.range==='Visible'?Number(visible?.from??now/1000)*1000:now-hours[s.range]*3600000;
       const to=s.range==='Visible'?Number(visible?.to??now/1000)*1000+59000:now;
       const p=buildProfile(data.candles,data.live,bottom,top,spec.minMove,s,from,to);
-      total=p.total;hasSplit=p.split&&s.split;rows=[];
+      total=p.total;hasSplit=p.split;rows=[];
       note.textContent=data.error||(!p.total?'Loading volume history…':'Estimated from 1m candles');
       canvas.dataset['total']=String(p.total);canvas.dataset['poc']=String(p.poc);canvas.dataset['vah']=String(p.vah);canvas.dataset['val']=String(p.val);canvas.dataset['rows']=String(p.rows.length);canvas.dataset['source']=source;
       if(!total)return;
@@ -34,7 +34,7 @@ export function VolumeProfile({ chartRef, hostRef, source, symbol, settings, spe
       for(const row of p.rows){const a=series.priceToCoordinate(row.high),b=series.priceToCoordinate(row.low);if(a===null||b===null||!row.volume)continue;
         const y=Math.max(0,a),height=Math.max(1,Math.min(h,b)-y-1),bar=width*row.volume/peak,x=s.position==='right'?w-bar:0;
         if(y>h||b<0)continue;ctx.globalAlpha=s.opacity*(row.inArea?1:.3);
-        if(hasSplit){const buy=bar*row.buy/row.volume;ctx.fillStyle=color('--t-up');ctx.fillRect(x,y,buy,height);ctx.fillStyle=color('--t-down');ctx.fillRect(x+buy,y,bar-buy,height);}else{ctx.fillStyle=color('--vp-unsplit');ctx.fillRect(x,y,bar,height);}
+        if(hasSplit&&s.split){const buy=bar*row.buy/row.volume;ctx.fillStyle=color('--t-up');ctx.fillRect(x,y,buy,height);ctx.fillStyle=color('--t-down');ctx.fillRect(x+buy,y,bar-buy,height);}else{ctx.fillStyle=color('--vp-unsplit');ctx.fillRect(x,y,bar,height);}
         rows.push({row,y,height,x,width:bar});
       }
       ctx.globalAlpha=1;ctx.font='12px sans-serif';

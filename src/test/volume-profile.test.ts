@@ -24,6 +24,15 @@ describe('Volume Profile rules',()=>{
     await m.loadProfile('binance','BTCUSDT');expect(fetcher).toHaveBeenCalledTimes(3);await m.loadProfile('binance','BTCUSDT');expect(fetcher).toHaveBeenCalledTimes(3);
     await m.loadProfile('binance','ETHUSDT');expect(fetcher).toHaveBeenCalledTimes(6);
   });
+  it('retains every live trade received while history is loading without extra requests',async()=>{
+    vi.resetModules();const m=await import('@/lib/volume-profile');const now=Date.now();
+    const fetcher=vi.fn(async()=>{
+      for(const [size,side] of [[4,'Buy'],[3,'Sell']] as const)m.addProfileTrade('BTCUSDT',{time:now,price:12,size,side,source:'trade',exchange:'binance',receivedAt:now});
+      return {ok:true,status:200,json:async()=>[]};
+    });vi.stubGlobal('fetch',fetcher);
+    await m.loadProfile('binance','BTCUSDT');const data=m.profileData('binance','BTCUSDT');
+    expect(data.live).toHaveLength(1);expect(data.live[0]).toMatchObject({time:Math.floor(now/60000)*60000,price:12,volume:7,buy:4});expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it.each([429,418])('pauses all profile requests for 60 seconds after %i',async(status)=>{
     vi.resetModules();vi.useFakeTimers();const m=await import('@/lib/volume-profile');const fetcher=vi.fn(async()=>({status,ok:false}));vi.stubGlobal('fetch',fetcher);
     await m.loadProfile('bybit','BTCUSDT');await m.loadProfile('binance','ETHUSDT');expect(fetcher).toHaveBeenCalledTimes(1);
