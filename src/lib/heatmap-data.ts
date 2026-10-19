@@ -93,7 +93,7 @@ export class HeatmapBuffer {
   // Liquidity at an absolute bucket index for one column.
   cell(column: Column, bucketIndex: number): number {
     const i = bucketIndex - column.origin;
-    return i >= 0 && i < ROWS ? column.data[i]! : 0;
+    return i >= 0 && i < ROWS ? (column.data[i] ?? 0) : 0;
   }
   // Grouped cell: sum of `grouping` adjacent buckets ending at the row's band.
   groupedCell(column: Column, rowTopIndex: number, grouping: number): number {
