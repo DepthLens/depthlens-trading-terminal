@@ -8,15 +8,16 @@ export function restoreProfile(raw: string | null): ProfileSettings {
 }
 export type VolumeCandle = { time: number; low: number; high: number; volume: number; buy: number | null };
 type LiveBucket = { time: number; price: number; volume: number; buy: number; receivedAt: number };
-type Entry = { candles: VolumeCandle[]; live: LiveBucket[]; fetchedAt: number; pending?: Promise<void>; error: string };
+type Entry = { candles: VolumeCandle[]; live: Map<string,LiveBucket>; fetchedAt: number; baselineAt: number; pending?: Promise<void>; error: string };
 const cache = new Map<string, Entry>();
 let pausedUntil = 0;
-function entry(source: TradeSource, symbol: string) { const key = `${source}:${symbol}`; let e = cache.get(key); if (!e) { e = { candles: [], live: [], fetchedAt: 0, error: '' }; cache.set(key,e); } return e; }
+function entry(source: TradeSource, symbol: string) { const key = `${source}:${symbol}`; let e = cache.get(key); if (!e) { e = { candles: [], live: new Map(), fetchedAt: 0, baselineAt: 0, error: '' }; cache.set(key,e); } return e; }
 export function addProfileTrade(symbol: string, tick: LivePrice) {
   if (tick.source !== 'trade' || !tick.exchange || !tick.size || tick.size <= 0) return;
   const e = entry(tick.exchange,symbol), receivedAt = tick.receivedAt ?? Date.now();
-  e.live.push({ time: Math.floor(tick.time / 60000) * 60000, price: tick.price, volume: tick.size, buy: tick.side === 'Buy' ? tick.size : 0, receivedAt });
-  // Trades are folded into minute/price buckets after the REST baseline; bounded work occurs only at profile refreshes.
+  const time = Math.floor(tick.time / 60000) * 60000, key = `${time}:${tick.price}`, old=e.live.get(key);
+  if(old && old.receivedAt>e.baselineAt) {old.volume+=tick.size;old.buy+=tick.side==='Buy'?tick.size:0;old.receivedAt=receivedAt;}
+  else e.live.set(key,{ time, price: tick.price, volume: tick.size, buy: tick.side === 'Buy' ? tick.size : 0, receivedAt });
 }
 export async function loadProfile(source: TradeSource, symbol: string, now = Date.now()): Promise<void> {
   const e = entry(source,symbol);
@@ -26,6 +27,10 @@ export async function loadProfile(source: TradeSource, symbol: string, now = Dat
   e.pending = (async () => {
     try {
       const all: VolumeCandle[] = []; let end = now;
+      // Record the baseline before requesting the current minute, so trades arriving during paging are retained.
+      const baselineAt=Date.now();
+      e.baselineAt=baselineAt;
+      e.live.clear();
       for (let page = 0; page < 3; page++) {
         const url = source === 'binance' ? `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=1500&endTime=${end}` : `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=1&limit=1000&end=${end}`;
         const r = await fetch(url);
@@ -40,7 +45,7 @@ export async function loadProfile(source: TradeSource, symbol: string, now = Dat
       }
       e.candles = [...new Map(all.map(c=>[c.time,c])).values()].sort((a,b)=>a.time-b.time);
       // The open candle is a baseline. Never add trades already covered by this snapshot.
-      e.fetchedAt = Date.now(); e.live = e.live.filter(t=>t.receivedAt>e.fetchedAt); e.error = '';
+      e.fetchedAt = Date.now(); e.error = '';
     } catch (error) { e.error = error instanceof Error ? error.message : 'Volume history unavailable'; }
     finally { e.pending = undefined; }
   })();
@@ -48,10 +53,8 @@ export async function loadProfile(source: TradeSource, symbol: string, now = Dat
 }
 export function profileData(source: TradeSource, symbol: string) {
   const e = entry(source,symbol), cutoff = Date.now() - 3*86400000;
-  const folded = new Map<string,LiveBucket>();
-  for (const t of e.live) { if(t.time<cutoff || t.receivedAt<=e.fetchedAt) continue; const key=`${t.time}:${t.price}`, old=folded.get(key); if(old) {old.volume+=t.volume;old.buy+=t.buy;} else folded.set(key,{...t}); }
-  e.live = [...folded.values()];
-  return { candles: e.candles, live: e.live, error: e.error, loading: Boolean(e.pending) };
+  for (const [key,t] of e.live) if(t.time<cutoff) e.live.delete(key);
+  return { candles: e.candles, live: [...e.live.values()], error: e.error, loading: Boolean(e.pending) };
 }
 export type ProfileRow = { low: number; high: number; volume: number; buy: number; sell: number; inArea: boolean };
 export function buildProfile(candles: VolumeCandle[], trades: Pick<LiveBucket,'time'|'price'|'volume'|'buy'>[], min: number, max: number, tick: number, settings: ProfileSettings, from: number, to: number) {
