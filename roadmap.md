@@ -1,5 +1,10 @@
 # Roadmap
 
+## Volume Profile
+- [ ] Cached active-source 1m volume data, tick-aligned histogram and live trade additions without sockets.
+- [ ] Candle overlay, POC/VAH/VAL, hover details, saved desktop/mobile settings and Heatmap hiding.
+- [ ] Verify pairs/timeframes/settings/zoom/pan and protected desktop/mobile smoke tests.
+
 ## Heatmap view
 - [x] Buffer: 1s book snapshots, USDT notional buckets, 60 min typed-array history, Bybit orderbook.1000→200 fallback, "Collecting data… X min".
 - [x] Drawing: offscreen ImageData, 1s updates + rAF, navy→blue→cyan→white→yellow→orange sqrt scale at 98th percentile, legend, trade bubbles, price/bid/ask lines + axis tag; columns right-anchored, scrolling left.
