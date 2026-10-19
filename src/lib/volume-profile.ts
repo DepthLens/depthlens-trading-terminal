@@ -16,7 +16,7 @@ export function addProfileTrade(symbol: string, tick: LivePrice) {
   if (tick.source !== 'trade' || !tick.exchange || !tick.size || tick.size <= 0) return;
   const e = entry(tick.exchange,symbol), receivedAt = tick.receivedAt ?? Date.now();
   const time = Math.floor(tick.time / 60000) * 60000, key = `${time}:${tick.price}`, old=e.live.get(key);
-  if(old && old.receivedAt>e.baselineAt) {old.volume+=tick.size;old.buy+=tick.side==='Buy'?tick.size:0;old.receivedAt=receivedAt;}
+  if(old) {old.volume+=tick.size;old.buy+=tick.side==='Buy'?tick.size:0;old.receivedAt=receivedAt;}
   else e.live.set(key,{ time, price: tick.price, volume: tick.size, buy: tick.side === 'Buy' ? tick.size : 0, receivedAt });
 }
 export async function loadProfile(source: TradeSource, symbol: string, now = Date.now()): Promise<void> {
