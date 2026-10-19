@@ -4,6 +4,7 @@ import { NATIVE } from '@/lib/chart-data';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { orderBook } from '@/lib/order-book';
+import { addProfileTrade } from '@/lib/volume-profile';
 
 const SOURCE_KEY = 'depthlens.source.v1';
 const MODES: { value: SourceMode; label: string }[] = [{ value: 'auto', label: 'Auto' }, { value: 'binance', label: 'Binance' }, { value: 'bybit', label: 'Bybit' }];
@@ -21,7 +22,8 @@ export function SourceSelect({ mode, onChange, className = 'h-6 rounded border b
   </select>;
 }
 const SOURCE_NAMES: Record<string, string> = { binance: 'Binance', bybit: 'Bybit', poll: 'Polling' };
-export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false, compact = false, mode: controlledMode, onModeChange, onSourceChange }: { symbol: string; minutes: number; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge>; bookEnabled?: boolean; compact?: boolean; mode?: SourceMode | null; onModeChange?: (next: SourceMode) => void; onSourceChange?: (source: TradeSource | 'poll') => void }) {
+export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false, profileEnabled = false, compact = false, mode: controlledMode, onModeChange, onSourceChange }: { symbol: string; minutes: number; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge>; bookEnabled?: boolean; profileEnabled?: boolean; compact?: boolean; mode?: SourceMode | null; onModeChange?: (next: SourceMode) => void; onSourceChange?: (source: TradeSource | 'poll') => void }) {
+  const profileEnabledRef = useRef(profileEnabled); profileEnabledRef.current = profileEnabled;
   const sizeClass = compact ? 'text-sm' : 'text-lg';
   const sizeRef = useRef(sizeClass); sizeRef.current = sizeClass;
   const sourceChangeRef = useRef(onSourceChange); sourceChangeRef.current = onSourceChange;
@@ -50,6 +52,7 @@ export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false, 
       bridge.current.latest = tick;
       bridge.current.receive?.(tick);
       bridge.current.heat?.(tick);
+      if (profileEnabledRef.current) addProfileTrade(symbol, tick);
       if (!frame) frame = requestAnimationFrame(() => {
         frame = 0;
         const tick = bridge.current.latest, el = priceRef.current, format = specRef.current;

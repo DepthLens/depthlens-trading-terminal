@@ -6,6 +6,9 @@ import { aggregate, applyLivePrice, NATIVE, type Bar } from '@/lib/chart-data';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 export { aggregate } from '@/lib/chart-data';
 import type { TradeBridge } from '@/components/LiveQuote';
+import { VolumeProfile, type ProfileChart } from '@/components/VolumeProfile';
+import type { ProfileSettings } from '@/lib/volume-profile';
+import type { TradeSource } from '@/lib/live-price';
 export type { LivePrice } from '@/lib/live-price';
 function toColor(el: HTMLElement, name: string) {
   const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
@@ -15,10 +18,11 @@ function toColor(el: HTMLElement, name: string) {
   const [r,g,b] = ctx.getImageData(0,0,1,1).data;
   return `rgb(${r},${g},${b})`;
 }
-export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean }) {
+export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false, volumeProfile, profileSettings, source = 'binance' }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; volumeProfile?: boolean; profileSettings?: ProfileSettings; source?: TradeSource }) {
   const [legendOpen, setLegendOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const profileChartRef = useRef<ProfileChart|null>(null);
   const legendRef = useRef<HTMLElement>(null);
   const [status, setStatus] = useState('Connecting');
   useEffect(() => {
@@ -36,6 +40,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     chart.applyOptions({ crosshair: crosshairOptions });
     (el as any).__crosshairMode = chart.options().crosshair.mode;
     const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:true,priceLineStyle:LineStyle.Dotted,lastValueVisible:true});
+    profileChartRef.current = { chart, series: candles };
     let stopped = false, hovered = false, frame = 0, ready = false;
     let bars: Bar[] = [], rawBars: Bar[] = [];
     const renderedTimes = new Set<number>();
@@ -120,7 +125,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       }
     };
     void load();
-    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;if(bridge.current.kline===handle)bridge.current.kline=null;chartRef.current=null;chart.remove(); };
+    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;if(bridge.current.kline===handle)bridge.current.kline=null;chartRef.current=null;profileChartRef.current=null;chart.remove(); };
   },[symbol,minutes,theme,priceFormat.precision,priceFormat.minMove,bridge]);
 
   const zoom = (factor: number) => {
@@ -142,6 +147,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       ? <button type="button" ref={legendRef as any} onClick={()=>setLegendOpen(o=>!o)} aria-expanded={legendOpen} aria-label="OHLC legend, tap to expand or collapse" className="terminal-tabs absolute left-1.5 top-1.5 z-10 flex max-w-[calc(100%-var(--axis-w,64px)-56px)] items-center gap-x-2 overflow-x-auto whitespace-nowrap min-h-10 rounded bg-t-panel/60 px-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</button>
       : <div ref={legendRef as any} className="pointer-events-none z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</div>}
     <div ref={ref} className="min-h-0 w-full flex-1" aria-label={`${symbol} ${minutes} minute candlestick chart`} />
+    {volumeProfile && profileSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${mobile?'top-0':'top-8'}`}><VolumeProfile chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={profileSettings} spec={priceFormat} mobile={mobile}/></div>}
     <div className={mobile ? 'absolute right-[calc(var(--axis-w,64px)+4px)] top-1.5 z-10 flex flex-col gap-1' : 'absolute bottom-12 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-md border border-t-border bg-t-panel/95 p-1'}>
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom In" title="Zoom In" onClick={()=>zoom(0.75)}><ZoomIn /></Button>
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom Out" title="Zoom Out" onClick={()=>zoom(1.3333)}><ZoomOut /></Button>
