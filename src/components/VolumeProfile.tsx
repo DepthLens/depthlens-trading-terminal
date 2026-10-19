@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
-import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import { buildProfile, loadProfile, profileData, type ProfileSettings, type ProfileRow } from '@/lib/volume-profile';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 import type { TradeSource } from '@/lib/live-price';
@@ -29,7 +29,7 @@ export function VolumeProfile({ chartRef, hostRef, source, symbol, settings, spe
       note.textContent=data.error||(!p.total?'Loading volume history…':'Estimated from 1m candles');
       canvas.dataset['total']=String(p.total);canvas.dataset['poc']=String(p.poc);canvas.dataset['vah']=String(p.vah);canvas.dataset['val']=String(p.val);canvas.dataset['rows']=String(p.rows.length);canvas.dataset['source']=source;
       if(!total)return;
-      const peak=Math.max(...p.rows.map(r=>r.volume)), width=w*(mobile?.12:.2);
+      const peak=Math.max(...p.rows.map(r=>r.volume)), width=w*(mobile ? .12 : .2);
       ctx.save();ctx.beginPath();ctx.rect(0,0,w,h);ctx.clip();
       for(const row of p.rows){const a=series.priceToCoordinate(row.high),b=series.priceToCoordinate(row.low);if(a===null||b===null||!row.volume)continue;
         const y=Math.max(0,a),height=Math.max(1,Math.min(h,b)-y-1),bar=width*row.volume/peak,x=s.position==='right'?w-bar:0;
@@ -39,7 +39,7 @@ export function VolumeProfile({ chartRef, hostRef, source, symbol, settings, spe
       }
       ctx.globalAlpha=1;ctx.font='12px sans-serif';
       for(const [name,price] of [['POC',p.poc],['VAH',p.vah],['VAL',p.val]] as const){const y=series.priceToCoordinate(price);if(y===null||y<0||y>h)continue;ctx.strokeStyle=color(name==='POC'?'--vp-poc':'--t-muted');ctx.lineWidth=1;ctx.setLineDash(name==='POC'?[]:[4,4]);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
-        const label=`${name} ${formatPrice(Math.round(price/spec.minMove)*spec.minMove,spec)}`,textW=ctx.measureText(label).width,x=mobile?Math.max(4,w/2-textW/2):s.position==='right'?8:w-textW-8, textY=Math.min(h-14,Math.max(mobile?110:16,y-16));
+        const label=`${name} ${formatPrice(Math.round(price/spec.minMove)*spec.minMove,spec)}`,textW=ctx.measureText(label).width,x=mobile?Math.max(4,w/2-textW/2):s.position==='right'?8:w-textW-8, textY=Math.min(h-14,Math.max(mobile?140:16,y-16));
         ctx.fillStyle=color('--t-panel');ctx.globalAlpha=.85;ctx.fillRect(x-3,textY-1,textW+6,15);ctx.globalAlpha=1;ctx.fillStyle=color(name==='POC'?'--vp-poc':'--t-muted');ctx.fillText(label,x,textY+11);
       }
       ctx.restore();

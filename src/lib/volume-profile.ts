@@ -47,7 +47,7 @@ export async function loadProfile(source: TradeSource, symbol: string, now = Dat
       // The open candle is a baseline. Never add trades already covered by this snapshot.
       e.fetchedAt = Date.now(); e.error = '';
     } catch (error) { e.error = error instanceof Error ? error.message : 'Volume history unavailable'; }
-    finally { e.pending = undefined; }
+    finally { delete e.pending; }
   })();
   return e.pending;
 }
