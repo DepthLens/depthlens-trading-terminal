@@ -1,9 +1,10 @@
 import { Settings, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import type { ProfileSettings } from '@/lib/volume-profile';
 
-export function VolumeProfileGear({ onClick }: { onClick: () => void }) { return <Button variant="ghost" size="icon" aria-label="Volume Profile settings" title="Volume Profile settings" className="size-8 text-t-muted hover:bg-t-border mobile:size-10" onClick={onClick}><Settings className="size-4"/></Button>; }
+export function VolumeProfileGear({ onClick }: { onClick: () => void }) { return <DropdownMenuItem asChild onSelect={onClick}><Button variant="ghost" size="icon" aria-label="Volume Profile settings" title="Volume Profile settings" className="size-8 text-t-muted hover:bg-t-border mobile:size-10"><Settings className="size-4"/></Button></DropdownMenuItem>; }
 export function VolumeProfileSettingsPanel({ settings, onChange, onClose, mobile, theme }: { settings: ProfileSettings; onChange: (s: ProfileSettings) => void; onClose: () => void; mobile: boolean; theme: string }) {
   const input='h-10 rounded border border-t-border bg-t-bg px-2 text-sm text-t-text';
   return <div data-theme={theme} data-mobile={mobile||undefined} className={`fixed inset-0 z-50 flex bg-t-bg/60 ${mobile?'items-end':'items-start justify-end pt-36 pr-4'}`} onClick={onClose}><section role="dialog" aria-modal="true" aria-label="Volume Profile settings" onClick={e=>e.stopPropagation()} className={`border border-t-border bg-t-panel p-4 text-t-text ${mobile?'w-full rounded-t-lg pb-[max(1rem,env(safe-area-inset-bottom))]':'w-80 rounded-md'}`}>
