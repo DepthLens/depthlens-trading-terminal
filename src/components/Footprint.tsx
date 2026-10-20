@@ -45,7 +45,7 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
       primitive.bars = bars;
       const first = since(store);
       note.textContent = `Real trades from ${SOURCE_NAME[source]} only`;
-      Object.assign(note.dataset, { group: String(group), rowSize: String(+(group * spec.minMove).toPrecision(10)), since: first === null ? '' : String(first), candles: String(bars.filter(b => b.fp.coverage !== 'none').length), partial: String(bars.filter(b => b.fp.coverage === 'partial').length), source });
+      Object.assign(note.dataset, { dbg: `${range.from.toFixed(1)}:${range.to.toFixed(1)}:${data.length}:${bars.at(-1)?.time}:${tooMany}`, group: String(group), rowSize: String(+(group * spec.minMove).toPrecision(10)), since: first === null ? '' : String(first), candles: String(bars.filter(b => b.fp.coverage !== 'none').length), partial: String(bars.filter(b => b.fp.coverage === 'partial').length), source });
       primitive.refresh();
     };
     const schedule = () => { clearTimeout(timer); timer = setTimeout(() => { timer = undefined; recalculate(); }, 200); };
