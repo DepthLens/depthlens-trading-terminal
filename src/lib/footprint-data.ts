@@ -53,14 +53,14 @@ export function addSegment(store: FootprintStore, from: number, to: number) { st
 export const isCovered = (store: FootprintStore, time: number) => store.segments.some(s => time >= s[0] && time <= s[1]);
 /** Latest uncovered gap inside [from, to), or null when fully covered. */
 export function lastGap(store: FootprintStore, from: number, to: number): Segment | null {
-  let end = to;
-  for (const s of [...store.segments].sort((a, b) => b[0] - a[0])) {
-    if (s[0] >= end) continue;
-    if (s[1] < end - 1) return [Math.max(from, s[1] + 1), end].every(Number.isFinite) && Math.max(from, s[1] + 1) < end ? [Math.max(from, s[1] + 1), end] : null;
-    end = s[0];
-    if (end <= from) return null;
+  let cursor = to;
+  for (const s of [...store.segments].sort((a, b) => b[1] - a[1])) {
+    if (s[0] >= cursor) continue;
+    if (s[1] < cursor - 1) { const a = Math.max(from, s[1] + 1); return a < cursor ? [a, cursor] : null; }
+    cursor = s[0];
+    if (cursor <= from) return null;
   }
-  return end > from ? [from, end] : null;
+  return cursor > from ? [from, cursor] : null;
 }
 export function prune(store: FootprintStore, now: number) {
   const cut = now - DAY;
