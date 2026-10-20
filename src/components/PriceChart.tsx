@@ -9,6 +9,8 @@ import type { TradeBridge } from '@/components/LiveQuote';
 import { VolumeProfile, type ProfileChart } from '@/components/VolumeProfile';
 import type { ProfileSettings } from '@/lib/volume-profile';
 import type { TradeSource } from '@/lib/live-price';
+import { Footprint } from '@/components/Footprint';
+import type { FootprintSettings } from '@/lib/footprint-data';
 import { CandleTimerPrimitive, checkOverlayStability } from '@/lib/chart-overlays';
 export type { LivePrice } from '@/lib/live-price';
 function toColor(el: HTMLElement, name: string) {
@@ -19,7 +21,7 @@ function toColor(el: HTMLElement, name: string) {
   const [r,g,b] = ctx.getImageData(0,0,1,1).data;
   return `rgb(${r},${g},${b})`;
 }
-export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false, volumeProfile, profileSettings, source = 'binance', candleTimer = true }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; volumeProfile?: boolean; profileSettings?: ProfileSettings; source?: TradeSource; candleTimer?: boolean }) {
+export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false, volumeProfile, profileSettings, source = 'binance', candleTimer = true, footprint = false, footprintSettings }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; volumeProfile?: boolean; profileSettings?: ProfileSettings; source?: TradeSource; candleTimer?: boolean; footprint?: boolean; footprintSettings?: FootprintSettings }) {
   const [legendOpen, setLegendOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -30,18 +32,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
   const timerRef = useRef<CandleTimerPrimitive | null>(null);
   const sourceRef = useRef(source); sourceRef.current = source;
   const timerEnabledRef = useRef(candleTimer); timerEnabledRef.current = candleTimer;
-  useEffect(() => {
-    const api = profileChartRef.current;
-    if (!api || api.disposed) return;
-    if (timerRef.current) { api.probes.delete(timerRef.current); api.series.detachPrimitive(timerRef.current); timerRef.current = null; }
-    api.series.applyOptions({ lastValueVisible: !candleTimer });
-    if (candleTimer) {
-      const timer = new CandleTimerPrimitive(api, minutes, () => sourceRef.current, api.colors, priceFormat);
-      api.series.attachPrimitive(timer); api.probes.add(timer); timerRef.current = timer;
-      const last = api.series.data().at(-1);
-      if (last && 'close' in last) timer.setPrice(last.close, last.close >= last.open);
-    } else if (ref.current) delete ref.current.dataset['countdown'];
-  }, [candleTimer]);
+  useEffect(() => { timerRef.current?.setCountdown(candleTimer); }, [candleTimer]);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -56,14 +47,14 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     chartRef.current = chart;
     chart.applyOptions({ crosshair: crosshairOptions });
     (el as any).__crosshairMode = chart.options().crosshair.mode;
-    const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:true,priceLineStyle:LineStyle.Dotted,lastValueVisible:!timerEnabledRef.current});
+    const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:true,priceLineStyle:LineStyle.Dotted,lastValueVisible:false});
     const api: ProfileChart = { chart, series: candles, probes: new Set(), host: el, disposed: false, colors: { up, down, muted: text, poc: toColor(el,'--vp-poc'), unsplit: toColor(el,'--vp-unsplit'), labelText: toColor(el,'--t-bg') } };
     profileChartRef.current = api;
     setChartRevision(value => value + 1);
-    if (timerEnabledRef.current) {
-      const timer = new CandleTimerPrimitive(api, minutes, () => sourceRef.current, api.colors, priceFormat);
-      candles.attachPrimitive(timer); api.probes.add(timer); timerRef.current = timer;
-    }
+    // The primitive owns the live price tag (green up / red down) so it keeps its color even when Footprint outlines candles.
+    const timer = new CandleTimerPrimitive(api, minutes, () => sourceRef.current, api.colors, priceFormat);
+    timer.countdown = timerEnabledRef.current;
+    candles.attachPrimitive(timer); api.probes.add(timer); timerRef.current = timer;
     const selfCheck = () => checkOverlayStability(api);
     (window as Window & { checkOverlayStability?: typeof selfCheck }).checkOverlayStability = selfCheck;
     let stopped = false, hovered = false, frame = 0, ready = false;
@@ -174,6 +165,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       : <div ref={legendRef as any} className="pointer-events-none z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</div>}
     <div ref={ref} className="min-h-0 w-full flex-1" aria-label={`${symbol} ${minutes} minute candlestick chart`} />
     {volumeProfile && profileSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${mobile?'top-0':'top-8'}`}><VolumeProfile chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={profileSettings} spec={priceFormat} mobile={mobile} minutes={minutes} theme={theme} revision={chartRevision}/></div>}
+    {footprint && footprintSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${mobile?'top-0':'top-8'}`}><Footprint chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={footprintSettings} spec={priceFormat} mobile={mobile} minutes={minutes} revision={chartRevision}/></div>}
     <div className={mobile ? 'absolute right-[calc(var(--axis-w,64px)+4px)] top-1.5 z-10 flex flex-col gap-1' : 'absolute bottom-12 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-md border border-t-border bg-t-panel/95 p-1'}>
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom In" title="Zoom In" onClick={()=>zoom(0.75)}><ZoomIn /></Button>
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom Out" title="Zoom Out" onClick={()=>zoom(1.3333)}><ZoomOut /></Button>

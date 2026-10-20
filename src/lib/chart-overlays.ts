@@ -69,6 +69,9 @@ export class CandleTimerPrimitive implements ISeriesPrimitive<Time>, OverlayProb
   private latest: { price: number; up: boolean } | null = null;
   private paused = false;
   private timerText = '';
+  /** The live price tag is always drawn here (direction colored); the countdown below it is optional. */
+  countdown = true;
+  setCountdown(on: boolean) { this.countdown = on; if (!on) delete this.api.host.dataset['countdown']; this.request(); }
   constructor(private api: OverlayChart, private minutes: number, private source: () => TradeSource, private colors: Palette, private spec: PriceSpec) {}
   attached({ requestUpdate }: Parameters<NonNullable<ISeriesPrimitive<Time>['attached']>>[0]) {
     this.request = requestUpdate;
@@ -77,7 +80,7 @@ export class CandleTimerPrimitive implements ISeriesPrimitive<Time>, OverlayProb
   detached() { clearInterval(this.interval); this.request = () => {}; }
   private tick() {
     this.timerText = candleCountdown(Date.now(), this.minutes, clockOffset(this.source())).text;
-    this.api.host.dataset['countdown'] = this.timerText;
+    if (this.countdown) this.api.host.dataset['countdown'] = this.timerText;
     this.api.host.dataset['clockOffset'] = String(clockOffset(this.source()));
     this.request();
   }
@@ -98,14 +101,14 @@ export class CandleTimerPrimitive implements ISeriesPrimitive<Time>, OverlayProb
     text: () => index ? this.timerText : this.latest ? formatPrice(this.latest.price, this.spec) : '',
     textColor: () => this.colors.labelText,
     backColor: () => this.latest?.up ? this.colors.up : this.colors.down,
-    visible: () => this.visible(), tickVisible: () => index === 0,
+    visible: () => this.visible() && (index === 0 || this.countdown), tickVisible: () => index === 0,
   }));
   priceAxisViews() { return this.axis; }
   private axisPane: IPrimitivePaneView[] = [{ renderer: () => ({ draw: () => {
     const y = this.y(); this.draw = [];
     if (y === null || !this.latest || !this.visible()) return;
     // These are the actual fixed positions consumed by lightweight-charts axis renderers.
-    for (const [i, view] of this.axis.entries()) this.draw.push({ name: i ? 'Candle timer' : 'Live price tag', price: this.latest.price, drawnY: view.fixedCoordinate?.() ?? null, offset: i ? this.offset() : 0 });
+    for (const [i, view] of this.axis.entries()) if (i === 0 || this.countdown) this.draw.push({ name: i ? 'Candle timer' : 'Live price tag', price: this.latest.price, drawnY: view.fixedCoordinate?.() ?? null, offset: i ? this.offset() : 0 });
     this.api.host.dataset['timerY'] = String(y + this.offset());
   } }) }];
   priceAxisPaneViews() { return this.axisPane; }

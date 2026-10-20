@@ -13,6 +13,8 @@ Read this file before any change. It applies to every future request.
 - Candle timer: default-on saved Tools switch, exchange-corrected UTC/custom close countdown below the live axis tag, same direction color, hidden outside visible price range, desktop/mobile.
 - Tools (orderflow) menu with switches
 - Volume Profile candle overlay: active-source cached 1m history, live trade volume, tick-aligned histogram, POC/VAH/VAL, hover details, saved settings and mobile sheet; hidden during Heatmap, no extra sockets.
+- Footprint candle overlay: real trades only (active source, no extra sockets), 1m bid/ask buckets on a fixed tick grid kept 24h in IndexedDB, aggTrades/recent-trade backfill (20 req/5 min, 60s pause on 429/418), Bid x Ask/Delta/Volume, diagonal imbalance, candle POC and totals, partial-data dashed outline, outline-only candles while on, level of detail with 150-candle limit, saved settings with mobile sheet, hidden during Heatmap, included in checkOverlayStability.
+- Live price axis tag and candle timer are green when the candle is up and red when down.
 - Order book engine and Book debug panel
 - Heatmap view (cells, trade bubbles, controls, zoom/pan, tooltip)
 - Heatmap history: module-level buffer per source+pair that never resets (only a source change clears it), IndexedDB restore after refresh with a dim gap stripe, 60-minute price/trade backfill, "Price and trades only" label

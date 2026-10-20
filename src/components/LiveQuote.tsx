@@ -5,6 +5,7 @@ import { formatPrice, type PriceSpec } from '@/lib/market-data';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { orderBook } from '@/lib/order-book';
 import { addProfileTrade } from '@/lib/volume-profile';
+import { addFootprintTrade } from '@/lib/footprint-store';
 
 const SOURCE_KEY = 'depthlens.source.v1';
 const MODES: { value: SourceMode; label: string }[] = [{ value: 'auto', label: 'Auto' }, { value: 'binance', label: 'Binance' }, { value: 'bybit', label: 'Bybit' }];
@@ -53,6 +54,7 @@ export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false, 
       bridge.current.receive?.(tick);
       bridge.current.heat?.(tick);
       if (profileEnabledRef.current) addProfileTrade(symbol, tick);
+      if (specRef.current) addFootprintTrade(symbol, tick, specRef.current.minMove);
       if (!frame) frame = requestAnimationFrame(() => {
         frame = 0;
         const tick = bridge.current.latest, el = priceRef.current, format = specRef.current;
