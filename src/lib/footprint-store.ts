@@ -59,7 +59,7 @@ export async function backfillFootprint(source: TradeSource, symbol: string, tic
   if (!gap) return false;
   const get = async (url: string) => {
     run!.requests++;
-    const r = await fetch(url, { signal });
+    const r = await fetch(url, { signal: signal ?? null });
     if (r.status === 429 || r.status === 418) { pausedUntil = Date.now() + 60000; throw new Error('rate limited'); }
     if (!r.ok) throw new Error('backfill failed');
     return r.json();
