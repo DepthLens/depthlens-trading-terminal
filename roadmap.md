@@ -1,5 +1,8 @@
 # Roadmap
 
+## Footprint
+- [x] Footprint store, backfill, primitive, settings, imbalance, LOD, persistence, direction-colored axis tag
+
 ## Stable chart overlays and candle timer
 - [x] Replace Volume Profile canvas with a price-anchored series primitive and native POC/VAH/VAL price lines; defer recalculation until 200ms after interaction ends.
 - [x] Add exchange-clock candle timer primitive, default-on saved Tools switch, and boundary tests.
@@ -45,7 +48,7 @@
 
 ## Open
 - Binance primary availability verification: primary sockets did not deliver trades during this environment's stress run; automatic Bybit recovery and real trades passed. Immediate primary recovery is covered by tests and controlled Binance frames.
-- Remaining order flow tools (Footprint, DOM drawing, CVD, Whale Trades, Liquidations) — coming soon
+- Remaining order flow tools (DOM drawing, CVD, Whale Trades, Liquidations) — coming soon
 - Real authentication for /login and /register
 
 ## Mobile layout
