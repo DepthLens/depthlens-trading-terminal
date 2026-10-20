@@ -70,7 +70,7 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
     const backfill = () => {
       const range = api.chart.timeScale().getVisibleLogicalRange(), data = api.series.data();
       const first = range && data[Math.max(0, Math.floor(range.from))];
-      if (!first || api.disposed) return;
+      if (!first || !range || api.disposed || range.to - range.from > MAX_FOOTPRINT_CANDLES) return;
       void backfillFootprint(source, symbol, spec.minMove, Number(first.time) * 1000, abort.signal).then(ok => { if (ok) schedule(); });
     };
     const refresh = setInterval(() => { if (!dragging && !timer) recalculate(); }, 1000);

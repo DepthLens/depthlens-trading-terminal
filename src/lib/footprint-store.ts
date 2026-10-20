@@ -55,8 +55,10 @@ export async function backfillFootprint(source: TradeSource, symbol: string, tic
   if (!run || now - run.at > 300000) { run = { at: now, requests: 0 }; backfillRuns.set(key, run); }
   const max = source === 'binance' ? 20 : 1;
   if (run.requests >= max) return false;
-  const end = store.liveFrom ?? now, gap = lastGap(store, Math.max(from, now - DAY), end);
-  if (!gap) return false;
+  const end = store.liveFrom ?? now, found = lastGap(store, Math.max(from, now - DAY), end);
+  if (!found) return false;
+  // Fill the newest part of the gap first so the latest visible candles complete before older ones.
+  const gap: [number, number] = source === 'binance' ? [Math.max(found[0], found[1] - 600000), found[1]] : found;
   const get = async (url: string) => {
     run!.requests++;
     const r = await fetch(url, { signal: signal ?? null });
