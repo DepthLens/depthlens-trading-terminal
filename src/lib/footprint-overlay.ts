@@ -53,7 +53,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
           ctx.fillStyle = rgba(s.mode === 'volume' ? c.unsplit : delta >= 0 ? c.up : c.down, .12 + .6 * v / peak);
           ctx.fillRect(left, y1, w, h);
           if (text) {
-            ctx.font = `${fontSize}px ui-monospace, monospace`; ctx.fillStyle = s.mode === 'volume' ? c.labelInk : delta >= 0 ? c.up : c.down;
+            ctx.font = `${fontSize}px ui-monospace, monospace`; ctx.fillStyle = s.mode === 'volume' ? c.muted : delta >= 0 ? c.up : c.down;
             const label = s.mode === 'volume' ? formatVolume(row.ask + row.bid) : `${delta >= 0 ? '+' : ''}${formatVolume(delta)}`;
             ctx.fillText(label, x - this.measure(ctx, label) / 2, y1 + (y2 - y1) / 2);
           }
