@@ -57,6 +57,19 @@ export function profileData(source: TradeSource, symbol: string) {
   return { candles: e.candles, live: [...e.live.values()], error: e.error, loading: Boolean(e.pending) };
 }
 export type ProfileRow = { low: number; high: number; volume: number; buy: number; sell: number; inArea: boolean };
+// Add only new trade volume to already anchored bins; never change level prices during interaction.
+export function updateProfileRows(rows: ProfileRow[], trades: { time: number; price: number; volume: number; buy: number }[], previous: Map<string,{volume:number;buy:number}>, from: number, to: number) {
+  let added=0;
+  for(const trade of trades){
+    const key=`${trade.time}:${trade.price}`,old=previous.get(key);
+    previous.set(key,{volume:trade.volume,buy:trade.buy});
+    if(trade.time<from||trade.time>to)continue;
+    const row=rows.find(r=>trade.price>=r.low&&trade.price<r.high);
+    const volume=Math.max(0,trade.volume-(old?.volume??0)),buy=Math.max(0,trade.buy-(old?.buy??0));
+    if(row&&volume){row.volume+=volume;row.buy+=buy;row.sell=Math.max(0,row.volume-row.buy);added+=volume;}
+  }
+  return added;
+}
 export function buildProfile(candles: VolumeCandle[], trades: Pick<LiveBucket,'time'|'price'|'volume'|'buy'>[], min: number, max: number, tick: number, settings: ProfileSettings, from: number, to: number) {
   const target = settings.rows === 'Auto' ? 60 : Number(settings.rows);
   const step = Math.max(tick, Math.ceil((max-min)/target/tick)*tick);

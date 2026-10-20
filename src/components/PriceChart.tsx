@@ -9,6 +9,7 @@ import type { TradeBridge } from '@/components/LiveQuote';
 import { VolumeProfile, type ProfileChart } from '@/components/VolumeProfile';
 import type { ProfileSettings } from '@/lib/volume-profile';
 import type { TradeSource } from '@/lib/live-price';
+import { CandleTimerPrimitive, checkOverlayStability } from '@/lib/chart-overlays';
 export type { LivePrice } from '@/lib/live-price';
 function toColor(el: HTMLElement, name: string) {
   const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
@@ -18,13 +19,29 @@ function toColor(el: HTMLElement, name: string) {
   const [r,g,b] = ctx.getImageData(0,0,1,1).data;
   return `rgb(${r},${g},${b})`;
 }
-export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false, volumeProfile, profileSettings, source = 'binance' }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; volumeProfile?: boolean; profileSettings?: ProfileSettings; source?: TradeSource }) {
+export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false, volumeProfile, profileSettings, source = 'binance', candleTimer = true }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; volumeProfile?: boolean; profileSettings?: ProfileSettings; source?: TradeSource; candleTimer?: boolean }) {
   const [legendOpen, setLegendOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const profileChartRef = useRef<ProfileChart|null>(null);
   const legendRef = useRef<HTMLElement>(null);
   const [status, setStatus] = useState('Connecting');
+  const [chartRevision, setChartRevision] = useState(0);
+  const timerRef = useRef<CandleTimerPrimitive | null>(null);
+  const sourceRef = useRef(source); sourceRef.current = source;
+  const timerEnabledRef = useRef(candleTimer); timerEnabledRef.current = candleTimer;
+  useEffect(() => {
+    const api = profileChartRef.current;
+    if (!api || api.disposed) return;
+    if (timerRef.current) { api.probes.delete(timerRef.current); api.series.detachPrimitive(timerRef.current); timerRef.current = null; }
+    api.series.applyOptions({ lastValueVisible: !candleTimer });
+    if (candleTimer) {
+      const timer = new CandleTimerPrimitive(api, minutes, () => sourceRef.current, api.colors, priceFormat);
+      api.series.attachPrimitive(timer); api.probes.add(timer); timerRef.current = timer;
+      const last = api.series.data().at(-1);
+      if (last && 'close' in last) timer.setPrice(last.close, last.close >= last.open);
+    } else if (ref.current) delete ref.current.dataset['countdown'];
+  }, [candleTimer]);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -39,8 +56,16 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     chartRef.current = chart;
     chart.applyOptions({ crosshair: crosshairOptions });
     (el as any).__crosshairMode = chart.options().crosshair.mode;
-    const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:true,priceLineStyle:LineStyle.Dotted,lastValueVisible:true});
-    profileChartRef.current = { chart, series: candles };
+    const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:true,priceLineStyle:LineStyle.Dotted,lastValueVisible:!timerEnabledRef.current});
+    const api: ProfileChart = { chart, series: candles, probes: new Set(), host: el, disposed: false, colors: { up, down, muted: text, poc: toColor(el,'--vp-poc'), unsplit: toColor(el,'--vp-unsplit'), labelText: toColor(el,'--t-bg') } };
+    profileChartRef.current = api;
+    setChartRevision(value => value + 1);
+    if (timerEnabledRef.current) {
+      const timer = new CandleTimerPrimitive(api, minutes, () => sourceRef.current, api.colors, priceFormat);
+      candles.attachPrimitive(timer); api.probes.add(timer); timerRef.current = timer;
+    }
+    const selfCheck = () => checkOverlayStability(api);
+    (window as Window & { checkOverlayStability?: typeof selfCheck }).checkOverlayStability = selfCheck;
     let stopped = false, hovered = false, frame = 0, ready = false;
     let bars: Bar[] = [], rawBars: Bar[] = [];
     const renderedTimes = new Set<number>();
@@ -67,6 +92,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       candles.update({ ...latest,time });
       renderedTimes.add(latest.time);
       candles.applyOptions({priceLineColor:latest.close>=latest.open?up:down});
+      timerRef.current?.setPrice(latest.close, latest.close >= latest.open);
       el.dataset['lastClose'] = formatPrice(latest.close, priceFormat);
       if (!hovered) setLegend({...latest});
       const axisWidth = Math.round(chart.priceScale('right').width()), axis = `${axisWidth}px`;
@@ -125,7 +151,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       }
     };
     void load();
-    return () => { stopped=true;abort.abort();clearTimeout(historyRetry);cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;if(bridge.current.kline===handle)bridge.current.kline=null;chartRef.current=null;profileChartRef.current=null;chart.remove(); };
+    return () => { stopped=true;api.disposed=true;timerRef.current?.detached();timerRef.current=null;const debugWindow=window as Window & { checkOverlayStability?: typeof selfCheck };if(debugWindow.checkOverlayStability===selfCheck)delete debugWindow.checkOverlayStability;abort.abort();clearTimeout(historyRetry);cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;if(bridge.current.kline===handle)bridge.current.kline=null;chartRef.current=null;profileChartRef.current=null;chart.remove(); };
   },[symbol,minutes,theme,priceFormat.precision,priceFormat.minMove,bridge]);
 
   const zoom = (factor: number) => {
@@ -147,7 +173,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       ? <button type="button" ref={legendRef as any} onClick={()=>setLegendOpen(o=>!o)} aria-expanded={legendOpen} aria-label="OHLC legend, tap to expand or collapse" className="terminal-tabs absolute left-1.5 top-1.5 z-10 flex max-w-[calc(100%-var(--axis-w,64px)-56px)] items-center gap-x-2 overflow-x-auto whitespace-nowrap min-h-10 rounded bg-t-panel/60 px-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</button>
       : <div ref={legendRef as any} className="pointer-events-none z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</div>}
     <div ref={ref} className="min-h-0 w-full flex-1" aria-label={`${symbol} ${minutes} minute candlestick chart`} />
-    {volumeProfile && profileSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${mobile?'top-0':'top-8'}`}><VolumeProfile chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={profileSettings} spec={priceFormat} mobile={mobile}/></div>}
+    {volumeProfile && profileSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${mobile?'top-0':'top-8'}`}><VolumeProfile chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={profileSettings} spec={priceFormat} mobile={mobile} minutes={minutes} theme={theme} revision={chartRevision}/></div>}
     <div className={mobile ? 'absolute right-[calc(var(--axis-w,64px)+4px)] top-1.5 z-10 flex flex-col gap-1' : 'absolute bottom-12 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-md border border-t-border bg-t-panel/95 p-1'}>
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom In" title="Zoom In" onClick={()=>zoom(0.75)}><ZoomIn /></Button>
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom Out" title="Zoom Out" onClick={()=>zoom(1.3333)}><ZoomOut /></Button>

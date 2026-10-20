@@ -10,6 +10,7 @@ Read this file before any change. It applies to every future request.
 - Timeframes (1m–1d) and Custom timeframe
 - Candle chart: live candle, OHLC legend, magnet crosshair, Zoom In, Zoom Out, Reload
 - Live price line with axis tag
+- Candle timer: default-on saved Tools switch, exchange-corrected UTC/custom close countdown below the live axis tag, same direction color, hidden outside visible price range, desktop/mobile.
 - Tools (orderflow) menu with switches
 - Volume Profile candle overlay: active-source cached 1m history, live trade volume, tick-aligned histogram, POC/VAH/VAL, hover details, saved settings and mobile sheet; hidden during Heatmap, no extra sockets.
 - Order book engine and Book debug panel
@@ -32,8 +33,15 @@ Read this file before any change. It applies to every future request.
 4. Tools opens.
 5. Heatmap turns on and off.
 6. Desktop and a 390x844 phone view are not broken.
+7. Run checkOverlayStability() after scrolling/zooming; log PASS or FAIL for every overlay with at most 1px error.
 
 Report the result as a short list.
 
 ## 4. Keep this list current
 After every change, add any new feature to the list in section 1.
+
+## 5. Chart overlay rules
+- Every drawing on the candle chart (lines, zones, bars, labels, countdown) must be a native price line, a series primitive, or a marker.
+- Anchor overlays to price and time values, never to pixel positions. Separate canvas layers are forbidden on the candle chart.
+- The Heatmap view has its own axes and is exempt.
+- Volume Profile levels use native series price lines and bars use a series primitive. Recalculate on pair/timeframe/range/settings changes and 200ms after pan/zoom stops, never while dragging.
