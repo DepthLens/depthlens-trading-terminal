@@ -50,7 +50,7 @@ export const footprintPaused = () => Date.now() < pausedUntil;
 /** Fill the latest uncovered gap in [from, now) with real trades; at most 20 requests per pair per 5 minutes. */
 export async function backfillFootprint(source: TradeSource, symbol: string, tick: number, from: number, signal?: AbortSignal): Promise<boolean> {
   const key = `${source}:${symbol}`, store = footprintStore(source, symbol, tick), now = Date.now();
-  if (Date.now() < pausedUntil) return false;
+  if (Date.now() < pausedUntil || !store.restored) return false;
   let run = backfillRuns.get(key);
   if (!run || now - run.at > 300000) { run = { at: now, requests: 0 }; backfillRuns.set(key, run); }
   const max = source === 'binance' ? 20 : 1;
