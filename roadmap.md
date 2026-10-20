@@ -1,5 +1,10 @@
 # Roadmap
 
+## Stable chart overlays and candle timer
+- [x] Replace Volume Profile canvas with a price-anchored series primitive and native POC/VAH/VAL price lines; defer recalculation until 200ms after interaction ends.
+- [x] Add exchange-clock candle timer primitive, default-on saved Tools switch, and boundary tests.
+- [x] Add permanent overlay rules and programmatic stability smoke check; BTC/ETH four-direction drags keep POC unchanged while held, zoom/resize checks pass, POC/VAH/VAL/histogram/timer errors <=1px. Verify 1m/5m/1h/custom 7m, actual 1m rollover, saved OFF/ON, 3 pairs, Heatmap on/off, desktop and fresh 390x844 live phone with zero console errors. All 69 tests pass; live verification used Bybit.
+
 ## Volume Profile
 - [x] Cached active-source 1m volume data, tick-aligned histogram and live trade additions without sockets.
 - [x] Candle overlay, POC/VAH/VAL, hover details, saved desktop/mobile settings and Heatmap hiding.
