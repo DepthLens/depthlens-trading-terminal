@@ -106,3 +106,9 @@ export function formatVolume(v: number) {
   if (a >= 1) return v.toFixed(1);
   return v.toFixed(3);
 }
+/** Auto row size: average candle range / 12 on the tick grid, at least one tick, at most range / 6. Returns ticks per row. */
+export function autoRowTicks(avgRange: number, tick: number) {
+  if (!(avgRange > 0) || !(tick > 0)) return 1;
+  const max = Math.max(1, Math.floor(avgRange / 6 / tick + 1e-9));
+  return Math.max(1, Math.min(max, Math.round(avgRange / 12 / tick)));
+}

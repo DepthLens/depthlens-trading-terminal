@@ -46,3 +46,9 @@ describe('footprint data', () => {
     expect(autoGroup(0.1, 10, 9)).toBe(10);
   });
 });
+import { autoRowTicks } from '@/lib/footprint-data';
+describe('footprint auto row size', () => {
+  it('uses average range / 12 rounded to ticks', () => { expect(autoRowTicks(6, 0.1)).toBe(5); expect(autoRowTicks(120, 1)).toBe(10); });
+  it('never goes below one tick', () => { expect(autoRowTicks(0.3, 0.1)).toBe(1); expect(autoRowTicks(0, 0.1)).toBe(1); });
+  it('never exceeds one sixth of the average range', () => { expect(autoRowTicks(0.65, 0.1) * 0.1).toBeLessThanOrEqual(0.65 / 6 + 1e-9); });
+});
