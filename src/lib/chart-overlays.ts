@@ -40,6 +40,8 @@ export class ProfilePrimitive implements ISeriesPrimitive<Time>, OverlayProbe {
         this.lastDraw.push({ name: `Histogram ${row.low}`, price: row.high, drawnY: a });
         ctx.globalAlpha = this.settings.opacity * (row.inArea ? 1 : .3);
         const height = Math.max(1, b - a - 1);
+        // Row-height probe: a bar is never taller than its own price row.
+        this.lastDraw.push({ name: 'Volume Profile bar height', price: row.low, drawnY: a + height > b + 1 ? a + height : b });
         if (this.split && this.settings.split) {
           const buy = bar * row.buy / row.volume;
           ctx.fillStyle = this.colors.up; ctx.fillRect(x, a, buy, height);

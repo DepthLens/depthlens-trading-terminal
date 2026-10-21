@@ -98,6 +98,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
       }
     }
     ctx.restore();
+    this.api.host.dataset['footprintOutside'] = String(this.outside);
   }) }) }];
   private number(ctx: CanvasRenderingContext2D, row: FootprintRow, side: 'bid' | 'ask', edge: number, y1: number, y2: number, size: number, half: number) {
     if (y2 - y1 < this.minH || half * 2 < this.minW) return;
