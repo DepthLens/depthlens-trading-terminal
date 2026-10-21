@@ -1,6 +1,6 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import type { CandlestickSeriesOptions } from 'lightweight-charts';
-import { autoGroup, buildCandle, formatVolume, since, type FootprintSettings } from '@/lib/footprint-data';
+import { autoRowTicks, buildCandle, formatVolume, since, type FootprintSettings } from '@/lib/footprint-data';
 import { backfillFootprint, footprintStore } from '@/lib/footprint-store';
 import { FootprintPrimitive, type FootprintBar } from '@/lib/footprint-overlay';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
@@ -35,17 +35,21 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
       const count = range.to - range.from;
       const tooMany = count > MAX_FOOTPRINT_CANDLES;
       hint.hidden = !tooMany; primitive.hidden = tooMany; outline(!tooMany);
-      const group = settings.grouping === 'Auto' ? autoGroup(spec.minMove, h / (top - bottom), primitive.minH + 3) : settings.grouping;
+      const lo = Math.max(0, Math.floor(range.from) - 1), hi = Math.min(data.length - 1, Math.ceil(range.to) + 1);
+      let sum = 0, n = 0;
+      for (let i = lo; i <= hi; i++) { const d = data[i]; if (d && 'high' in d && d.high > d.low) { sum += d.high - d.low; n++; } }
+      // Auto row size comes from the average visible candle range (about 12 rows per candle), never from the screen height.
+      const group = settings.grouping === 'Auto' ? autoRowTicks(n ? sum / n : 0, spec.minMove) : settings.grouping;
       const bars: FootprintBar[] = [];
-      if (!tooMany) for (let i = Math.max(0, Math.floor(range.from) - 1); i <= Math.min(data.length - 1, Math.ceil(range.to) + 1); i++) {
+      if (!tooMany) for (let i = lo; i <= hi; i++) {
         const d = data[i]; if (!d || !('high' in d)) continue;
         const time = Number(d.time);
         bars.push({ time, high: d.high, low: d.low, fp: buildCandle(store, time * 1000, minutes, group, settings.ratio) });
       }
       primitive.bars = bars;
       const first = since(store);
-      note.textContent = `Real trades from ${SOURCE_NAME[source]} only`;
-      Object.assign(note.dataset, { group: String(group), rowSize: String(+(group * spec.minMove).toPrecision(10)), since: first === null ? '' : String(first), candles: String(bars.filter(b => b.fp.coverage !== 'none').length), partial: String(bars.filter(b => b.fp.coverage === 'partial').length), source });
+      note.textContent = `Footprint data since ${first === null ? '—' : new Date(first).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} · Real trades from ${SOURCE_NAME[source]} only`;
+      Object.assign(note.dataset, { group: String(group), auto: String(settings.grouping === 'Auto'), rowSize: String(+(group * spec.minMove).toPrecision(10)), since: first === null ? '' : String(first), candles: String(bars.filter(b => b.fp.coverage !== 'none').length), partial: String(bars.filter(b => b.fp.coverage === 'partial').length), source });
       primitive.refresh();
     };
     const schedule = () => { clearTimeout(timer); timer = setTimeout(() => { timer = undefined; recalculate(); }, 200); };

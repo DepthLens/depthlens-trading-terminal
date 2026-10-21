@@ -170,7 +170,7 @@ function Terminal() {
         <div className="relative min-h-0 flex-1">{restored&&activeSpec&&(state.tools['Heatmap']?<Heatmap key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={mobile}/>:<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} bridge={bridge} mobile={mobile} volumeProfile={Boolean(state.tools['Volume Profile'])} profileSettings={profileSettings} source={listSource} candleTimer={state.tools['Candle timer']!==false} footprint={Boolean(state.tools['Footprint'])} footprintSettings={footprintSettings}/>)} {showBookDebug&&<BookDebug spec={activeSpec}/>}</div>
       </main>
     </div>
-    {showFootprintSettings&&activeSpec&&<FootprintSettingsPanel settings={footprintSettings} onChange={changeFootprintSettings} onClose={()=>setShowFootprintSettings(false)} mobile={mobile} theme={state.theme} source={listSource} symbol={active.symbol} tick={activeSpec.minMove}/>}
+    {showFootprintSettings&&activeSpec&&<FootprintSettingsPanel settings={footprintSettings} onChange={changeFootprintSettings} onClose={()=>setShowFootprintSettings(false)} mobile={mobile} theme={state.theme} source={listSource} symbol={active.symbol} tick={activeSpec.minMove} minutes={active.minutes}/>}
     {showProfileSettings&&<VolumeProfileSettingsPanel settings={profileSettings} onChange={changeProfileSettings} onClose={()=>setShowProfileSettings(false)} mobile={mobile} theme={state.theme}/>}
   </div>;
 }

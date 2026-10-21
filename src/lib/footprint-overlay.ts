@@ -19,8 +19,10 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
   pause(value: boolean) { this.paused = value; }
   samples = () => this.lastDraw;
   refresh() { this.request(); }
-  get minH() { return this.mobile ? 12 : 9; }
-  get minW() { return this.mobile ? 72 : 56; }
+  get minH() { return 9; }
+  get minW() { return 56; }
+  /** Cells drawn outside their candle's high-low range in the last paint (must stay 0). */
+  outside = 0;
   cellWidth() { return this.api.chart.timeScale().options().barSpacing * .92; }
   private measure(ctx: CanvasRenderingContext2D, text: string) {
     const key = `${ctx.font}|${text}`;
@@ -29,7 +31,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
     return w;
   }
   private views: IPrimitivePaneView[] = [{ zOrder: () => 'normal', renderer: () => ({ draw: target => target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
-    this.lastDraw = [];
+    this.lastDraw = []; this.outside = 0;
     if (this.hidden || !this.bars.length) return;
     const ts = this.api.chart.timeScale(), s = this.settings, c = this.colors, w = this.cellWidth(), half = w / 2;
     const numbers = w >= this.minW, fontSize = this.mobile ? 11 : 10;
@@ -42,12 +44,26 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
         const a = this.api.series.priceToCoordinate(bar.high), b = this.api.series.priceToCoordinate(bar.low);
         if (a !== null && b !== null) { ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = rgba(c.muted, .6); ctx.lineWidth = 1; ctx.strokeRect(left - 1, a - 1, w + 2, b - a + 2); ctx.restore(); }
       }
-      const peak = Math.max(1e-12, ...bar.fp.rows.map(r => s.mode === 'delta' ? Math.abs(r.ask - r.bid) : s.mode === 'volume' ? r.ask + r.bid : Math.max(r.ask, r.bid)));
-      for (const row of bar.fp.rows) {
-        const y1 = this.api.series.priceToCoordinate(row.high), y2 = this.api.series.priceToCoordinate(row.low);
+      const hiY = this.api.series.priceToCoordinate(bar.high), loY = this.api.series.priceToCoordinate(bar.low);
+      if (hiY === null || loY === null) continue;
+      if (!numbers) {
+        // Narrow candles: keep the normal candle and add only a light delta tint over its own range.
+        const d = bar.fp.ask - bar.fp.bid;
+        ctx.fillStyle = rgba(d >= 0 ? c.up : c.down, .22); ctx.fillRect(left, hiY, w, Math.max(1, loY - hiY));
+        continue;
+      }
+      const rows = bar.fp.rows.filter(r => r.bid + r.ask > 0 && r.high > bar.low && r.low < bar.high);
+      const peak = Math.max(1e-12, ...rows.map(r => s.mode === 'delta' ? Math.abs(r.ask - r.bid) : s.mode === 'volume' ? r.ask + r.bid : Math.max(r.ask, r.bid)));
+      let topY = Infinity, botY = -Infinity;
+      for (const row of rows) {
+        // Height is priceToCoordinate(rowTop) - priceToCoordinate(rowBottom), clipped to the candle's high/low.
+        const topP = Math.min(row.high, bar.high), botP = Math.max(row.low, bar.low);
+        const y1 = this.api.series.priceToCoordinate(topP), y2 = this.api.series.priceToCoordinate(botP);
         if (y1 === null || y2 === null || y2 < 0 || y1 > mediaSize.height) continue;
-        const h = Math.max(1, y2 - y1 - (y2 - y1 > 4 ? 1 : 0)), text = numbers && y2 - y1 >= this.minH, delta = row.ask - row.bid;
-        if (this.lastDraw.length < 8) this.lastDraw.push({ name: `Footprint cell ${this.lastDraw.length + 1}`, price: row.high, drawnY: y1 });
+        if (y1 < hiY - 1 || y2 > loY + 1) this.outside++;
+        topY = Math.min(topY, y1); botY = Math.max(botY, y2);
+        const h = Math.max(1, y2 - y1 - (y2 - y1 > 4 ? 1 : 0)), text = y2 - y1 >= this.minH, delta = row.ask - row.bid;
+        if (this.lastDraw.length < 8) this.lastDraw.push({ name: `Footprint cell ${this.lastDraw.length + 1}`, price: topP, drawnY: y1 });
         if (!text || s.mode !== 'bidask') {
           const v = s.mode === 'volume' ? row.ask + row.bid : Math.abs(delta);
           ctx.fillStyle = rgba(s.mode === 'volume' ? c.unsplit : delta >= 0 ? c.up : c.down, .12 + .6 * v / peak);
@@ -65,7 +81,12 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
         }
         if (s.poc && bar.fp.poc === row.row) { ctx.save(); ctx.globalAlpha = 1; ctx.strokeStyle = c.poc; ctx.lineWidth = 1.5; ctx.strokeRect(left + .75, y1 + .75, w - 1.5, Math.max(1, y2 - y1 - 1.5)); ctx.restore(); }
       }
-      if (s.totals && w >= 40) {
+      // Clip probes: report the candle edge when cells stay inside it, otherwise the offending pixel (fails the 1px check).
+      if (topY !== Infinity && this.lastDraw.length < 12) {
+        this.lastDraw.push({ name: 'Footprint within high', price: bar.high, drawnY: topY < hiY - 1 ? topY : hiY });
+        this.lastDraw.push({ name: 'Footprint within low', price: bar.low, drawnY: botY > loY + 1 ? botY : loY });
+      }
+      if (s.totals && numbers) {
         const low = this.api.series.priceToCoordinate(bar.low);
         if (low !== null && low < mediaSize.height) {
           const d = bar.fp.ask - bar.fp.bid;
@@ -77,6 +98,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
       }
     }
     ctx.restore();
+    this.api.host.dataset['footprintOutside'] = String(this.outside);
   }) }) }];
   private number(ctx: CanvasRenderingContext2D, row: FootprintRow, side: 'bid' | 'ask', edge: number, y1: number, y2: number, size: number, half: number) {
     if (y2 - y1 < this.minH || half * 2 < this.minW) return;
