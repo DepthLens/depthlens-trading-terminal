@@ -13,7 +13,7 @@ Read this file before any change. It applies to every future request.
 - Candle timer: default-on saved Tools switch, exchange-corrected UTC/custom close countdown below the live axis tag, same direction color, hidden outside visible price range, desktop/mobile.
 - Tools (orderflow) menu with switches
 - Volume Profile candle overlay: active-source cached 1m history, live trade volume, tick-aligned histogram, POC/VAH/VAL, hover details, saved settings and mobile sheet; hidden during Heatmap, no extra sockets.
-- Footprint candle overlay: real trades only (active source, no extra sockets), 1m bid/ask buckets on a fixed tick grid kept 24h in IndexedDB, aggTrades/recent-trade backfill (20 req/5 min, 60s pause on 429/418), Bid x Ask/Delta/Volume, diagonal imbalance, candle POC and totals, partial-data dashed outline, outline-only candles while on, level of detail with 150-candle limit, saved settings with mobile sheet, hidden during Heatmap, included in checkOverlayStability.
+- Footprint candle overlay: real trades only (active source, no extra sockets), 1m bid/ask buckets on a fixed tick grid kept 24h in IndexedDB, aggTrades/recent-trade backfill (20 req/5 min, 60s pause on 429/418), Bid x Ask/Delta/Volume, diagonal imbalance, candle POC and totals, partial-data dashed outline, outline-only candles while on, level of detail with 150-candle limit, saved settings with mobile sheet, hidden during Heatmap, included in checkOverlayStability. Auto row size = average visible candle range / 12 on the tick grid (min one tick, max range / 6) shown as "Auto = X"; cells only for traded rows, clipped to each candle's high/low; numbers only at 56px+ wide and 9px+ rows, otherwise a light delta tint; "Footprint data since HH:MM" chart label; Footprint debug button (latest closed candle vs kline volume, PASS within 5%).
 - Live price axis tag and candle timer are green when the candle is up and red when down.
 - Order book engine and Book debug panel
 - Heatmap view (cells, trade bubbles, controls, zoom/pan, tooltip)
@@ -35,7 +35,8 @@ Read this file before any change. It applies to every future request.
 4. Tools opens.
 5. Heatmap turns on and off.
 6. Desktop and a 390x844 phone view are not broken.
-7. Run checkOverlayStability() after scrolling/zooming; log PASS or FAIL for every overlay with at most 1px error.
+7. Run checkOverlayStability() after scrolling/zooming; log PASS or FAIL for every overlay with at most 1px error. This includes "Footprint within high/low" (no cell outside its candle) and "Volume Profile bar height" (no bar taller than one row).
+8. With Footprint on and zoomed in, small rows with numbers appear and Footprint debug logs PASS for a fully covered candle.
 
 Report the result as a short list.
 
