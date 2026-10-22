@@ -47,6 +47,40 @@ describe('footprint data', () => {
   });
 });
 import { autoRowTicks } from '@/lib/footprint-data';
+import { clusterRowTicks, FOOTPRINT_DETAIL_SPACING, FOOTPRINT_FIT_SPACING, rowImbalance } from '@/lib/footprint-data';
+describe('professional footprint clusters', () => {
+  it('defaults to USDT and keeps a saved coin selection', () => {
+    expect(restoreFootprintSettings(null).unit).toBe('USDT');
+    expect(restoreFootprintSettings('{"unit":"coin"}').unit).toBe('coin');
+  });
+  it('uses actual trade prices for USDT volume without changing coin volume', () => {
+    const store = createStore(1);
+    addTrade(store, 0, 100.2, 2, true); addTrade(store, 0, 100.8, 3, false);
+    expect(buildCandle(store, 0, 1, 1, 300, 'USDT')).toMatchObject({ bid: 200.4, ask: 302.4 });
+    expect(buildCandle(store, 0, 1, 1, 300, 'coin')).toMatchObject({ bid: 2, ask: 3 });
+  });
+  it('changes row size only beyond 40 percent while keeping at least 14px', () => {
+    expect(clusterRowTicks(.1, 10)).toBe(20);
+    expect(clusterRowTicks(.1, 8, 20)).toBe(20);
+    expect(clusterRowTicks(.1, 20 / 2.8, 20)).toBe(20);
+    expect(clusterRowTicks(.1, 5, 20)).toBe(40);
+    expect(clusterRowTicks(.1, 20 / 2.8, 20) * .1 * (20 / 2.8)).toBeGreaterThanOrEqual(14);
+  });
+  it('keeps grouped rows on exact fixed multiples even below zero', () => {
+    const store = createStore(.1); addTrade(store, 0, 100.05, 2, true);
+    expect(buildCandle(store, 0, 1, 20, 300).rows[0]).toMatchObject({ low: 100, high: 102 });
+  });
+  it('uses same-row 300 percent imbalance including a zero opposing side', () => {
+    expect(rowImbalance(1, 3, 300)).toBe('ask');
+    expect(rowImbalance(3, 1, 300)).toBe('bid');
+    expect(rowImbalance(1, 2.99, 300)).toBeNull();
+    expect(rowImbalance(0, 1, 300)).toBe('ask');
+    expect(rowImbalance(0, 0, 300)).toBeNull();
+  });
+  it('uses the requested 110px fit and 70px detail threshold', () => {
+    expect(FOOTPRINT_FIT_SPACING).toBe(110); expect(FOOTPRINT_DETAIL_SPACING).toBe(70);
+  });
+});
 describe('footprint auto row size', () => {
   it('uses average range / 12 rounded to ticks', () => { expect(autoRowTicks(6, 0.1)).toBe(5); expect(autoRowTicks(120, 1)).toBe(10); });
   it('never goes below one tick', () => { expect(autoRowTicks(0.3, 0.1)).toBe(1); expect(autoRowTicks(0, 0.1)).toBe(1); });
