@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Footprint
+- [ ] Rebuild professional cluster drawing, fixed-grid scale-aware rows, automatic 110px fit, and saved USDT/coin units.
+- [ ] Verify live BTC 1m/5m and ETH 5m collection for three minutes, overlays, zoom/drag, and desktop/phone smoke checks.
 - [x] Footprint store, backfill, primitive, settings, imbalance, LOD, persistence, direction-colored axis tag
 
 ## Stable chart overlays and candle timer

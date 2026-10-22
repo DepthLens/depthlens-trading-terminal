@@ -25,7 +25,11 @@ async function restore(key: string, store: FootprintStore) {
     if (!saved || saved.tick !== store.tick || Date.now() - saved.savedAt > DAY) return;
     for (const [m, rows] of saved.minutes) for (const [k, c] of rows) {
       let target = store.minutes.get(m); if (!target) { target = new Map(); store.minutes.set(m, target); }
-      const t = target.get(k); if (t) { t.bid += c.bid; t.ask += c.ask; } else target.set(k, { bid: c.bid, ask: c.ask });
+      const savedCell = c as import('./footprint-data').Cell;
+      const price = (k + .5) * store.tick;
+      const t = target.get(k);
+      if (t) { t.bid += c.bid; t.ask += c.ask; t.bidNotional = (t.bidNotional ?? 0) + (savedCell.bidNotional ?? c.bid * price); t.askNotional = (t.askNotional ?? 0) + (savedCell.askNotional ?? c.ask * price); }
+      else target.set(k, { ...c, bidNotional: savedCell.bidNotional ?? c.bid * price, askNotional: savedCell.askNotional ?? c.ask * price });
     }
     store.segments = mergeSegments([...saved.segments, ...store.segments]);
     prune(store, Date.now());

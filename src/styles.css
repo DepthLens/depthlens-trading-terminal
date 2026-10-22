@@ -152,6 +152,7 @@
   --t-up: oklch(0.74 0.16 165); --t-down: oklch(0.65 0.2 20);
   --t-warning: oklch(0.8 0.16 80);
   --vp-poc: oklch(0.88 0.17 95); --vp-unsplit: oklch(0.75 0.13 185);
+  --fp-text: oklch(1 0 0); --fp-outline: oklch(0.94 0.01 250);
 }
 [data-theme="light"] {
   --t-bg: oklch(0.97 0.01 250); --t-panel: oklch(1 0 0); --t-border: oklch(0.88 0.02 255);
