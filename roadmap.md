@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Footprint
+- [x] Rebuild professional cluster drawing, fixed-grid scale-aware rows, automatic 110px fit, and saved USDT/coin units.
+- [x] Live Bybit BTC 1m/5m and ETH 5m each collected for three minutes with rows, bars, imbalance and moving prices; four-direction drags, 70px fallback, fit, saved units, three pairs/timeframes, Heatmap on/off and 390x844 phone pass with no console errors. Footprint/timer/profile/native lines stability <=1px; fully collected BTC 1m debug matches kline volume exactly. All 84 automated tests pass; two sockets observed. Binance live availability remains outside this environment's verified coverage.
 - [x] Footprint store, backfill, primitive, settings, imbalance, LOD, persistence, direction-colored axis tag
 
 ## Stable chart overlays and candle timer

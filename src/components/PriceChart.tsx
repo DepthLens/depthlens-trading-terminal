@@ -10,7 +10,7 @@ import { VolumeProfile, type ProfileChart } from '@/components/VolumeProfile';
 import type { ProfileSettings } from '@/lib/volume-profile';
 import type { TradeSource } from '@/lib/live-price';
 import { Footprint } from '@/components/Footprint';
-import type { FootprintSettings } from '@/lib/footprint-data';
+import { FOOTPRINT_FIT_SPACING, type FootprintSettings } from '@/lib/footprint-data';
 import { CandleTimerPrimitive, checkOverlayStability } from '@/lib/chart-overlays';
 export type { LivePrice } from '@/lib/live-price';
 function toColor(el: HTMLElement, name: string) {
@@ -153,6 +153,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     scale.setVisibleLogicalRange({from:mid-width/2,to:mid+width/2});
   };
   const reset = () => { const chart=chartRef.current;if (!chart) return;chart.timeScale().applyOptions({barSpacing:8,rightOffset:8});chart.priceScale('right').applyOptions({autoScale:true});chart.timeScale().scrollToRealTime(); };
+  const fitFootprint = () => { const chart = chartRef.current; if (!chart) return; chart.timeScale().applyOptions({ barSpacing: FOOTPRINT_FIT_SPACING, rightOffset: 2 }); chart.timeScale().scrollToRealTime(); };
   const buttonClass = mobile ? 'size-10 bg-t-panel/60 text-t-text hover:bg-t-border' : 'text-t-text hover:bg-t-border';
   const legendItems = <>
     {!mobile && <span className="font-semibold text-t-text">{symbol} · {minutes}m</span>}
@@ -167,6 +168,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     {volumeProfile && profileSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${mobile?'top-0':'top-8'}`}><VolumeProfile chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={profileSettings} spec={priceFormat} mobile={mobile} minutes={minutes} theme={theme} revision={chartRevision}/></div>}
     {footprint && footprintSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${mobile?'top-0':'top-8'}`}><Footprint chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={footprintSettings} spec={priceFormat} mobile={mobile} minutes={minutes} revision={chartRevision}/></div>}
     <div className={mobile ? 'absolute right-[calc(var(--axis-w,64px)+4px)] top-1.5 z-10 flex flex-col gap-1' : 'absolute bottom-12 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-md border border-t-border bg-t-panel/95 p-1'}>
+      {footprint && <Button variant="ghost" className={`${buttonClass} ${mobile ? 'h-10 w-10 p-1 text-xs' : 'px-2 text-xs'}`} aria-label="Fit footprint" title="Fit footprint" onClick={fitFootprint}>{mobile ? 'Fit' : 'Fit footprint'}</Button>}
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom In" title="Zoom In" onClick={()=>zoom(0.75)}><ZoomIn /></Button>
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom Out" title="Zoom Out" onClick={()=>zoom(1.3333)}><ZoomOut /></Button>
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Reload" title="Reload — latest candle and default zoom" onClick={reset}><RotateCcw /></Button>

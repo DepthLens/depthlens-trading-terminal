@@ -1,11 +1,11 @@
 // Browser-safe footprint aggregation: 1m buckets of bid/ask volume on a fixed tick grid.
-export type Cell = { bid: number; ask: number };
+export type Cell = { bid: number; ask: number; bidNotional?: number; askNotional?: number };
 export type Segment = [number, number];
 export type FootprintStore = { tick: number; minutes: Map<number, Map<number, Cell>>; segments: Segment[]; liveFrom: number | null; dirty: boolean; restored: boolean };
 export type FootprintMode = 'bidask' | 'delta' | 'volume';
-export type FootprintSettings = { mode: FootprintMode; grouping: 'Auto' | number; imbalance: boolean; ratio: number; totals: boolean; poc: boolean; opacity: number };
+export type FootprintSettings = { mode: FootprintMode; grouping: 'Auto' | number; imbalance: boolean; ratio: number; totals: boolean; poc: boolean; opacity: number; unit: 'USDT' | 'coin' };
 export const FOOTPRINT_KEY = 'depthlens.footprint.v1';
-export const FOOTPRINT_DEFAULT: FootprintSettings = { mode: 'bidask', grouping: 'Auto', imbalance: true, ratio: 300, totals: true, poc: true, opacity: .8 };
+export const FOOTPRINT_DEFAULT: FootprintSettings = { mode: 'bidask', grouping: 'Auto', imbalance: true, ratio: 300, totals: true, poc: true, opacity: .8, unit: 'USDT' };
 export const GROUPS = [1, 2, 5, 10, 25, 50, 100, 250, 500, 1000] as const;
 export const DAY = 86400000;
 
@@ -18,6 +18,7 @@ export function restoreFootprintSettings(raw: string | null): FootprintSettings 
       imbalance: d.imbalance !== false,
       ratio: Number.isFinite(d.ratio) ? Math.max(150, Math.min(500, d.ratio)) : 300,
       totals: d.totals !== false, poc: d.poc !== false,
+      unit: d.unit === 'coin' ? 'coin' : 'USDT',
       opacity: Number.isFinite(d.opacity) ? Math.max(.1, Math.min(1, d.opacity)) : FOOTPRINT_DEFAULT.opacity,
     };
   } catch { return { ...FOOTPRINT_DEFAULT }; }
@@ -34,13 +35,15 @@ export function addTrade(store: FootprintStore, time: number, price: number, siz
   if (!rows) { rows = new Map(); store.minutes.set(minute, rows); }
   let cell = rows.get(row);
   if (!cell) { cell = { bid: 0, ask: 0 }; rows.set(row, cell); }
-  if (sellAggressor) cell.bid += size; else cell.ask += size;
+  if (sellAggressor) { cell.bid += size; cell.bidNotional = (cell.bidNotional ?? 0) + size * price; }
+  else { cell.ask += size; cell.askNotional = (cell.askNotional ?? 0) + size * price; }
   store.dirty = true;
 }
 export function addLiveTrade(store: FootprintStore, time: number, price: number, size: number, sell: boolean) {
   addTrade(store, time, price, size, sell);
   if (store.liveFrom === null) { store.liveFrom = time; store.segments = mergeSegments([...store.segments, [time, time]]); }
-  const last = store.segments.find(s => s[0] <= store.liveFrom! && s[1] >= store.liveFrom!);
+  const liveFrom = store.liveFrom;
+  const last = store.segments.find(s => s[0] <= liveFrom && s[1] >= liveFrom);
   if (last && time > last[1]) last[1] = time;
 }
 export function mergeSegments(list: Segment[]): Segment[] {
@@ -78,16 +81,21 @@ export const since = (store: FootprintStore) => store.segments[0]?.[0] ?? null;
 export type FootprintRow = { row: number; low: number; high: number; bid: number; ask: number; askImb: boolean; bidImb: boolean };
 export type FootprintCandle = { start: number; rows: FootprintRow[]; bid: number; ask: number; poc: number | null; peak: number; coverage: 'none' | 'partial' | 'full' };
 /** Sums 1m buckets into one candle; grouping merges g base rows on the same fixed grid. */
-export function buildCandle(store: FootprintStore, start: number, minutes: number, group: number, ratio: number): FootprintCandle {
+export function buildCandle(store: FootprintStore, start: number, minutes: number, group: number, ratio: number, unit: 'coin' | 'USDT' = 'coin'): FootprintCandle {
   const end = start + minutes * 60000, merged = new Map<number, Cell>();
   for (let m = start; m < end; m += 60000) {
     const rows = store.minutes.get(m); if (!rows) continue;
-    for (const [k, c] of rows) { const g = Math.floor(k / group); const t = merged.get(g); if (t) { t.bid += c.bid; t.ask += c.ask; } else merged.set(g, { bid: c.bid, ask: c.ask }); }
+    for (const [k, c] of rows) {
+      const g = Math.floor(k / group), price = (k + .5) * store.tick;
+      const bid = unit === 'USDT' ? c.bidNotional ?? c.bid * price : c.bid;
+      const ask = unit === 'USDT' ? c.askNotional ?? c.ask * price : c.ask;
+      const t = merged.get(g); if (t) { t.bid += bid; t.ask += ask; } else merged.set(g, { bid, ask });
+    }
   }
   const size = store.tick * group, keys = [...merged.keys()].sort((a, b) => a - b);
   let bid = 0, ask = 0, poc: number | null = null, peak = 0;
   const rows: FootprintRow[] = keys.map(k => {
-    const c = merged.get(k)!; bid += c.bid; ask += c.ask;
+    const c = merged.get(k) ?? { bid: 0, ask: 0 }; bid += c.bid; ask += c.ask;
     const below = merged.get(k - 1), above = merged.get(k + 1), r = ratio / 100;
     if (c.bid + c.ask > peak) { peak = c.bid + c.ask; poc = k; }
     return { row: k, low: k * size, high: (k + 1) * size, bid: c.bid, ask: c.ask, askImb: !!below && below.bid > 0 && c.ask >= r * below.bid, bidImb: !!above && above.ask > 0 && c.bid >= r * above.ask };
@@ -96,12 +104,25 @@ export function buildCandle(store: FootprintStore, start: number, minutes: numbe
 }
 /** Smallest grouping whose row is at least minPx tall at the current zoom. */
 export function autoGroup(tick: number, pxPerPrice: number, minPx: number) {
-  return GROUPS.find(g => g * tick * pxPerPrice >= minPx) ?? GROUPS[GROUPS.length - 1]!;
+  return GROUPS.find(g => g * tick * pxPerPrice >= minPx) ?? 1000;
 }
+/** 20px headroom preserves the 14px minimum throughout the 40% hysteresis band. */
+export function clusterRowTicks(tick: number, pxPerPrice: number, previous = 0) {
+  if (!(tick > 0) || !(pxPerPrice > 0)) return previous || 1;
+  const ideal = Math.max(1, Math.ceil(20 / (tick * pxPerPrice)));
+  return previous > 0 && Math.abs(ideal / previous - 1) <= .4 ? previous : ideal;
+}
+export function rowImbalance(bid: number, ask: number, ratio: number): 'bid' | 'ask' | null {
+  if (bid > ask && bid >= ask * ratio / 100) return 'bid';
+  if (ask > bid && ask >= bid * ratio / 100) return 'ask';
+  return null;
+}
+export const FOOTPRINT_FIT_SPACING = 110;
+export const FOOTPRINT_DETAIL_SPACING = 70;
 export function formatVolume(v: number) {
   const a = Math.abs(v);
   if (a >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
-  if (a >= 1e4) return `${(v / 1e3).toFixed(1)}K`;
+  if (a >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
   if (a >= 100) return v.toFixed(0);
   if (a >= 1) return v.toFixed(1);
   return v.toFixed(3);
