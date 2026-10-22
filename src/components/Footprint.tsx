@@ -1,6 +1,6 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import type { CandlestickSeriesOptions } from 'lightweight-charts';
-import { autoRowTicks, buildCandle, formatVolume, since, type FootprintSettings } from '@/lib/footprint-data';
+import { clusterRowTicks, FOOTPRINT_FIT_SPACING, buildCandle, formatVolume, since, type FootprintSettings } from '@/lib/footprint-data';
 import { backfillFootprint, footprintStore } from '@/lib/footprint-store';
 import { FootprintPrimitive, type FootprintBar } from '@/lib/footprint-overlay';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
@@ -8,22 +8,28 @@ import type { TradeSource } from '@/lib/live-price';
 import type { ProfileChart } from '@/components/VolumeProfile';
 
 const SOURCE_NAME: Record<TradeSource, string> = { binance: 'Binance', bybit: 'Bybit' };
-const STYLE_KEYS = ['upColor', 'downColor', 'borderVisible', 'borderUpColor', 'borderDownColor', 'wickUpColor', 'wickDownColor'] as const;
+const STYLE_KEYS = ['upColor', 'downColor', 'borderVisible', 'borderUpColor', 'borderDownColor', 'wickUpColor', 'wickDownColor', 'wickVisible'] as const;
 export const MAX_FOOTPRINT_CANDLES = 150;
 
 export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, mobile, minutes, revision }: { chartRef: MutableRefObject<ProfileChart | null>; hostRef: MutableRefObject<HTMLDivElement | null>; source: TradeSource; symbol: string; settings: FootprintSettings; spec: PriceSpec; mobile: boolean; minutes: number; revision: number }) {
+  const autoGroupRef = useRef(0);
+  useEffect(() => {
+    const api = chartRef.current; if (!api || api.disposed) return;
+    api.chart.timeScale().applyOptions({ barSpacing: FOOTPRINT_FIT_SPACING, rightOffset: 2 });
+    api.chart.timeScale().scrollToRealTime();
+  }, [chartRef, source, symbol, minutes, revision]);
   const noteRef = useRef<HTMLDivElement>(null), hintRef = useRef<HTMLDivElement>(null), tipRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const api = chartRef.current, host = hostRef.current, note = noteRef.current, hint = hintRef.current, tip = tipRef.current;
     if (!api || !host || !note || !hint || !tip) return;
-    const primitive = new FootprintPrimitive(api, settings, api.colors, mobile);
+    const primitive = new FootprintPrimitive(api, settings, { ...api.colors, clusterText: chartColor(host, '--fp-text'), clusterOutline: chartColor(host, '--fp-outline') }, mobile);
     api.series.attachPrimitive(primitive); api.probes.add(primitive);
     const opts = api.series.options() as CandlestickSeriesOptions;
     const original = Object.fromEntries(STYLE_KEYS.map(k => [k, opts[k]])) as Partial<CandlestickSeriesOptions>;
     let outlined = false;
     const outline = (on: boolean) => {
       if (on === outlined || api.disposed) return; outlined = on;
-      api.series.applyOptions(on ? { upColor: 'rgba(0,0,0,0)', downColor: 'rgba(0,0,0,0)', borderVisible: true, borderUpColor: api.colors.up, borderDownColor: api.colors.down } : original);
+      api.series.applyOptions(on ? { upColor: 'rgba(0,0,0,0)', downColor: 'rgba(0,0,0,0)', borderVisible: false, wickVisible: false } : original);
     };
     let disposed = false, dragging = false, timer: ReturnType<typeof setTimeout> | undefined;
     const recalculate = () => {
@@ -34,17 +40,16 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
       if (!range || !data.length || top === null || bottom === null || top <= bottom) return;
       const count = range.to - range.from;
       const tooMany = count > MAX_FOOTPRINT_CANDLES;
-      hint.hidden = !tooMany; primitive.hidden = tooMany; outline(!tooMany);
+      hint.hidden = !tooMany; primitive.hidden = tooMany; outline(true);
       const lo = Math.max(0, Math.floor(range.from) - 1), hi = Math.min(data.length - 1, Math.ceil(range.to) + 1);
-      let sum = 0, n = 0;
-      for (let i = lo; i <= hi; i++) { const d = data[i]; if (d && 'high' in d && d.high > d.low) { sum += d.high - d.low; n++; } }
-      // Auto row size comes from the average visible candle range (about 12 rows per candle), never from the screen height.
-      const group = settings.grouping === 'Auto' ? autoRowTicks(n ? sum / n : 0, spec.minMove) : settings.grouping;
+      const pxPerPrice = h / (top - bottom);
+      if (settings.grouping === 'Auto') autoGroupRef.current = clusterRowTicks(spec.minMove, pxPerPrice, autoGroupRef.current);
+      const group = settings.grouping === 'Auto' ? autoGroupRef.current : settings.grouping;
       const bars: FootprintBar[] = [];
-      if (!tooMany) for (let i = lo; i <= hi; i++) {
+      for (let i = lo; i <= hi; i++) {
         const d = data[i]; if (!d || !('high' in d)) continue;
         const time = Number(d.time);
-        bars.push({ time, high: d.high, low: d.low, fp: buildCandle(store, time * 1000, minutes, group, settings.ratio) });
+        bars.push({ time, open: d.open, close: d.close, high: d.high, low: d.low, fp: buildCandle(store, time * 1000, minutes, group, settings.ratio, settings.unit) });
       }
       primitive.bars = bars;
       const first = since(store);
@@ -79,10 +84,10 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
     };
     const refresh = setInterval(() => { if (!dragging && !timer) recalculate(); }, 1000);
     const filler = setInterval(backfill, 4000);
-    setTimeout(backfill, 600);
-    schedule();
+    const initialBackfill = setTimeout(backfill, 600);
+    recalculate();
     return () => {
-      disposed = true; abort.abort(); clearTimeout(timer); clearInterval(refresh); clearInterval(filler); observer.disconnect();
+      disposed = true; abort.abort(); clearTimeout(initialBackfill); clearTimeout(timer); clearInterval(refresh); clearInterval(filler); observer.disconnect();
       host.removeEventListener('pointerdown', down); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
       host.removeEventListener('wheel', schedule); host.removeEventListener('mousemove', hover); host.removeEventListener('mouseleave', leave);
       api.probes.delete(primitive);
@@ -91,7 +96,15 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
   }, [source, symbol, spec.minMove, mobile, chartRef, hostRef, settings, minutes, revision]);
   return <>
     <div ref={noteRef} data-testid="footprint" className={`pointer-events-none absolute left-3 z-[3] text-xs text-t-muted ${mobile ? 'bottom-24' : 'bottom-20'}`}/>
-    <div ref={hintRef} hidden data-testid="footprint-hint" className="pointer-events-none absolute left-1/2 top-12 z-[3] -translate-x-1/2 rounded border border-t-border bg-t-panel/90 px-2 py-1 text-xs text-t-text">Zoom in to see footprint</div>
+    <div ref={hintRef} hidden data-testid="footprint-hint" className="pointer-events-none absolute left-1/2 top-12 z-[3] -translate-x-1/2 rounded border border-t-border bg-t-panel/90 px-2 py-1 text-xs text-t-text">Zoom in or Fit footprint</div>
     <div ref={tipRef} hidden role="tooltip" data-testid="footprint-tooltip" className="pointer-events-none absolute left-3 top-12 z-20 whitespace-pre-line rounded border border-t-border bg-t-panel/95 p-2 text-xs text-t-text"/>
   </>;
+}
+
+function chartColor(host: HTMLElement, token: string) {
+  const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+  if (!ctx) return getComputedStyle(host).getPropertyValue('--t-text').trim();
+  ctx.fillStyle = getComputedStyle(host).getPropertyValue(token).trim(); ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+  return `rgb(${r},${g},${b})`;
 }
