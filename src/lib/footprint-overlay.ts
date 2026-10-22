@@ -33,7 +33,14 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
     const detailed = spacing >= FOOTPRINT_DETAIL_SPACING && !this.hidden;
     let texts = 0, cells = 0, imbalances = 0;
     ctx.save();
-    for (const bar of this.bars) {
+    const range = ts.getVisibleLogicalRange(), data = this.api.series.data();
+    const cached = new Map(this.bars.map(bar => [bar.time, bar]));
+    const first = range ? Math.max(0, Math.floor(range.from) - 1) : 0;
+    const last = range ? Math.min(data.length - 1, Math.ceil(range.to) + 1) : -1;
+    for (let index = first; index <= last; index++) {
+      const current = data[index]; if (!current || !('open' in current)) continue;
+      const time = Number(current.time), saved = cached.get(time);
+      const bar: FootprintBar = { time, open: current.open, close: current.close, high: current.high, low: current.low, fp: saved?.fp ?? { start: time * 1000, rows: [], bid: 0, ask: 0, poc: null, peak: 0, coverage: 'none' } };
       const x = ts.timeToCoordinate(bar.time as Time);
       if (x === null || x < -spacing / 2 || x > mediaSize.width + spacing / 2) continue;
       const hi = this.api.series.priceToCoordinate(bar.high), lo = this.api.series.priceToCoordinate(bar.low);
@@ -79,7 +86,8 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
           const delta = row.ask - row.bid;
           const label = s.mode === 'bidask' ? `${formatVolume(row.bid)} x ${formatVolume(row.ask)}` : s.mode === 'delta' ? `${delta >= 0 ? '+' : ''}${formatVolume(delta)}` : formatVolume(row.bid + row.ask);
           ctx.globalAlpha = 1; ctx.font = 'bold 11px ui-monospace, monospace'; ctx.textBaseline = 'middle'; ctx.fillStyle = c.clusterText;
-          ctx.fillText(label, cellLeft + (cellW - this.measure(ctx, label)) / 2, y1 + height / 2, cellW - 4);
+          const width = Math.min(this.measure(ctx, label), cellW - 4);
+          ctx.fillText(label, cellLeft + (cellW - width) / 2, y1 + height / 2, cellW - 4);
           texts++;
         }
         ctx.restore();
