@@ -9,7 +9,7 @@ export type CandleSeries = ISeriesApi<'Candlestick'>;
 export type OverlaySample = { name: string; price: number; drawnY: number | null; offset?: number };
 export type OverlayProbe = { samples: () => OverlaySample[]; pause: (value: boolean) => void };
 export type OverlayChart = { chart: IChartApi; series: CandleSeries; probes: Set<OverlayProbe>; host: HTMLElement };
-export type Palette = { up: string; down: string; unsplit: string; poc: string; muted: string; labelText: string };
+export type Palette = { up: string; down: string; unsplit: string; poc: string; muted: string; labelText: string; valueArea?: string };
 
 // This primitive retains price/volume only. Pixel coordinates are derived inside each draw/hit test.
 export class ProfilePrimitive implements ISeriesPrimitive<Time>, OverlayProbe {
@@ -32,14 +32,17 @@ export class ProfilePrimitive implements ISeriesPrimitive<Time>, OverlayProbe {
       this.lastDraw = [];
       if (!peak) return;
       const width = mediaSize.width * (this.mobile ? .12 : .2);
+      const area = this.rows.filter(r=>r.inArea), upper=area.at(-1), lower=area[0];
+      if(upper&&lower){const top=this.api.series.priceToCoordinate(upper.high),bottom=this.api.series.priceToCoordinate(lower.low);if(top!==null&&bottom!==null){ctx.globalAlpha=.08;ctx.fillStyle=this.colors.valueArea??this.colors.unsplit;ctx.fillRect(this.settings.position==='right'?mediaSize.width-width:0,top,width,bottom-top);this.lastDraw.push({name:'Volume Profile value-area band',price:upper.high,drawnY:top});}}
       for (const row of this.rows) {
         if (!row.volume) continue;
         const a = this.api.series.priceToCoordinate(row.high), b = this.api.series.priceToCoordinate(row.low);
         if (a === null || b === null) continue;
         const bar = width * row.volume / peak, x = this.settings.position === 'right' ? mediaSize.width - bar : 0;
         this.lastDraw.push({ name: `Histogram ${row.low}`, price: row.high, drawnY: a });
-        ctx.globalAlpha = this.settings.opacity * (row.inArea ? 1 : .3);
-        const height = Math.max(1, b - a - 1);
+        const isPoc=row.volume===peak;
+        ctx.globalAlpha = isPoc||row.inArea?1:.45;
+        const height = Math.max(0, b - a - 1);
         // Row-height probe: a bar is never taller than its own price row.
         this.lastDraw.push({ name: 'Volume Profile bar height', price: row.low, drawnY: a + height > b + 1 ? a + height : b });
         if (this.split && this.settings.split) {
@@ -47,6 +50,7 @@ export class ProfilePrimitive implements ISeriesPrimitive<Time>, OverlayProbe {
           ctx.fillStyle = this.colors.up; ctx.fillRect(x, a, buy, height);
           ctx.fillStyle = this.colors.down; ctx.fillRect(x + buy, a, bar - buy, height);
         } else { ctx.fillStyle = this.colors.unsplit; ctx.fillRect(x, a, bar, height); }
+        if(isPoc){ctx.globalAlpha=1;ctx.strokeStyle=this.colors.poc;ctx.lineWidth=1;ctx.strokeRect(x+.5,a+.5,Math.max(0,bar-1),Math.max(0,height-1));this.lastDraw.push({name:'Volume Profile POC outline',price:row.high,drawnY:a});}
       }
       ctx.globalAlpha = 1;
     });
@@ -127,13 +131,15 @@ export function nativeLineSample(api: OverlayChart, name: string, line: IPriceLi
   color.fillStyle = line.options().color; color.fillRect(0, 0, 1, 1);
   const rgb = color.getImageData(0, 0, 1, 1).data;
   const ratio = window.devicePixelRatio || 1;
-  const w = api.chart.timeScale().width(), left = Math.round(w * .3 * ratio), right = Math.round(w * .6 * ratio);
+  // Clusters can cover the middle of a native line; sample across the whole pane,
+  // including the candle-column gaps, rather than treating occlusion as drift.
+  const w = api.chart.timeScale().width(), left = 0, right = Math.round(w * ratio);
   let best = -1, drawnY: number | null = null;
   for (let y = Math.max(0, Math.floor((expected - 4) * ratio)); y <= Math.min(shot.height - 1, Math.ceil((expected + 4) * ratio)); y++) {
     const pixels = ctx.getImageData(left, y, Math.max(1, right - left), 1).data;
     let hits = 0;
     for (let x = 0; x < pixels.length; x += 4) if ([0, 1, 2].every(c => Math.abs((pixels[x + c] ?? 0) - (rgb[c] ?? 0)) <= 3)) hits++;
-    if (hits > best && hits > (right - left) * .25) { best = hits; drawnY = (y + .5) / ratio; }
+    if (hits > best && hits > Math.max(6*ratio,(right-left)*.02)) { best = hits; drawnY = (y + .5) / ratio; }
   }
   return { name, price, drawnY };
 }
@@ -142,6 +148,7 @@ export async function checkOverlayStability(api: OverlayChart) {
   const range = api.chart.timeScale().getVisibleLogicalRange(), priceRange = api.series.priceScale().getVisibleRange();
   if (!range || !priceRange) return [{ name: 'Chart data', pass: false, error: Infinity }];
   const autoScale = api.series.priceScale().options().autoScale;
+  api.chart.clearCrosshairPosition();
   for (const probe of api.probes) probe.pause(true);
   const results = new Map<string, { name: string; pass: boolean; error: number }>();
   const wait = () => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));

@@ -44,12 +44,28 @@ export function colorFor(t: number): [number, number, number] {
 }
 
 export class HeatmapBuffer {
-  readonly bucket: number;
+  bucket: number;
   private cols: Column[] = [];
   private pending = new Map<number, { buy: number; sell: number }>();
   private pendingPrice = NaN;
-  constructor(price: number) {
-    this.bucket = autoBucketSize(price);
+  constructor(price: number, bucket = autoBucketSize(price)) {
+    this.bucket = bucket;
+  }
+  configureBucket(bucket: number) {
+    if (!(bucket > 0) || bucket === this.bucket) return;
+    const old = this.bucket;
+    const rebin=(values:Map<number,{buy:number;sell:number}>)=>{
+      const result=new Map<number,{buy:number;sell:number}>();
+      for(const [index,t] of values){const key=Math.floor((index+.5)*old/bucket),target=result.get(key)??{buy:0,sell:0};target.buy+=t.buy;target.sell+=t.sell;result.set(key,target);}
+      return result;
+    };
+    this.pending=rebin(this.pending);
+    for (const col of this.cols) {
+      const origin=Math.floor(col.price/bucket)-ROWS/2,data=new Float32Array(col.data.length?ROWS:0);
+      for(let i=0;i<col.data.length;i++){const value=col.data[i]??0,target=Math.floor((col.origin+i+.5)*old/bucket)-origin;if(target>=0&&target<data.length)data[target]=(data[target]??0)+value;}
+      col.trades=rebin(col.trades);col.origin=origin;col.data=data;
+    }
+    this.bucket = bucket;
   }
   index(price: number) { return Math.floor(price / this.bucket); }
   trade(price: number, size: number, side: TradeSide | undefined) {

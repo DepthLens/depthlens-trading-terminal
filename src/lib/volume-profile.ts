@@ -1,4 +1,5 @@
 import type { TradeSource, LivePrice } from './live-price';
+import { profileRowSize } from './tool-layout';
 
 export type ProfileSettings = { range: 'Visible' | '4h' | '12h' | '24h' | '3d'; rows: 'Auto' | '50' | '100'; valueArea: number; split: boolean; position: 'right' | 'left'; opacity: number };
 export const PROFILE_KEY = 'depthlens.volume-profile.v1';
@@ -8,16 +9,29 @@ export function restoreProfile(raw: string | null): ProfileSettings {
 }
 export type VolumeCandle = { time: number; low: number; high: number; volume: number; buy: number | null };
 type LiveBucket = { time: number; price: number; volume: number; buy: number; receivedAt: number };
-type Entry = { candles: VolumeCandle[]; live: Map<string,LiveBucket>; fetchedAt: number; baselineAt: number; pending?: Promise<void>; error: string };
+type ProfileDelta = { time: number; price: number; volume: number; buy: number };
+type Entry = { listeners: Set<(trade: ProfileDelta) => void>; candles: VolumeCandle[]; live: Map<string,LiveBucket>; fetchedAt: number; baselineAt: number; pending?: Promise<void>; error: string };
 const cache = new Map<string, Entry>();
 let pausedUntil = 0;
-function entry(source: TradeSource, symbol: string) { const key = `${source}:${symbol}`; let e = cache.get(key); if (!e) { e = { candles: [], live: new Map(), fetchedAt: 0, baselineAt: 0, error: '' }; cache.set(key,e); } return e; }
+function entry(source: TradeSource, symbol: string) { const key = `${source}:${symbol}`; let e = cache.get(key); if (!e) { e = { listeners: new Set(), candles: [], live: new Map(), fetchedAt: 0, baselineAt: 0, error: '' }; cache.set(key,e); } return e; }
+export function subscribeProfileTrades(source: TradeSource, symbol: string, listener: (trade: ProfileDelta) => void) {
+  const e = entry(source, symbol); e.listeners.add(listener); return () => { e.listeners.delete(listener); };
+}
+export function applyProfileDelta(rows: ProfileRow[], trade: ProfileDelta, from: number, to: number) {
+  if (trade.time < from || trade.time > to || !rows.length) return 0;
+  const first = rows[0]; if (!first) return 0;
+  const row = rows[Math.floor((trade.price - first.low) / (first.high - first.low))];
+  if (!row) return 0;
+  row.volume += trade.volume; row.buy += trade.buy; row.sell += trade.volume - trade.buy;
+  return trade.volume;
+}
 export function addProfileTrade(symbol: string, tick: LivePrice) {
   if (tick.source !== 'trade' || !tick.exchange || !tick.size || tick.size <= 0) return;
   const e = entry(tick.exchange,symbol), receivedAt = tick.receivedAt ?? Date.now();
   const time = Math.floor(tick.time / 60000) * 60000, key = `${time}:${tick.price}`, old=e.live.get(key);
   if(old) {old.volume+=tick.size;old.buy+=tick.side==='Buy'?tick.size:0;old.receivedAt=receivedAt;}
   else e.live.set(key,{ time, price: tick.price, volume: tick.size, buy: tick.side === 'Buy' ? tick.size : 0, receivedAt });
+  for (const listener of e.listeners) listener({ time, price: tick.price, volume: tick.size, buy: tick.side === 'Buy' ? tick.size : 0 });
 }
 export async function loadProfile(source: TradeSource, symbol: string, now = Date.now()): Promise<void> {
   const e = entry(source,symbol);
@@ -70,9 +84,9 @@ export function updateProfileRows(rows: ProfileRow[], trades: { time: number; pr
   }
   return added;
 }
-export function buildProfile(candles: VolumeCandle[], trades: Pick<LiveBucket,'time'|'price'|'volume'|'buy'>[], min: number, max: number, tick: number, settings: ProfileSettings, from: number, to: number) {
+export function buildProfile(candles: VolumeCandle[], trades: Pick<LiveBucket,'time'|'price'|'volume'|'buy'>[], min: number, max: number, tick: number, settings: ProfileSettings, from: number, to: number, previousStep = 0) {
   const target = settings.rows === 'Auto' ? 60 : Number(settings.rows);
-  const step = Math.max(tick, Math.ceil((max-min)/target/tick)*tick);
+  const step = settings.rows==='Auto'?profileRowSize(max-min,tick,target,previousStep):Math.max(tick,Math.ceil((max-min)/target/tick)*tick);
   const base = Math.floor(min/step)*step, count = Math.min(102, Math.max(1,Math.ceil((max-base)/step)));
   const rows: ProfileRow[] = Array.from({length:count},(_,i)=>({low:base+i*step,high:base+(i+1)*step,volume:0,buy:0,sell:0,inArea:false}));
   for (const c of candles) {

@@ -1,6 +1,8 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import type { CandlestickSeriesOptions } from 'lightweight-charts';
 import { clusterRowTicks, FOOTPRINT_FIT_SPACING, buildCandle, formatVolume, since, type FootprintSettings } from '@/lib/footprint-data';
+import { shouldFitFootprint } from '@/lib/tool-layout';
+import { toolDemoEnabled, demoFootprint } from '@/lib/tool-demo';
 import { backfillFootprint, footprintStore } from '@/lib/footprint-store';
 import { FootprintPrimitive, type FootprintBar } from '@/lib/footprint-overlay';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
@@ -13,8 +15,10 @@ export const MAX_FOOTPRINT_CANDLES = 150;
 
 export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, mobile, minutes, revision }: { chartRef: MutableRefObject<ProfileChart | null>; hostRef: MutableRefObject<HTMLDivElement | null>; source: TradeSource; symbol: string; settings: FootprintSettings; spec: PriceSpec; mobile: boolean; minutes: number; revision: number }) {
   const autoGroupRef = useRef(0);
+  const fitRef = useRef<{enabled:boolean;minutes:number}|null>(null);
   useEffect(() => {
-    const api = chartRef.current; if (!api || api.disposed) return;
+    const api = chartRef.current; if (!api || api.disposed || !shouldFitFootprint(fitRef.current,true,minutes)) return;
+    fitRef.current={enabled:true,minutes};
     api.chart.timeScale().applyOptions({ barSpacing: FOOTPRINT_FIT_SPACING, rightOffset: 2 });
     api.chart.timeScale().scrollToRealTime();
   }, [chartRef, source, symbol, minutes, revision]);
@@ -22,7 +26,7 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
   useEffect(() => {
     const api = chartRef.current, host = hostRef.current, note = noteRef.current, hint = hintRef.current, tip = tipRef.current;
     if (!api || !host || !note || !hint || !tip) return;
-    const primitive = new FootprintPrimitive(api, settings, { ...api.colors, clusterText: chartColor(host, '--fp-text'), clusterOutline: chartColor(host, '--fp-outline') }, mobile);
+    const primitive = new FootprintPrimitive(api, settings, { ...api.colors, clusterText: chartColor(host, '--fp-text'), clusterOutline: chartColor(host, '--fp-outline'), textShadow:chartColor(host,'--flow-shadow') }, mobile);
     api.series.attachPrimitive(primitive); api.probes.add(primitive);
     const opts = api.series.options() as CandlestickSeriesOptions;
     const original = Object.fromEntries(STYLE_KEYS.map(k => [k, opts[k]])) as Partial<CandlestickSeriesOptions>;
@@ -34,8 +38,10 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
     let disposed = false, dragging = false, timer: ReturnType<typeof setTimeout> | undefined;
     const recalculate = () => {
       if (disposed || api.disposed || dragging || primitive.paused) return;
-      const store = footprintStore(source, symbol, spec.minMove), range = api.chart.timeScale().getVisibleLogicalRange();
-      const data = api.series.data(), h = api.chart.paneSize().height;
+      const liveStore = footprintStore(source,symbol,spec.minMove), range = api.chart.timeScale().getVisibleLogicalRange();
+      const data = api.series.data(), demo=toolDemoEnabled();
+      const store=demo?demoFootprint(data.filter(b=>'open' in b).map(b=>({...b,time:Number(b.time)*1000})),spec.minMove):liveStore;
+      const h = api.chart.paneSize().height;
       const top = api.series.coordinateToPrice(0), bottom = api.series.coordinateToPrice(h);
       if (!range || !data.length || top === null || bottom === null || top <= bottom) return;
       const count = range.to - range.from;
@@ -77,6 +83,7 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
     const observer = new ResizeObserver(schedule); observer.observe(host);
     const abort = new AbortController();
     const backfill = () => {
+      if(toolDemoEnabled())return;
       const range = api.chart.timeScale().getVisibleLogicalRange(), data = api.series.data();
       const first = range && data[Math.max(0, Math.floor(range.from))];
       if (!first || !range || api.disposed || range.to - range.from > MAX_FOOTPRINT_CANDLES) return;

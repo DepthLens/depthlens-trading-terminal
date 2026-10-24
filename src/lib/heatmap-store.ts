@@ -3,10 +3,11 @@
 // clear history. Only a source change clears everything. Persisted to IndexedDB.
 import { HeatmapBuffer, COLUMN_MS, MAX_COLUMNS, type Column } from './heatmap-data';
 import { loadHeatmapBuffer, saveHeatmapBuffer } from './heatmap-persist';
+import { depthRowSize } from './tool-layout';
 
 export type HeatSource = 'binance' | 'bybit' | 'poll';
 
-type Entry = { buffer: HeatmapBuffer; restored: boolean };
+type Entry = { buffer: HeatmapBuffer; restored: boolean; calibrated: boolean; depthSpan: number };
 const entries = new Map<string, Entry>();
 let currentSource: HeatSource | null = null;
 
@@ -29,7 +30,7 @@ export function getHeatmapEntry(source: HeatSource, symbol: string, price: numbe
   const k = key(source, symbol);
   let entry = entries.get(k);
   if (!entry) {
-    entry = { buffer: new HeatmapBuffer(price), restored: false };
+    entry = { buffer: new HeatmapBuffer(price), restored: false, calibrated: false, depthSpan: 0 };
     entries.set(k, entry);
     void restoreAndBackfill(k, source, symbol, entry);
   }
@@ -39,7 +40,10 @@ export function getHeatmapEntry(source: HeatSource, symbol: string, price: numbe
 async function restoreAndBackfill(k: string, source: HeatSource, symbol: string, entry: Entry) {
   // Restore from IndexedDB; a dim gap stripe marks when the page was closed.
   const saved = await loadHeatmapBuffer(k);
-  if (saved && Date.now() - saved.savedAt < RESTORE_MAX_AGE && saved.bucket === entry.buffer.bucket) {
+  if (saved?.calibrated && saved.bucket > 0) {
+    entry.buffer.configureBucket(saved.bucket); entry.calibrated = true; entry.depthSpan = saved.depthSpan ?? saved.bucket * 150;
+  }
+  if (saved?.calibrated && Date.now() - saved.savedAt < RESTORE_MAX_AGE) {
     const cutoff = Date.now() - RESTORE_MAX_AGE;
     const cols = saved.columns.filter(c => c.time >= cutoff);
     if (cols.length) {
@@ -51,6 +55,12 @@ async function restoreAndBackfill(k: string, source: HeatSource, symbol: string,
   }
   entry.restored = true;
   await backfill(source, symbol, entry.buffer);
+}
+
+export function calibrateHeatmap(source: HeatSource, symbol: string, entry: Entry, depthSpan: number, tick: number) {
+  if (!entry.restored || entry.calibrated || !(depthSpan > 0)) return;
+  entry.depthSpan = depthSpan; entry.buffer.configureBucket(depthRowSize(depthSpan, tick)); entry.calibrated = true;
+  void saveHeatmapBuffer(key(source, symbol), entry.buffer.bucket, entry.buffer.columns, true, depthSpan);
 }
 
 type RawTrade = { time: number; price: number; size: number; side: 'Buy' | 'Sell' };
@@ -144,7 +154,7 @@ export async function backfill(source: HeatSource, symbol: string, buffer: Heatm
 
 // Write every buffer to IndexedDB. Called on a 10 second interval by the Heatmap view.
 export function persistHeatmaps() {
-  for (const [k, entry] of entries) void saveHeatmapBuffer(k, entry.buffer.bucket, entry.buffer.columns);
+  for (const [k, entry] of entries) if (entry.calibrated) void saveHeatmapBuffer(k, entry.buffer.bucket, entry.buffer.columns, true, entry.depthSpan);
 }
 
 export function heatmapColumns(source: HeatSource, symbol: string): readonly Column[] {

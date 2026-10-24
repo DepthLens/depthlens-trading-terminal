@@ -2,6 +2,8 @@ import type { ISeriesPrimitive, IPrimitivePaneView, Time } from 'lightweight-cha
 import type { OverlayChart, OverlayProbe, OverlaySample, Palette } from './chart-overlays';
 import { FOOTPRINT_DETAIL_SPACING, formatVolume, rowImbalance, type FootprintCandle, type FootprintSettings } from './footprint-data';
 
+import { emptyFootprintColumn } from './tool-layout';
+
 export type FootprintBar = { time: number; open: number; close: number; high: number; low: number; fp: FootprintCandle };
 const rgba = (rgb: string, a: number) => rgb.replace('rgb(', 'rgba(').replace(')', `,${a.toFixed(3)})`);
 
@@ -14,7 +16,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
   private request = () => {};
   private lastDraw: OverlaySample[] = [];
   private widths = new Map<string, number>();
-  constructor(private api: OverlayChart, public settings: FootprintSettings, private colors: Palette & { clusterText: string; clusterOutline: string }, private mobile: boolean) {}
+  constructor(private api: OverlayChart, public settings: FootprintSettings, private colors: Palette & { clusterText: string; clusterOutline: string; textShadow: string }, private mobile: boolean) {}
   attached({ requestUpdate }: Parameters<NonNullable<ISeriesPrimitive<Time>['attached']>>[0]) { this.request = requestUpdate; }
   detached() { this.request = () => {}; }
   pause(value: boolean) { this.paused = value; }
@@ -31,7 +33,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
     this.lastDraw = []; this.outside = 0;
     const ts = this.api.chart.timeScale(), spacing = ts.options().barSpacing, w = this.cellWidth(), s = this.settings, c = this.colors;
     const detailed = spacing >= FOOTPRINT_DETAIL_SPACING && !this.hidden;
-    let texts = 0, cells = 0, imbalances = 0;
+    let texts = 0, cells = 0, imbalances = 0, emptyColumns = 0;
     ctx.save();
     const range = ts.getVisibleLogicalRange(), data = this.api.series.data();
     const cached = new Map(this.bars.map(bar => [bar.time, bar]));
@@ -47,11 +49,14 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
       const open = this.api.series.priceToCoordinate(bar.open), close = this.api.series.priceToCoordinate(bar.close);
       if (hi === null || lo === null || open === null || close === null) continue;
       const hasData = bar.fp.rows.length > 0, cluster = detailed && hasData;
-      const left = x - w / 2, candleX = cluster ? left + 3 : x, bodyW = cluster ? 4 : Math.max(1, Math.min(spacing * .6, 20));
+      const left = x - w / 2, candleX = cluster ? left + 3 : x, bodyW = cluster || (detailed&&!hasData) ? 4 : Math.max(1, Math.min(spacing * .6, 20));
       ctx.globalAlpha = 1; ctx.strokeStyle = ctx.fillStyle = bar.close >= bar.open ? c.up : c.down;
       ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(candleX, hi); ctx.lineTo(candleX, lo); ctx.stroke();
       ctx.fillRect(candleX - bodyW / 2, Math.min(open, close), bodyW, Math.max(1, Math.abs(close - open)));
-      if (!hasData) continue;
+      if (!hasData) {
+        if(emptyFootprintColumn(spacing,hasData)&&!this.hidden){emptyColumns++;ctx.save();ctx.globalAlpha=.28;ctx.strokeStyle=c.muted;ctx.setLineDash([3,3]);ctx.strokeRect(left+.5,hi+.5,w-1,Math.max(1,lo-hi-1));ctx.restore();this.lastDraw.push({name:'Footprint no-data column',price:bar.high,drawnY:hi});if(w>=100&&lo-hi>18){ctx.font='10px ui-monospace,monospace';ctx.fillStyle=c.muted;ctx.textBaseline='middle';ctx.fillText('No footprint data',left+7,(hi+lo)/2,w-14);}}
+        continue;
+      }
       if (!cluster) {
         ctx.fillStyle = rgba(bar.fp.ask >= bar.fp.bid ? c.up : c.down, .18);
         ctx.fillRect(left, hi, w, Math.max(0, lo - hi));
@@ -64,7 +69,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
         const topP = Math.min(row.high, bar.high), bottomP = Math.max(row.low, bar.low);
         const y1 = this.api.series.priceToCoordinate(topP), y2 = this.api.series.priceToCoordinate(bottomP);
         if (y1 === null || y2 === null || y2 <= y1 || y2 < 0 || y1 > mediaSize.height) continue;
-        const height = y2 - y1;
+        const height = Math.max(0,y2-y1-1);
         if (y1 < hi - 1 || y2 > lo + 1) this.outside++;
         if (this.lastDraw.length < 24) {
           this.lastDraw.push({ name: `Footprint cell ${cells + 1}`, price: topP, drawnY: y1 });
@@ -76,7 +81,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
         ctx.save(); ctx.beginPath(); ctx.rect(cellLeft, y1, cellW, height); ctx.clip();
         ctx.globalAlpha = imbalance ? 1 : s.opacity * .6;
         ctx.fillStyle = color;
-        ctx.fillRect(cellLeft, y1, imbalance ? cellW : cellW * (row.bid + row.ask) / peak, height);
+        ctx.fillRect(cellLeft, y1, imbalance ? cellW : cellW * Math.max(.12,(row.bid+row.ask)/peak), height);
         if (imbalance) imbalances++;
         if (s.poc && bar.fp.poc === row.row) {
           ctx.globalAlpha = 1; ctx.strokeStyle = c.clusterOutline; ctx.lineWidth = 1;
@@ -87,6 +92,8 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
           const label = s.mode === 'bidask' ? `${formatVolume(row.bid)} x ${formatVolume(row.ask)}` : s.mode === 'delta' ? `${delta >= 0 ? '+' : ''}${formatVolume(delta)}` : formatVolume(row.bid + row.ask);
           ctx.globalAlpha = 1; ctx.font = 'bold 11px ui-monospace, monospace'; ctx.textBaseline = 'middle'; ctx.fillStyle = c.clusterText;
           const width = Math.min(this.measure(ctx, label), cellW - 4);
+          ctx.shadowColor=c.textShadow;ctx.shadowOffsetX=1;ctx.shadowOffsetY=1;
+          ctx.strokeStyle=c.textShadow;ctx.lineWidth=2;ctx.strokeText(label,cellLeft+(cellW-width)/2,y1+height/2,cellW-4);
           ctx.fillText(label, cellLeft + (cellW - width) / 2, y1 + height / 2, cellW - 4);
           texts++;
         }
@@ -101,7 +108,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
       }
     }
     ctx.restore();
-    Object.assign(this.api.host.dataset, { footprintOutside: String(this.outside), footprintTexts: String(texts), footprintCells: String(cells), footprintImbalances: String(imbalances), footprintSpacing: String(spacing) });
+    Object.assign(this.api.host.dataset, { footprintEmpty: String(emptyColumns), footprintOutside: String(this.outside), footprintTexts: String(texts), footprintCells: String(cells), footprintImbalances: String(imbalances), footprintSpacing: String(spacing) });
   }) }) }];
   paneViews() { return this.views; }
   at(x: number, y: number) {

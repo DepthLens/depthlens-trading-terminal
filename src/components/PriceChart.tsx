@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { createChart, CandlestickSeries, CrosshairMode, LineStyle, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toolDemoEnabled, demoBars } from '@/lib/tool-demo';
 import { aggregate, applyLivePrice, NATIVE, type Bar } from '@/lib/chart-data';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 export { aggregate } from '@/lib/chart-data';
@@ -25,6 +26,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
   const [legendOpen, setLegendOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const spacingRef = useRef(8);
   const profileChartRef = useRef<ProfileChart|null>(null);
   const legendRef = useRef<HTMLElement>(null);
   const [status, setStatus] = useState('Connecting');
@@ -38,17 +40,18 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     if (!el) return;
     delete el.dataset['lastClose'];
     setStatus('Connecting');
-    const text = toColor(el,'--t-muted'), grid = toColor(el,'--t-border'), up = toColor(el,'--t-up'), down = toColor(el,'--t-down');
+    const text = toColor(el,'--t-muted'), grid = toColor(el,'--t-border'), up = toColor(el,'--flow-up'), down = toColor(el,'--flow-down');
     const soft = toColor(el,'--t-muted').replace('rgb(','rgba(').replace(')',',0.75)'), labelBg = toColor(el,'--t-border');
     const line = { color: soft, width: 1 as const, style: LineStyle.Dashed, visible: true, labelVisible: true, labelBackgroundColor: labelBg };
     // Magnet mode must be present on every chart creation; theme/pair/timeframe all recreate the chart here.
     const crosshairOptions = { mode: CrosshairMode.MagnetOHLC, vertLine: line, horzLine: line };
     const chart = createChart(el, { autoSize:true, localization:{locale:'en-US'}, layout:{ background:{ color:'transparent' }, textColor:text }, grid:{ vertLines:{color:grid},horzLines:{color:grid} }, crosshair:crosshairOptions, rightPriceScale:{visible:true,borderColor:grid,scaleMargins:{top:0.08,bottom:0.08}}, timeScale:{borderColor:grid,timeVisible:true,barSpacing:8,rightOffset:8} });
+    chart.timeScale().applyOptions({barSpacing:spacingRef.current});
     chartRef.current = chart;
     chart.applyOptions({ crosshair: crosshairOptions });
     (el as any).__crosshairMode = chart.options().crosshair.mode;
     const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:true,priceLineStyle:LineStyle.Dotted,lastValueVisible:false});
-    const api: ProfileChart = { chart, series: candles, probes: new Set(), host: el, disposed: false, colors: { up, down, muted: text, poc: toColor(el,'--vp-poc'), unsplit: toColor(el,'--vp-unsplit'), labelText: toColor(el,'--t-bg') } };
+    const api: ProfileChart = { chart, series: candles, probes: new Set(), host: el, disposed: false, colors: { up, down, muted: text, poc: toColor(el,'--flow-poc'), unsplit: toColor(el,'--flow-unsplit'), valueArea:toColor(el,'--flow-value-area'), labelText: toColor(el,'--t-bg') } };
     profileChartRef.current = api;
     setChartRevision(value => value + 1);
     // The primitive owns the live price tag (green up / red down) so it keeps its color even when Footprint outlines candles.
@@ -91,7 +94,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(flush); };
     const receive = (tick: {time: number; price: number}) => {
-      if (stopped) return;
+      if (stopped || toolDemoEnabled()) return;
       if (!ready) { pendingTrades.push(tick); return; }
       latest = latest ? applyLivePrice(latest, tick.time, tick.price, minutes) : { time: Math.floor(tick.time / (minutes * 60000)) * minutes * 60000, open: tick.price, high: tick.price, low: tick.price, close: tick.price };
       schedule();
@@ -104,6 +107,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       else setLegend(latest ? {...latest} : null);
     });
     const handle = (message: any) => {
+      if(toolDemoEnabled())return;
       const d = message.data ?? message;
       if (!d.k) return;
       const k=d.k;
@@ -119,6 +123,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     bridge.current.kline = handle;
     const load = async () => {
       try {
+        if(toolDemoEnabled()){bars=demoBars(symbol==='ETHUSDT'?3000:symbol==='DOGEUSDT'?.15:68000,priceFormat.minMove,minutes);latest=bars.at(-1);candles.setData(bars.map(b=>({...b,time:b.time/1000 as UTCTimestamp})));ready=true;flush();chart.timeScale().scrollToRealTime();setStatus('Demo');return;}
         const response=await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${NATIVE[minutes]?1000:1500}`,{signal:abort.signal});
         if (!response.ok) throw new Error('History unavailable');
         const data=await response.json();
@@ -142,7 +147,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       }
     };
     void load();
-    return () => { stopped=true;api.disposed=true;timerRef.current?.detached();timerRef.current=null;const debugWindow=window as Window & { checkOverlayStability?: typeof selfCheck };if(debugWindow.checkOverlayStability===selfCheck)delete debugWindow.checkOverlayStability;abort.abort();clearTimeout(historyRetry);cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;if(bridge.current.kline===handle)bridge.current.kline=null;chartRef.current=null;profileChartRef.current=null;chart.remove(); };
+    return () => { spacingRef.current=chart.timeScale().options().barSpacing;stopped=true;api.disposed=true;timerRef.current?.detached();timerRef.current=null;const debugWindow=window as Window & { checkOverlayStability?: typeof selfCheck };if(debugWindow.checkOverlayStability===selfCheck)delete debugWindow.checkOverlayStability;abort.abort();clearTimeout(historyRetry);cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;if(bridge.current.kline===handle)bridge.current.kline=null;chartRef.current=null;profileChartRef.current=null;chart.remove(); };
   },[symbol,minutes,theme,priceFormat.precision,priceFormat.minMove,bridge]);
 
   const zoom = (factor: number) => {
@@ -164,6 +169,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     {mobile
       ? <button type="button" ref={legendRef as any} onClick={()=>setLegendOpen(o=>!o)} aria-expanded={legendOpen} aria-label="OHLC legend, tap to expand or collapse" className="terminal-tabs absolute left-1.5 top-1.5 z-10 flex max-w-[calc(100%-var(--axis-w,64px)-56px)] items-center gap-x-2 overflow-x-auto whitespace-nowrap min-h-10 rounded bg-t-panel/60 px-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</button>
       : <div ref={legendRef as any} className="pointer-events-none z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</div>}
+    {toolDemoEnabled()&&<span className="demo-watermark">DEMO DATA</span>}
     <div ref={ref} className="min-h-0 w-full flex-1" aria-label={`${symbol} ${minutes} minute candlestick chart`} />
     {volumeProfile && profileSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${mobile?'top-0':'top-8'}`}><VolumeProfile chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={profileSettings} spec={priceFormat} mobile={mobile} minutes={minutes} theme={theme} revision={chartRevision}/></div>}
     {footprint && footprintSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${mobile?'top-0':'top-8'}`}><Footprint chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={footprintSettings} spec={priceFormat} mobile={mobile} minutes={minutes} revision={chartRevision}/></div>}

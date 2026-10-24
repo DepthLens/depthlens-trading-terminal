@@ -3,6 +3,11 @@
 Read this file before any change. It applies to every future request.
 
 ## 1. Features that must never break
+- Query-only `?demo=1` fixtures for Heatmap, Volume Profile and Footprint, always watermarked DEMO DATA and never saved into live caches.
+- Shared CSS flow palette across four themes; Heatmap fixed #050b18 background, tick-precision axes, fitted depth band and crisp right-anchored 3–12px columns.
+- Heatmap base row is tick-clamped niceStep(synced depthSpan/150), saved with calibration per source/symbol in IndexedDB even after history expires. Center fits 1.15 depthSpan; 20-row minimum and ±5% zoom cap. Persistent offscreen ring texture paints new columns; sampled color histogram every five seconds.
+- VPVR 1px row gaps, 45% outside-area bars, bright yellow outlined POC, shaded VAH/VAL band and range/row label. Nice tick rows target 60 with 40% hysteresis; direct incremental trade deltas, no repeated live-map scans. Visible history beyond three days is labeled honestly.
+- Footprint empty columns keep the cluster width with dashed outlines, a small candle and width-gated no-data text; 1px gaps, minimum 12% volume bars, bold imbalance text with dark shadow. Fit 110px only on enable/timeframe/explicit Fit, never unrelated render or manual zoom; settings show coverage minutes and source.
 - Live price in the top bar with status dot and source selector (Auto, Binance, Bybit)
 - WebSocket connection manager (max 3 open sockets, failover, exponential backoff)
 - Pair list with search (pinned BTC/ETH/BNB, sorted by 24h volume), prices follow the active source
@@ -13,7 +18,7 @@ Read this file before any change. It applies to every future request.
 - Candle timer: default-on saved Tools switch, exchange-corrected UTC/custom close countdown below the live axis tag, same direction color, hidden outside visible price range, desktop/mobile.
 - Tools (orderflow) menu with switches
 - Volume Profile candle overlay: active-source cached 1m history, live trade volume, tick-aligned histogram, POC/VAH/VAL, hover details, saved settings and mobile sheet; hidden during Heatmap, no extra sockets.
-- Footprint cluster overlay: real trades only (active source, no extra sockets), 1m bid/ask buckets on a fixed tick grid kept 24h in IndexedDB, rate-limited real-trade backfill, saved settings and mobile sheet, hidden during Heatmap, included in checkOverlayStability. Narrow candle on left, bold 11px white centered bid x ask, proportional volume bars, same-row whole-cell imbalance (300%, adjustable 150–500%), light POC outline, totals and Bid x Ask/Delta/Volume modes. Auto fixed-grid tick-multiple rows remain at least 14px at the vertical scale with 40% hysteresis, real size shown in settings; cells clipped to high/low. Enable and Fit footprint set 110px spacing and latest candles; below 70px draw normal candles with delta tint, no bars/text; candles with no data stay normal. Default saved USDT volume unit or coin, "Footprint data since HH:MM", and coin-volume debug comparison within 5% for a fully covered candle.
+- Footprint cluster overlay: real trades only (active source, no extra sockets), 1m bid/ask buckets on a fixed tick grid kept 24h in IndexedDB, rate-limited real-trade backfill, saved settings and mobile sheet, hidden during Heatmap, included in checkOverlayStability. Narrow candle on left, bold 11px white centered bid x ask, proportional volume bars, same-row whole-cell imbalance (300%, adjustable 150–500%), light POC outline, totals and Bid x Ask/Delta/Volume modes. Auto fixed-grid tick-multiple rows remain at least 14px at the vertical scale with 40% hysteresis, real size shown in settings; cells clipped to high/low. Enable and Fit footprint set 110px spacing and latest candles; below 70px draw normal candles with delta tint, no bars/text; detailed candles with no data use a small candle inside a dashed column. Default saved USDT volume unit or coin, "Footprint data since HH:MM", and coin-volume debug comparison within 5% for a fully covered candle.
 - Live price axis tag and candle timer are green when the candle is up and red when down.
 - Order book engine and Book debug panel
 - Heatmap view (cells, trade bubbles, controls, zoom/pan, tooltip)
@@ -37,6 +42,7 @@ Read this file before any change. It applies to every future request.
 6. Desktop and a 390x844 phone view are not broken.
 7. Run checkOverlayStability() after scrolling/zooming; log PASS or FAIL for every overlay with at most 1px error. This includes "Footprint within high/low" (no cell outside its candle) and "Volume Profile bar height" (no bar taller than one row).
 8. With Footprint on and zoomed in, small rows with numbers appear and Footprint debug logs PASS for a fully covered candle.
+9. Check demo at 1366x768 and 390x844 in navy/light/midnight/ocean: many thin Heatmap rows/bright band, clear VP outside-area and POC, readable Footprint plus consistent empty columns. Confirm watermark is absent without query.
 
 Report the result as a short list.
 
