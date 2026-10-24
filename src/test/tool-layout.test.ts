@@ -14,7 +14,8 @@ describe('Depth and layout rules', () => {
     const buffer=new HeatmapBuffer(68000,2);
     buffer.sample(1000,new Map([[67998,2]]),new Map(),68000);
     const restored=new HeatmapBuffer(73000);restored.configureBucket(buffer.bucket);restored.merge([...buffer.columns]);
-    expect(restored.bucket).toBe(2);expect(restored.cell(restored.columns[0],restored.index(67998))).toBe(135996);
+    const col=restored.columns[0];if(!col)throw new Error('Missing restored column');
+    expect(restored.bucket).toBe(2);expect(restored.cell(col,restored.index(67998))).toBe(135996);
   });
   it('profile nice tick size holds within forty percent ideal changes', () => {
     expect(profileRowSize(600,.1,60)).toBe(10);

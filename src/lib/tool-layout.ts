@@ -11,7 +11,10 @@ export function depthRowSize(span: number, tick: number) {
 export function profileRowSize(span: number, tick: number, target = 60, previous = 0) {
   const ideal = span / target;
   if (previous > 0 && Math.abs(ideal / previous - 1) <= .4) return previous;
-  return Math.max(tick, niceStep(Math.max(1, ideal / tick)) * tick);
+  const next = Math.max(tick, niceStep(Math.max(1, ideal / tick)) * tick);
+  if (previous > 0 && next === previous && ideal > previous * 1.4) return previous * 2;
+  if (previous > 0 && next === previous && ideal < previous * .6) return Math.max(tick, previous / 2);
+  return next;
 }
 export const heatColumnWidth = (width: number, count: number) => Math.min(12, Math.max(3, width / Math.max(count, 120)));
 export const heatFitRows = (span: number, bucket: number, grouping: number) => Math.max(20, span * 1.15 / (bucket * grouping));
