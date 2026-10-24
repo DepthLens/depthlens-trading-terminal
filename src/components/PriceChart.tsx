@@ -107,6 +107,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       else setLegend(latest ? {...latest} : null);
     });
     const handle = (message: any) => {
+      if(toolDemoEnabled())return;
       const d = message.data ?? message;
       if (!d.k) return;
       const k=d.k;
