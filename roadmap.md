@@ -1,10 +1,10 @@
 # Roadmap
 
 ## Three-tool redesign
-- [ ] Shared theme palette and query-only watermarked demo fixture.
-- [ ] Heatmap depth-derived persisted rows, fitted band, crisp incremental drawing and sampled normalization.
-- [ ] VPVR styling, stable nice tick rows and incremental live updates.
-- [ ] Consistent no-data Footprint columns, cell legibility, restricted fit and coverage settings.
+- [x] Shared theme palette and query-only watermarked demo fixture.
+- [x] Heatmap depth-derived persisted rows, fitted band, crisp incremental drawing and sampled normalization.
+- [x] VPVR styling, stable nice tick rows and incremental live updates.
+- [x] Consistent no-data Footprint columns, cell legibility, restricted fit and coverage settings.
 - [ ] New rule tests, overlay probes, protection updates, eight demo layouts and three live markets for three minutes each.
 
 ## Footprint
