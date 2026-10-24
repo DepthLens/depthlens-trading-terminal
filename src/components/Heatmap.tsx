@@ -59,6 +59,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
     let entry = getHeatmapEntry(orderBook.debug().source as HeatSource, symbol, bridge.current.latest?.price ?? NaN);
     let buffer = fixture?.buffer ?? entry.buffer;
     let depthSpan = fixture?.span ?? entry.depthSpan;
+    let fitted = Boolean(fixture), lastGrouping = controls.current.grouping;
     let normValue = 1, normAt = 0, cacheKey = "", paintedTime = 0;
     off.width = 3600;
     let source = orderBook.debug().source;
@@ -84,9 +85,11 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
         let low = Infinity, high = -Infinity;
         for (const p of bids.keys()) low = Math.min(low, p);
         for (const p of asks.keys()) high = Math.max(high, p);
+        const wasCalibrated=entry.calibrated;
         calibrateHeatmap(source as HeatSource, symbol, entry, high - low, specRef.current?.minMove ?? .01);
         if (!entry.calibrated) return;
         depthSpan = entry.depthSpan;
+        if(!fitted||!wasCalibrated){view.current.center=price;view.current.rows=heatFitRows(depthSpan,buffer.bucket,controls.current.grouping);fitted=true;}
         buffer.sample(Date.now(), bids, asks, price);
       }
       else return;
@@ -131,6 +134,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
       ctx.fillStyle = cBg; ctx.fillRect(0, 0, cssW, cssH);
 
       const c = controls.current;
+      if(lastGrouping!==c.grouping){view.current.rows=Math.max(20,view.current.rows*lastGrouping/c.grouping);lastGrouping=c.grouping;}
       const cols = buffer.columns.slice(-c.windowMin * 60);
       const price = fixture ? demoPrice : bridge.current.latest?.price ?? NaN;
       if (!Number.isFinite(view.current.center)) { view.current.center = price; view.current.rows = heatFitRows(depthSpan || buffer.bucket * 150, buffer.bucket, c.grouping); }
@@ -141,9 +145,9 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
         schedule(); return;
       }
       const g = c.grouping, bs = buffer.bucket * g;
-      const rows = Math.max(20, Math.round(view.current.rows));
+      const rows = Math.min(Math.floor(heatMaxRows(price,buffer.bucket,g)),Math.max(20, Math.round(view.current.rows)));
       const band = rows * bs;
-      const top = center + band / 2;
+      const top = Math.ceil((center + band / 2)/bs)*bs;
       const N = cols.length;
 
       // Sample a bounded histogram every five seconds, never on animation frames.
@@ -221,8 +225,8 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
       // Best bid / ask thin lines.
       const dbg = orderBook.debug();
       ctx.lineWidth = 1;
-      if (dbg.bestBid !== null) { const y = priceToY(dbg.bestBid, top, band, H); if (y >= 0 && y <= H) { ctx.strokeStyle = cUp; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
-      if (dbg.bestAsk !== null) { const y = priceToY(dbg.bestAsk, top, band, H); if (y >= 0 && y <= H) { ctx.strokeStyle = cDown; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
+      if (!demo && dbg.bestBid !== null) { const y = priceToY(dbg.bestBid, top, band, H); if (y >= 0 && y <= H) { ctx.strokeStyle = cUp; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
+      if (!demo && dbg.bestAsk !== null) { const y = priceToY(dbg.bestAsk, top, band, H); if (y >= 0 && y <= H) { ctx.strokeStyle = cDown; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
 
       // Axes.
       ctx.strokeStyle = cBorder; ctx.beginPath(); ctx.moveTo(W + 0.5, 0); ctx.lineTo(W + 0.5, H); ctx.moveTo(0, H + 0.5); ctx.lineTo(W, H + 0.5); ctx.stroke();

@@ -49,7 +49,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
       const open = this.api.series.priceToCoordinate(bar.open), close = this.api.series.priceToCoordinate(bar.close);
       if (hi === null || lo === null || open === null || close === null) continue;
       const hasData = bar.fp.rows.length > 0, cluster = detailed && hasData;
-      const left = x - w / 2, candleX = cluster ? left + 3 : x, bodyW = cluster ? 4 : Math.max(1, Math.min(spacing * .6, 20));
+      const left = x - w / 2, candleX = cluster ? left + 3 : x, bodyW = cluster || (detailed&&!hasData) ? 4 : Math.max(1, Math.min(spacing * .6, 20));
       ctx.globalAlpha = 1; ctx.strokeStyle = ctx.fillStyle = bar.close >= bar.open ? c.up : c.down;
       ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(candleX, hi); ctx.lineTo(candleX, lo); ctx.stroke();
       ctx.fillRect(candleX - bodyW / 2, Math.min(open, close), bodyW, Math.max(1, Math.abs(close - open)));

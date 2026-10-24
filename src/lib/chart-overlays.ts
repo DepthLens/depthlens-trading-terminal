@@ -41,7 +41,7 @@ export class ProfilePrimitive implements ISeriesPrimitive<Time>, OverlayProbe {
         const bar = width * row.volume / peak, x = this.settings.position === 'right' ? mediaSize.width - bar : 0;
         this.lastDraw.push({ name: `Histogram ${row.low}`, price: row.high, drawnY: a });
         const isPoc=row.volume===peak;
-        ctx.globalAlpha = isPoc?1:row.inArea?this.settings.opacity:.45;
+        ctx.globalAlpha = isPoc||row.inArea?1:.45;
         const height = Math.max(0, b - a - 1);
         // Row-height probe: a bar is never taller than its own price row.
         this.lastDraw.push({ name: 'Volume Profile bar height', price: row.low, drawnY: a + height > b + 1 ? a + height : b });
