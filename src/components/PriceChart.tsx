@@ -26,6 +26,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
   const [legendOpen, setLegendOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const spacingRef = useRef(8);
   const profileChartRef = useRef<ProfileChart|null>(null);
   const legendRef = useRef<HTMLElement>(null);
   const [status, setStatus] = useState('Connecting');
@@ -45,6 +46,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     // Magnet mode must be present on every chart creation; theme/pair/timeframe all recreate the chart here.
     const crosshairOptions = { mode: CrosshairMode.MagnetOHLC, vertLine: line, horzLine: line };
     const chart = createChart(el, { autoSize:true, localization:{locale:'en-US'}, layout:{ background:{ color:'transparent' }, textColor:text }, grid:{ vertLines:{color:grid},horzLines:{color:grid} }, crosshair:crosshairOptions, rightPriceScale:{visible:true,borderColor:grid,scaleMargins:{top:0.08,bottom:0.08}}, timeScale:{borderColor:grid,timeVisible:true,barSpacing:8,rightOffset:8} });
+    chart.timeScale().applyOptions({barSpacing:spacingRef.current});
     chartRef.current = chart;
     chart.applyOptions({ crosshair: crosshairOptions });
     (el as any).__crosshairMode = chart.options().crosshair.mode;
@@ -144,7 +146,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       }
     };
     void load();
-    return () => { stopped=true;api.disposed=true;timerRef.current?.detached();timerRef.current=null;const debugWindow=window as Window & { checkOverlayStability?: typeof selfCheck };if(debugWindow.checkOverlayStability===selfCheck)delete debugWindow.checkOverlayStability;abort.abort();clearTimeout(historyRetry);cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;if(bridge.current.kline===handle)bridge.current.kline=null;chartRef.current=null;profileChartRef.current=null;chart.remove(); };
+    return () => { spacingRef.current=chart.timeScale().options().barSpacing;stopped=true;api.disposed=true;timerRef.current?.detached();timerRef.current=null;const debugWindow=window as Window & { checkOverlayStability?: typeof selfCheck };if(debugWindow.checkOverlayStability===selfCheck)delete debugWindow.checkOverlayStability;abort.abort();clearTimeout(historyRetry);cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;if(bridge.current.kline===handle)bridge.current.kline=null;chartRef.current=null;profileChartRef.current=null;chart.remove(); };
   },[symbol,minutes,theme,priceFormat.precision,priceFormat.minMove,bridge]);
 
   const zoom = (factor: number) => {

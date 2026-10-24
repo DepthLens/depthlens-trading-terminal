@@ -146,6 +146,7 @@ export async function checkOverlayStability(api: OverlayChart) {
   const range = api.chart.timeScale().getVisibleLogicalRange(), priceRange = api.series.priceScale().getVisibleRange();
   if (!range || !priceRange) return [{ name: 'Chart data', pass: false, error: Infinity }];
   const autoScale = api.series.priceScale().options().autoScale;
+  api.chart.clearCrosshairPosition();
   for (const probe of api.probes) probe.pause(true);
   const results = new Map<string, { name: string; pass: boolean; error: number }>();
   const wait = () => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
