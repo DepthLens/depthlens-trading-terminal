@@ -131,13 +131,15 @@ export function nativeLineSample(api: OverlayChart, name: string, line: IPriceLi
   color.fillStyle = line.options().color; color.fillRect(0, 0, 1, 1);
   const rgb = color.getImageData(0, 0, 1, 1).data;
   const ratio = window.devicePixelRatio || 1;
-  const w = api.chart.timeScale().width(), left = Math.round(w * .3 * ratio), right = Math.round(w * .6 * ratio);
+  // Clusters can cover the middle of a native line; sample across the whole pane,
+  // including the candle-column gaps, rather than treating occlusion as drift.
+  const w = api.chart.timeScale().width(), left = 0, right = Math.round(w * ratio);
   let best = -1, drawnY: number | null = null;
   for (let y = Math.max(0, Math.floor((expected - 4) * ratio)); y <= Math.min(shot.height - 1, Math.ceil((expected + 4) * ratio)); y++) {
     const pixels = ctx.getImageData(left, y, Math.max(1, right - left), 1).data;
     let hits = 0;
     for (let x = 0; x < pixels.length; x += 4) if ([0, 1, 2].every(c => Math.abs((pixels[x + c] ?? 0) - (rgb[c] ?? 0)) <= 3)) hits++;
-    if (hits > best && hits > (right - left) * .25) { best = hits; drawnY = (y + .5) / ratio; }
+    if (hits > best && hits > Math.max(6*ratio,(right-left)*.02)) { best = hits; drawnY = (y + .5) / ratio; }
   }
   return { name, price, drawnY };
 }
