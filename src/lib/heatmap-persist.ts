@@ -4,7 +4,7 @@ import type { Column } from './heatmap-data';
 const DB_NAME = 'depthlens-heatmap';
 const STORE = 'buffers';
 
-export type SavedBuffer = { savedAt: number; bucket: number; columns: Column[] };
+export type SavedBuffer = { savedAt: number; bucket: number; columns: Column[]; calibrated?: boolean; depthSpan?: number };
 
 function openDb(): Promise<IDBDatabase | null> {
   if (typeof indexedDB === 'undefined') return Promise.resolve(null);
@@ -16,13 +16,13 @@ function openDb(): Promise<IDBDatabase | null> {
   });
 }
 
-export async function saveHeatmapBuffer(key: string, bucket: number, columns: readonly Column[]): Promise<void> {
+export async function saveHeatmapBuffer(key: string, bucket: number, columns: readonly Column[], calibrated = false, depthSpan = 0): Promise<void> {
   const db = await openDb();
   if (!db) return;
   return new Promise(resolve => {
     const tx = db.transaction(STORE, 'readwrite');
     // Float32Array and Map survive structured clone, so columns are stored as-is.
-    tx.objectStore(STORE).put({ savedAt: Date.now(), bucket, columns: [...columns] } satisfies SavedBuffer, key);
+    tx.objectStore(STORE).put({ savedAt: Date.now(), bucket, columns: [...columns], calibrated, depthSpan } satisfies SavedBuffer, key);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); resolve(); };
   });

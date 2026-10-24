@@ -44,12 +44,25 @@ export function colorFor(t: number): [number, number, number] {
 }
 
 export class HeatmapBuffer {
-  readonly bucket: number;
+  bucket: number;
   private cols: Column[] = [];
   private pending = new Map<number, { buy: number; sell: number }>();
   private pendingPrice = NaN;
-  constructor(price: number) {
-    this.bucket = autoBucketSize(price);
+  constructor(price: number, bucket = autoBucketSize(price)) {
+    this.bucket = bucket;
+  }
+  configureBucket(bucket: number) {
+    if (!(bucket > 0) || bucket === this.bucket) return;
+    const old = this.bucket;
+    for (const col of this.cols) {
+      const trades = new Map<number, { buy: number; sell: number }>();
+      for (const [index, t] of col.trades) {
+        const key = Math.floor((index + .5) * old / bucket), target = trades.get(key) ?? { buy: 0, sell: 0 };
+        target.buy += t.buy; target.sell += t.sell; trades.set(key, target);
+      }
+      col.trades = trades; col.origin = Math.floor(col.price / bucket) - ROWS / 2;
+    }
+    this.bucket = bucket;
   }
   index(price: number) { return Math.floor(price / this.bucket); }
   trade(price: number, size: number, side: TradeSide | undefined) {
