@@ -154,8 +154,9 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
       const scaleChanged = Date.now() - normAt >= 5000;
       if (scaleChanged) {
         const values: number[] = [];
-        for (let ci = 0; ci < N; ci += Math.max(1, Math.floor(N / 48))) {
-          const col = cols[ci]; if (!col || col.gap) continue;
+        const bookColumns=cols.filter(col=>!col.priceOnly&&!col.gap);
+        for (let ci = 0; ci < bookColumns.length; ci += Math.max(1, Math.floor(bookColumns.length / 48))) {
+          const col = bookColumns[ci]; if (!col) continue;
           for (let r = 0; r < rows; r += 2) {
             const value = buffer.groupedCell(col, Math.floor(top / buffer.bucket) - r * g, g);
             if (value > 0) values.push(value);
