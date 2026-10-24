@@ -93,6 +93,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
           ctx.globalAlpha = 1; ctx.font = 'bold 11px ui-monospace, monospace'; ctx.textBaseline = 'middle'; ctx.fillStyle = c.clusterText;
           const width = Math.min(this.measure(ctx, label), cellW - 4);
           ctx.shadowColor=c.textShadow;ctx.shadowOffsetX=1;ctx.shadowOffsetY=1;
+          ctx.strokeStyle=c.textShadow;ctx.lineWidth=2;ctx.strokeText(label,cellLeft+(cellW-width)/2,y1+height/2,cellW-4);
           ctx.fillText(label, cellLeft + (cellW - width) / 2, y1 + height / 2, cellW - 4);
           texts++;
         }
