@@ -37,7 +37,6 @@ export function FootprintSettingsPanel({ settings, onChange, onClose, mobile, th
   const input = 'h-10 rounded border border-t-border bg-t-bg px-2 text-sm text-t-text';
   const sw = 'data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border';
   const unit = (g: number) => +(g * tick).toPrecision(8);
-  const hhmm = first === null ? '—' : new Date(first).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   return <div data-theme={theme} data-mobile={mobile || undefined} className={`fixed inset-0 z-50 flex bg-t-bg/60 ${mobile ? 'items-end' : 'items-start justify-end pt-36 pr-4'}`} onClick={onClose}><section role="dialog" aria-modal="true" aria-label="Footprint settings" onClick={e => e.stopPropagation()} className={`border border-t-border bg-t-panel p-4 text-t-text ${mobile ? 'max-h-[85dvh] w-full overflow-y-auto rounded-t-lg pb-[max(1rem,env(safe-area-inset-bottom))]' : 'w-80 rounded-md'}`}>
     <div className="mb-3 flex items-center justify-between"><h2 className="text-base font-semibold">Footprint</h2><Button variant="ghost" size="icon" aria-label="Close Footprint settings" className="size-10 text-t-muted hover:bg-t-border" onClick={onClose}><X/></Button></div>
     <div className="grid grid-cols-[1fr_1fr] items-center gap-3 text-sm">
@@ -50,7 +49,7 @@ export function FootprintSettingsPanel({ settings, onChange, onClose, mobile, th
       <label htmlFor="fp-poc">POC</label><div className="flex h-10 items-center"><Switch id="fp-poc" aria-label="Footprint POC" checked={settings.poc} onCheckedChange={poc => onChange({ ...settings, poc })} className={sw}/></div>
       <label htmlFor="fp-opacity">Opacity {Math.round(settings.opacity * 100)}%</label><input id="fp-opacity" aria-label="Footprint opacity" type="range" min={.1} max={1} step={.05} value={settings.opacity} onChange={e => onChange({ ...settings, opacity: Number(e.target.value) })} className="h-10 w-full accent-t-accent"/>
     </div>
-    <p className="mt-4 text-xs text-t-muted" data-testid="footprint-since">Footprint data since {hhmm}</p>
+    <p className="mt-4 text-xs text-t-muted" data-testid="footprint-since">Footprint data: {first===null?'0':Math.max(0,Math.floor((Date.now()-first)/60000))} min · {NAMES[source]}</p>
     <p className="mt-1 text-xs text-t-muted">Real trades from {NAMES[source]} only</p>
     <Button variant="outline" className="mt-3 h-10 w-full border-t-border bg-t-bg text-t-text hover:bg-t-border" onClick={() => void runDebug()}>Footprint debug</Button>
     {debug && <pre data-testid="footprint-debug" className="mt-2 whitespace-pre-wrap rounded border border-t-border bg-t-bg p-2 text-xs text-t-text">{debug.join('\n')}</pre>}
