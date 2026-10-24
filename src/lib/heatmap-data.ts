@@ -54,13 +54,16 @@ export class HeatmapBuffer {
   configureBucket(bucket: number) {
     if (!(bucket > 0) || bucket === this.bucket) return;
     const old = this.bucket;
+    const rebin=(values:Map<number,{buy:number;sell:number}>)=>{
+      const result=new Map<number,{buy:number;sell:number}>();
+      for(const [index,t] of values){const key=Math.floor((index+.5)*old/bucket),target=result.get(key)??{buy:0,sell:0};target.buy+=t.buy;target.sell+=t.sell;result.set(key,target);}
+      return result;
+    };
+    this.pending=rebin(this.pending);
     for (const col of this.cols) {
-      const trades = new Map<number, { buy: number; sell: number }>();
-      for (const [index, t] of col.trades) {
-        const key = Math.floor((index + .5) * old / bucket), target = trades.get(key) ?? { buy: 0, sell: 0 };
-        target.buy += t.buy; target.sell += t.sell; trades.set(key, target);
-      }
-      col.trades = trades; col.origin = Math.floor(col.price / bucket) - ROWS / 2;
+      const origin=Math.floor(col.price/bucket)-ROWS/2,data=new Float32Array(col.data.length?ROWS:0);
+      for(let i=0;i<col.data.length;i++){const value=col.data[i]??0,target=Math.floor((col.origin+i+.5)*old/bucket)-origin;if(target>=0&&target<data.length)data[target]=(data[target]??0)+value;}
+      col.trades=rebin(col.trades);col.origin=origin;col.data=data;
     }
     this.bucket = bucket;
   }

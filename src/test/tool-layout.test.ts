@@ -22,6 +22,11 @@ describe('Depth and layout rules', () => {
     expect(profileRowSize(840,.1,60,10)).toBe(10);
     expect(profileRowSize(846,.1,60,10)).toBe(20);
   });
+  it('calibration preserves pending notional in the new grid',()=>{
+    const buffer=new HeatmapBuffer(68000,50);buffer.trade(68010,2,'Buy');buffer.configureBucket(2);buffer.sample(1000,new Map(),new Map(),68010);
+    const col=buffer.columns[0];if(!col)throw new Error('Missing column');expect([...col.trades.values()].reduce((sum,t)=>sum+t.buy,0)).toBe(136020);
+    expect([...col.trades.keys()]).toEqual([34012]);
+  });
   it('centers on depth times 1.15 and caps zoom at ten percent total', () => {
     expect(heatFitRows(300,2,1)).toBeCloseTo(172.5);
     expect(heatFitRows(300,2,10)).toBe(20);

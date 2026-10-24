@@ -56,7 +56,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
     const fixture = demo ? demoHeatmap(demoPrice, depthRowSize(demoPrice * .003, specRef.current?.minMove ?? .1)) : null;
     // History lives in the module-level store keyed by source:symbol; remounts,
     // tab switches and setting changes never clear it. Only a source change does.
-    let entry = getHeatmapEntry(orderBook.debug().source as HeatSource, symbol, bridge.current.latest?.price ?? NaN);
+    let entry = fixture ? {buffer:fixture.buffer,restored:true,calibrated:true,depthSpan:fixture.span} : getHeatmapEntry(orderBook.debug().source as HeatSource, symbol, bridge.current.latest?.price ?? NaN);
     let buffer = fixture?.buffer ?? entry.buffer;
     let depthSpan = fixture?.span ?? entry.depthSpan;
     let fitted = Boolean(fixture), lastGrouping = controls.current.grouping;
@@ -76,7 +76,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
     const timer = setInterval(() => {
       if (demo) { setCollected(buffer.columns.length); dirty = true; return; }
       const dbg = orderBook.debug();
-      if (dbg.source !== source) { source = dbg.source; entry = getHeatmapEntry(source as HeatSource, symbol, bridge.current.latest?.price ?? NaN); buffer = entry.buffer; view.current.center = NaN; }
+      if (dbg.source !== source) { source = dbg.source; entry = getHeatmapEntry(source as HeatSource, symbol, bridge.current.latest?.price ?? NaN); buffer = entry.buffer;depthSpan=entry.depthSpan;fitted=false;view.current.center = NaN; }
       const price = bridge.current.latest?.price ?? dbg.bestBid ?? NaN;
       if (!Number.isFinite(price)) return;
       if (hidden) buffer.markGap(Date.now(), price);
@@ -103,7 +103,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
       dirty = true;
     }, COLUMN_MS);
     // Persist all buffers to IndexedDB every 10 seconds.
-    const persistTimer = setInterval(persistHeatmaps, 10000);
+    const persistTimer = setInterval(()=>{if(!demo)persistHeatmaps();}, 10000);
 
     const onVisibility = () => { hidden = document.hidden; if (!hidden) dirty = true; };
     document.addEventListener('visibilitychange', onVisibility);
