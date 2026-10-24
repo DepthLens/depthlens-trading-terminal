@@ -86,7 +86,7 @@ export function updateProfileRows(rows: ProfileRow[], trades: { time: number; pr
 }
 export function buildProfile(candles: VolumeCandle[], trades: Pick<LiveBucket,'time'|'price'|'volume'|'buy'>[], min: number, max: number, tick: number, settings: ProfileSettings, from: number, to: number, previousStep = 0) {
   const target = settings.rows === 'Auto' ? 60 : Number(settings.rows);
-  const step = profileRowSize(max-min,tick,target,previousStep);
+  const step = settings.rows==='Auto'?profileRowSize(max-min,tick,target,previousStep):Math.max(tick,Math.ceil((max-min)/target/tick)*tick);
   const base = Math.floor(min/step)*step, count = Math.min(102, Math.max(1,Math.ceil((max-base)/step)));
   const rows: ProfileRow[] = Array.from({length:count},(_,i)=>({low:base+i*step,high:base+(i+1)*step,volume:0,buy:0,sell:0,inArea:false}));
   for (const c of candles) {
