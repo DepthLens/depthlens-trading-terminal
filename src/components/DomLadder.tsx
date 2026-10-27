@@ -86,7 +86,6 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose }: { symbol: s
       scroll.current = Math.max(-maxScroll, Math.min(maxScroll, scroll.current));
       const top = (H - total) / 2 + scroll.current;
       ctx.font = `12px ui-monospace, SFMono-Regular, Menlo, monospace`; ctx.textBaseline = 'middle';
-      ctx.fontVariantNumeric = 'tabular-nums';
       const nextPrev = new Map<string, number>(), list: Hit[] = [];
       const ref = Number.isFinite(livePrice) ? livePrice : mid;
       let cumA = 0, cumAU = 0, cumB = 0, cumBU = 0;
@@ -110,8 +109,8 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose }: { symbol: s
         if ((flashUntil.get(fk) ?? 0) > now) { ctx.save(); ctx.globalAlpha *= .22; ctx.fillStyle = text; ctx.fillRect(0, r.y, W, rowH - 1); ctx.restore(); }
         if (r.v > 0 && max > 0) {
           ctx.save(); ctx.globalAlpha *= .35; ctx.fillStyle = color;
-          const len = r.v / max * (ask ? x(2 + (s.cumulative ? 1 : 0)) - x(2) : x(1));
-          if (ask) { const right = s.cumulative ? x(3) : W; ctx.fillRect(right - len, r.y, len, rowH - 1); }
+          const len = r.v / max * (ask ? x(3) - x(2) : x(1));
+          if (ask) ctx.fillRect(x(3) - len, r.y, len, rowH - 1);
           else ctx.fillRect(0, r.y, len, rowH - 1);
           ctx.restore();
         }
