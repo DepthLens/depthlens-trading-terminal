@@ -28,3 +28,4 @@
 - The candle timer primitive always owns the live price axis tag (native last-value label off) so its direction color survives series style changes such as Footprint outlines.
 - Shared browser-safe tool-layout rules own depth/profile grids and fit gates; tool-demo provides query-only isolated fixtures, never persisted, so synthetic values cannot contaminate live caches.
 - Heatmap stores calibrated base row/depth with IndexedDB history and draws a persistent offscreen ring texture; profile updates subscribe to immediate trade deltas rather than scanning historical maps, preserving chart responsiveness.
+- DOM ladder grouping/auto-size/wall rules live in browser-safe `dom-ladder.ts`; `DomLadder.tsx` only reads the existing order-book engine on a ≤10 fps canvas loop and never stores the ladder in React state or opens sockets.
