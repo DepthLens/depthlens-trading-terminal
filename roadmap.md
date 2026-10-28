@@ -62,3 +62,5 @@
 
 ## Mobile layout
 - [x] All 10 mobile items done and tested at 360/390/412, landscape and 1366
+
+- [x] DOM order book ladder (panel, settings, tests, PROTECT entry)
