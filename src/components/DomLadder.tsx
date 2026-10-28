@@ -123,7 +123,7 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose }: { symbol: s
         if (s.walls && isWall(r.v, med, s.wallMultiple)) {
           ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.strokeRect(1, r.y + 1, W - 2, rowH - 3);
           ctx.save(); ctx.font = 'bold 9px ui-monospace, monospace'; ctx.fillStyle = accent; ctx.textAlign = ask ? 'left' : 'right';
-          ctx.fillText('WALL', ask ? x(1) + 3 : x(2) - 3, cy); ctx.restore();
+          ctx.fillText('WALL', ask ? x(2) + 3 : x(1) - 3, cy); ctx.restore();
         }
         if (r.i === 0) { ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.strokeRect(1, r.y + 1, W - 2, rowH - 3); }
         ctx.globalAlpha = 1;
@@ -182,7 +182,7 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose }: { symbol: s
     className={mobile ? 'fixed inset-x-0 bottom-0 z-40 flex h-[60dvh] flex-col rounded-t-xl border-t border-t-border bg-t-panel pb-[env(safe-area-inset-bottom)] text-t-text' : 'relative flex shrink-0 flex-col border-l border-t-border bg-t-panel text-t-text'}>
     {!mobile && <div role="separator" aria-orientation="vertical" aria-label="Resize DOM" onPointerDown={startResize} className="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize hover:bg-t-accent/40" />}
     <header className="shrink-0 space-y-1 border-b border-t-border px-2 py-1.5 text-xs tabular-nums">
-      <div className="flex items-center gap-2"><span ref={head('dot')} className="size-2 rounded-full bg-t-warning" /><span ref={head('source')} className="font-semibold">—</span><span className="ml-auto text-t-muted">DOM</span>
+      <div className="flex items-center gap-2"><span ref={head('dot')} className="size-2 rounded-full bg-t-warning" /><span ref={head('source')} className="font-semibold">—</span>{toolDemoEnabled() && <span className="font-mono text-[10px] font-bold text-t-accent">DEMO DATA</span>}<span className="ml-auto text-t-muted">DOM</span>
         <Button variant="ghost" size="icon" className="size-7 text-t-muted hover:bg-t-border mobile:size-10" aria-label="DOM settings" title="DOM settings" onClick={() => setShowSettings(s => !s)}><Settings className="size-4" /></Button>
         {mobile && <Button variant="ghost" size="icon" className="size-10 text-t-muted" aria-label="Close DOM" onClick={onClose}><X /></Button>}</div>
       <div className="grid grid-cols-3 gap-1 font-mono"><span>Bid <b ref={head('bid')} className="text-t-up">—</b></span><span className="text-center">Mid <b ref={head('mid')}>—</b></span><span className="text-right">Ask <b ref={head('ask')} className="text-t-down">—</b></span></div>
@@ -200,7 +200,6 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose }: { symbol: s
       <div ref={tipRef} role="tooltip" className="pointer-events-none absolute inset-x-2 z-10 hidden whitespace-pre-line rounded border border-t-border bg-t-bg/95 p-2 font-mono text-[11px] text-t-text shadow" />
       <div ref={head('sync')} className="pointer-events-none absolute inset-0 hidden items-center justify-center"><span className="rounded bg-t-bg/90 px-3 py-1.5 text-xs text-t-warning">Syncing order book...</span></div>
       {scrolled && <Button size="sm" onClick={recenter} className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 bg-t-accent text-t-bg hover:bg-t-accent/90"><Crosshair className="size-3.5" />Re-center</Button>}
-      {toolDemoEnabled() && <span className="absolute right-2 top-1 z-10 font-mono text-[10px] font-bold text-t-accent">DEMO DATA</span>}
     </div>
     {settingsPanel}
   </section>;
