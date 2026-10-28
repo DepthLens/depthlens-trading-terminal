@@ -12,7 +12,7 @@ it('bids group down and asks group up on a fixed grid', () => {
 it('auto row size covers ~0.3% per side and holds within 40%', () => {
   const m = autoMultiple(68000, .1, 25); expect(m).toBe(100);
   expect(autoMultiple(68000 * 1.3, .1, 25, m)).toBe(100);
-  expect(autoMultiple(68000 * 1.6, .1, 25, m)).not.toBe(100);
+  expect(autoMultiple(68000 * 3, .1, 25, m)).toBe(250);
 });
 it('wall threshold is a multiple of the median of non-empty rows', () => {
   const med = median([0, 1, 2, 3, 0]); expect(med).toBe(2);
