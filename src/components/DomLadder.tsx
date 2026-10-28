@@ -19,7 +19,7 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose }: { symbol: s
   const [rowLabel, setRowLabel] = useState('');
   const settingsRef = useRef(settings); settingsRef.current = settings;
   const rootRef = useRef<HTMLElement>(null), canvasRef = useRef<HTMLCanvasElement>(null), wrapRef = useRef<HTMLDivElement>(null);
-  const headRef = useRef<Record<string, HTMLElement | null>>({});
+  const headRef = useRef<Partial<Record<'dot' | 'source' | 'bid' | 'ask' | 'mid' | 'imb' | 'imbText' | 'note' | 'sync', HTMLElement | null>>>({});
   const tipRef = useRef<HTMLDivElement>(null);
   const scroll = useRef(0), hover = useRef<{ y: number; x: number } | null>(null), hits = useRef<Hit[]>([]);
   useEffect(() => { setSettings(restoreDomSettings(localStorage.getItem(DOM_KEY))); }, []);
@@ -176,7 +176,7 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose }: { symbol: s
       <label className="flex min-h-9 items-center justify-between"><span className="text-t-muted">Flash changes</span><Switch aria-label="Flash changes" checked={settings.flash} onCheckedChange={v => change({ ...settings, flash: v })} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border" /></label>
     </div>
   </div>;
-  const head = (k: string) => (el: HTMLElement | null) => { headRef.current[k] = el; };
+  const head = (k: 'dot' | 'source' | 'bid' | 'ask' | 'mid' | 'imb' | 'imbText' | 'note' | 'sync') => (el: HTMLElement | null) => { headRef.current[k] = el; };
   return <section ref={rootRef} aria-label="Order book ladder" data-testid="dom-ladder"
     style={mobile ? undefined : { width: settings.width }}
     className={mobile ? 'fixed inset-x-0 bottom-0 z-40 flex h-[60dvh] flex-col rounded-t-xl border-t border-t-border bg-t-panel pb-[env(safe-area-inset-bottom)] text-t-text' : 'relative flex shrink-0 flex-col border-l border-t-border bg-t-panel text-t-text'}>
