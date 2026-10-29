@@ -17,6 +17,7 @@ Read this file before any change. It applies to every future request.
 - Live price line with axis tag
 - Candle timer: default-on saved Tools switch, exchange-corrected UTC/custom close countdown below the live axis tag, same direction color, hidden outside visible price range, desktop/mobile.
 - Tools (orderflow) menu with switches
+- CVD: saved free Tools switch and settings; native resizable pane below candles (22% desktop, 25% mobile, minimum 90px), hidden with Heatmap, shared time scale/crosshair and equal fixed-minimum right axes. Exact own-timeframe Binance taker deltas, six cached 1500-candle pages maximum (Custom from 1m), absolute live kline updates; real Bybit trades plus recent 1000 with execution-ID deduplication and honest since label. Daily UTC/Weekly/Visible start (200ms idle)/Continuous, Line/Candles/Delta histogram, USDT/coin, reset marks and zero line; no extra sockets.
 - Volume Profile candle overlay: active-source cached 1m history, live trade volume, tick-aligned histogram, POC/VAH/VAL, hover details, saved settings and mobile sheet; hidden during Heatmap, no extra sockets.
 - Footprint cluster overlay: real trades only (active source, no extra sockets), 1m bid/ask buckets on a fixed tick grid kept 24h in IndexedDB, rate-limited real-trade backfill, saved settings and mobile sheet, hidden during Heatmap, included in checkOverlayStability. Narrow candle on left, bold 11px white centered bid x ask, proportional volume bars, same-row whole-cell imbalance (300%, adjustable 150–500%), light POC outline, totals and Bid x Ask/Delta/Volume modes. Auto fixed-grid tick-multiple rows remain at least 14px at the vertical scale with 40% hysteresis, real size shown in settings; cells clipped to high/low. Enable and Fit footprint set 110px spacing and latest candles; below 70px draw normal candles with delta tint, no bars/text; detailed candles with no data use a small candle inside a dashed column. Default saved USDT volume unit or coin, "Footprint data since HH:MM", and coin-volume debug comparison within 5% for a fully covered candle.
 - Live price axis tag and candle timer are green when the candle is up and red when down.
@@ -45,6 +46,7 @@ Read this file before any change. It applies to every future request.
 8. With Footprint on and zoomed in, small rows with numbers appear and Footprint debug logs PASS for a fully covered candle.
 10. Turn DOM on: best bid/ask match Book debug, ladder updates, sockets ≤3, chart/live price/tools unchanged; turn it off.
 9. Check demo at 1366x768 and 390x844 in navy/light/midnight/ocean: many thin Heatmap rows/bright band, clear VP outside-area and POC, readable Footprint plus consistent empty columns. Confirm watermark is absent without query.
+11. Turn CVD on at desktop/phone, verify Binance BTC 1m/5m/1h and ETH 15m then Bybit, all anchors/modes/units, pane resizing and moving live price; run checkPaneAlignment() after scroll/zoom (candle x and right axes within 1px), with Volume Profile/Footprint/DOM/timer and Heatmap hiding; sockets ≤3 and no console errors.
 
 Report the result as a short list.
 
