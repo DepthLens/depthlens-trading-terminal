@@ -34,7 +34,7 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
     let rows:CvdBar[]=[],busy=false,dragged=false,lastHeight=0;
     const position=()=>{
       if(disposed||api.disposed)return;
-      const element=pane.getHTMLElement();if(!element)return;
+      const element=pane.getHTMLElement();if(!element||!host.parentElement)return;
       const top=element.getBoundingClientRect().top-host.parentElement.getBoundingClientRect().top;
       legend.style.top=`${Math.round(top+6)}px`;note.style.top=`${Math.round(top+pane.getHeight()-20)}px`;
       const ratio=pane.getHeight()/Math.max(1,chart.paneSize(0).height+pane.getHeight());

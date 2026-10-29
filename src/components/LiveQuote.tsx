@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { orderBook } from '@/lib/order-book';
 import { addProfileTrade } from '@/lib/volume-profile';
 import { addFootprintTrade } from '@/lib/footprint-store';
+import { addCvdTrade, addCvdKline } from '@/lib/cvd-store';
 
 const SOURCE_KEY = 'depthlens.source.v1';
 const MODES: { value: SourceMode; label: string }[] = [{ value: 'auto', label: 'Auto' }, { value: 'binance', label: 'Binance' }, { value: 'bybit', label: 'Bybit' }];
@@ -53,6 +54,7 @@ export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false, 
       bridge.current.latest = tick;
       bridge.current.receive?.(tick);
       bridge.current.heat?.(tick);
+      addCvdTrade(symbol, tick);
       if (profileEnabledRef.current) addProfileTrade(symbol, tick);
       if (specRef.current) addFootprintTrade(symbol, tick, specRef.current.minMove);
       if (!frame) frame = requestAnimationFrame(() => {
@@ -65,7 +67,7 @@ export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false, 
         el.dataset['price'] = String(tick.price);
         el.dataset['exchange'] = tick.exchange ?? 'poll';
       });
-    }, setStatus, NATIVE[minutes] ?? '1m', data => bridge.current.kline?.(data), source => { sourceRef.current = source; setSourceName(SOURCE_NAMES[source] ?? source); sourceChangeRef.current?.(source); orderBook.setActive(symbol, source === 'poll' ? null : source); }, mode);
+    }, setStatus, NATIVE[minutes] ?? '1m', data => { if(sourceRef.current==='binance')addCvdKline(symbol,minutes,data);bridge.current.kline?.(data); }, source => { sourceRef.current = source; setSourceName(SOURCE_NAMES[source] ?? source); sourceChangeRef.current?.(source); orderBook.setActive(symbol, source === 'poll' ? null : source); }, mode);
     return () => { orderBook.setActive('', null); stop(); cancelAnimationFrame(frame); };
   }, [symbol, minutes, bridge, mode]);
   useEffect(() => {
