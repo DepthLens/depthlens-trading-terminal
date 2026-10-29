@@ -2,7 +2,7 @@ import { connectionManager, marketStream, type ConnectionSnapshot } from './mark
 
 export type TradeSource = 'binance' | 'bybit';
 export type SourceMode = 'auto' | TradeSource;
-export type LivePrice = { price: number; time: number; direction: number; size?: number; side?: 'Buy' | 'Sell'; eventTime?: number; receivedAt?: number; latency?: number; source?: 'trade' | 'poll'; exchange?: TradeSource };
+export type LivePrice = { price: number; time: number; direction: number; size?: number; side?: 'Buy' | 'Sell'; eventTime?: number; receivedAt?: number; latency?: number; source?: 'trade' | 'poll'; exchange?: TradeSource; tradeId?: string };
 export type PriceStatus = 'Live' | 'Polling' | 'Offline';
 export type PriceDiagnostics = ConnectionSnapshot;
 
@@ -72,7 +72,7 @@ export function livePriceStream(symbol: string, onPrice: (tick: LivePrice) => vo
   const status = (next: PriceStatus) => { if (!stopped && next !== currentStatus) { currentStatus = next; onStatus(next); } };
   const select = (source: TradeSource) => { if (current !== source) { current = source; lastTime[source] = -Infinity; } stopPolling(); onSource?.(source); };
 
-  const trade = (source: TradeSource, price: number, time: number, eventTime: number, size?: number, side?: 'Buy' | 'Sell') => {
+  const trade = (source: TradeSource, price: number, time: number, eventTime: number, size?: number, side?: 'Buy' | 'Sell', tradeId?: string) => {
     if (stopped) return;
     const receivedAt = Date.now();
     const latency = Math.round(receivedAt + clockOffset(source) - eventTime);
@@ -84,7 +84,7 @@ export function livePriceStream(symbol: string, onPrice: (tick: LivePrice) => vo
     lastTime[source] = time;
     const direction = last === undefined || price === last ? 0 : price > last ? 1 : -1;
     last = price;
-    onPrice({ price, time, direction, ...(size === undefined ? {} : { size }), ...(side === undefined ? {} : { side }), eventTime, receivedAt, latency, source: 'trade', exchange: source });
+    onPrice({ price, time, direction, ...(size === undefined ? {} : { size }), ...(side === undefined ? {} : { side }), eventTime, receivedAt, latency, source: 'trade', exchange: source, tradeId });
     status('Live');
   };
 
@@ -139,7 +139,7 @@ export function livePriceStream(symbol: string, onPrice: (tick: LivePrice) => vo
         for (const t of message.data) {
           const price = Number(t.p), time = Number(t.T), size = Number(t.v), eventTime = Number(message.ts ?? t.T);
           if ((t.s !== undefined && t.s !== symbol) || !Number.isFinite(price) || price <= 0 || !Number.isFinite(time)) continue;
-          trade('bybit', price, time, Number.isFinite(eventTime) ? eventTime : time, Number.isFinite(size) ? size : undefined, t.S === 'Sell' ? 'Sell' : t.S === 'Buy' ? 'Buy' : undefined);
+          trade('bybit', price, time, Number.isFinite(eventTime) ? eventTime : time, Number.isFinite(size) ? size : undefined, t.S === 'Sell' ? 'Sell' : t.S === 'Buy' ? 'Buy' : undefined, typeof t.i === 'string' ? t.i : undefined);
         }
       }, live => { if (!live && source === current && !polling) status('Offline'); }, { exchange: 'bybit', purpose: 'active', onFailure, subscription: { op: 'subscribe', args: [`publicTrade.${symbol}`, kTopic] } });
     }

@@ -13,6 +13,8 @@ import type { TradeSource } from '@/lib/live-price';
 import { Footprint } from '@/components/Footprint';
 import { FOOTPRINT_FIT_SPACING, type FootprintSettings } from '@/lib/footprint-data';
 import { CandleTimerPrimitive, checkOverlayStability } from '@/lib/chart-overlays';
+import { Cvd } from '@/components/Cvd';
+import type { CvdSettings } from '@/lib/cvd-data';
 export type { LivePrice } from '@/lib/live-price';
 function toColor(el: HTMLElement, name: string) {
   const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
@@ -22,7 +24,7 @@ function toColor(el: HTMLElement, name: string) {
   const [r,g,b] = ctx.getImageData(0,0,1,1).data;
   return `rgb(${r},${g},${b})`;
 }
-export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false, volumeProfile, profileSettings, source = 'binance', candleTimer = true, footprint = false, footprintSettings }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; volumeProfile?: boolean; profileSettings?: ProfileSettings; source?: TradeSource; candleTimer?: boolean; footprint?: boolean; footprintSettings?: FootprintSettings }) {
+export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false, volumeProfile, profileSettings, source = 'binance', candleTimer = true, footprint = false, footprintSettings, cvd = false, cvdSettings, onCvdHeight }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; volumeProfile?: boolean; profileSettings?: ProfileSettings; source?: TradeSource; candleTimer?: boolean; footprint?: boolean; footprintSettings?: FootprintSettings; cvd?:boolean; cvdSettings?:CvdSettings; onCvdHeight?:(ratio:number)=>void }) {
   const [legendOpen, setLegendOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -171,6 +173,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       : <div ref={legendRef as any} className="pointer-events-none z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</div>}
     {toolDemoEnabled()&&<span className="demo-watermark">DEMO DATA</span>}
     <div ref={ref} className="min-h-0 w-full flex-1" aria-label={`${symbol} ${minutes} minute candlestick chart`} />
+    {cvd&&cvdSettings&&onCvdHeight&&<Cvd chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} minutes={minutes} settings={cvdSettings} mobile={mobile} revision={chartRevision} onHeight={onCvdHeight}/>}
     {volumeProfile && profileSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${mobile?'top-0':'top-8'}`}><VolumeProfile chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={profileSettings} spec={priceFormat} mobile={mobile} minutes={minutes} theme={theme} revision={chartRevision}/></div>}
     {footprint && footprintSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${mobile?'top-0':'top-8'}`}><Footprint chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={footprintSettings} spec={priceFormat} mobile={mobile} minutes={minutes} revision={chartRevision}/></div>}
     <div className={mobile ? 'absolute right-[calc(var(--axis-w,64px)+4px)] top-1.5 z-10 flex flex-col gap-1' : 'absolute bottom-12 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-md border border-t-border bg-t-panel/95 p-1'}>

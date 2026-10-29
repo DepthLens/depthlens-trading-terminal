@@ -1,5 +1,10 @@
 # Roadmap
 
+## CVD
+- [ ] Browser-safe exact Binance delta/cache and Bybit real-trade history, anchors, modes and units.
+- [ ] Native synchronized resizable pane, saved settings, legend and alignment diagnostics.
+- [ ] Correctness tests and complete desktop/phone source and protection smoke checks.
+
 ## Three-tool redesign
 - [x] Shared theme palette and query-only watermarked demo fixture.
 - [x] Heatmap depth-derived persisted rows, fitted band, crisp incremental drawing and sampled normalization.

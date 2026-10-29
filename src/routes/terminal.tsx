@@ -7,6 +7,8 @@ import { DomLadder } from '@/components/DomLadder';
 import { FootprintGear, FootprintSettingsPanel } from '@/components/FootprintSettings';
 import { FOOTPRINT_DEFAULT, FOOTPRINT_KEY, restoreFootprintSettings, type FootprintSettings } from '@/lib/footprint-data';
 import { VolumeProfileGear, VolumeProfileSettingsPanel } from '@/components/VolumeProfileSettings';
+import { CvdGear, CvdSettingsPanel } from '@/components/CvdSettings';
+import { CVD_DEFAULT, CVD_KEY, restoreCvd, type CvdSettings } from '@/lib/cvd-data';
 import { PROFILE_DEFAULT, PROFILE_KEY, restoreProfile, type ProfileSettings } from '@/lib/volume-profile';
 import logo from '@/assets/depthlens-logo.png.asset.json';
 import { Button } from '@/components/ui/button';
@@ -40,6 +42,10 @@ function Terminal() {
   const [showProfileSettings,setShowProfileSettings]=useState(false);
   const [footprintSettings,setFootprintSettings]=useState<FootprintSettings>({...FOOTPRINT_DEFAULT});
   const [showFootprintSettings,setShowFootprintSettings]=useState(false);
+  const [cvdSettings,setCvdSettings]=useState<CvdSettings>({...CVD_DEFAULT});
+  const [showCvdSettings,setShowCvdSettings]=useState(false);
+  useEffect(()=>{setCvdSettings(restoreCvd(localStorage.getItem(CVD_KEY)));},[]);
+  const changeCvdSettings=(next:CvdSettings)=>{setCvdSettings(next);localStorage.setItem(CVD_KEY,JSON.stringify(next));};
   useEffect(()=>{setFootprintSettings(restoreFootprintSettings(localStorage.getItem(FOOTPRINT_KEY)));},[]);
   const changeFootprintSettings=(next:FootprintSettings)=>{setFootprintSettings(next);localStorage.setItem(FOOTPRINT_KEY,JSON.stringify(next));};
   useEffect(()=>{setProfileSettings(restoreProfile(localStorage.getItem(PROFILE_KEY)));},[]);
@@ -147,7 +153,7 @@ function Terminal() {
           <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`mx-1 size-10 shrink-0 border border-t-border ${control}`} aria-label="Orderflow tools" title="Orderflow tools"><SlidersHorizontal/></Button></DropdownMenuTrigger>
             <DropdownMenuContent data-theme={state.theme} data-mobile="" align="end" className="w-[min(20rem,calc(100vw-1rem))] border-t-border bg-t-panel p-2 text-t-text">
               <div className="mb-1 flex justify-between px-2 py-2 text-xs font-semibold"><span>Order flow tools</span><span className="text-t-up">Free · Unlocked</span></div>
-              {TOOLS.map(t=><div key={t} className="flex min-h-10 items-center gap-2 px-2 py-1"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-xs text-t-muted">{t!=='Volume Profile'&&t!=='Candle timer'&&t!=='Footprint'&&t!=='DOM'&&'Coming soon'}</span>{t==='Volume Profile'&&<VolumeProfileGear onClick={()=>setShowProfileSettings(true)}/>}{t==='Footprint'&&<FootprintGear onClick={()=>setShowFootprintSettings(true)}/>}<Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]??false} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
+              {TOOLS.map(t=><div key={t} className="flex min-h-10 items-center gap-2 px-2 py-1"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-xs text-t-muted">{t!=='Volume Profile'&&t!=='Candle timer'&&t!=='Footprint'&&t!=='DOM'&&t!=='CVD'&&'Coming soon'}</span>{t==='Volume Profile'&&<VolumeProfileGear onClick={()=>setShowProfileSettings(true)}/>}{t==='Footprint'&&<FootprintGear onClick={()=>setShowFootprintSettings(true)}/>}{t==='CVD'&&<CvdGear onClick={()=>setShowCvdSettings(true)}/>}<Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]??false} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
               <div className="mt-1 flex min-h-10 items-center gap-2 border-t border-t-border px-2 pt-2"><label htmlFor="tool-book-debug" className="flex-1 text-sm">Book debug</label><Switch id="tool-book-debug" aria-label="Book debug" checked={showBookDebug} onCheckedChange={setShowBookDebug} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -159,7 +165,7 @@ function Terminal() {
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className={control}><SlidersHorizontal/>orderflow<ChevronDown/></Button></DropdownMenuTrigger>
           <DropdownMenuContent data-theme={state.theme} align="end" className="w-80 border-t-border bg-t-panel p-2 text-t-text">
             <div className="mb-1 flex justify-between px-2 py-2 text-xs font-semibold"><span>Order flow tools</span><span className="text-t-up">Free · Unlocked</span></div>
-            {TOOLS.map(t=><div key={t} className="flex items-center gap-2 px-2 py-2.5"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-[10px] text-t-muted">{t!=='Volume Profile'&&t!=='Candle timer'&&t!=='Footprint'&&t!=='DOM'&&'Coming soon'}</span>{t==='Volume Profile'&&<VolumeProfileGear onClick={()=>setShowProfileSettings(true)}/>}{t==='Footprint'&&<FootprintGear onClick={()=>setShowFootprintSettings(true)}/>}<Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]??false} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
+            {TOOLS.map(t=><div key={t} className="flex items-center gap-2 px-2 py-2.5"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-[10px] text-t-muted">{t!=='Volume Profile'&&t!=='Candle timer'&&t!=='Footprint'&&t!=='DOM'&&t!=='CVD'&&'Coming soon'}</span>{t==='Volume Profile'&&<VolumeProfileGear onClick={()=>setShowProfileSettings(true)}/>}{t==='Footprint'&&<FootprintGear onClick={()=>setShowFootprintSettings(true)}/>}{t==='CVD'&&<CvdGear onClick={()=>setShowCvdSettings(true)}/>}<Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]??false} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
           </DropdownMenuContent>
         </DropdownMenu>
         </div>
@@ -168,10 +174,11 @@ function Terminal() {
         </div>
         </>}
         {notice&&<div role="alert" className="border-b border-t-border px-3 py-2 text-xs text-t-down">{notice}</div>}
-        <div className="flex min-h-0 flex-1"><div className="relative min-h-0 min-w-0 flex-1">{restored&&activeSpec&&(state.tools['Heatmap']?<Heatmap key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={mobile}/>:<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} bridge={bridge} mobile={mobile} volumeProfile={Boolean(state.tools['Volume Profile'])} profileSettings={profileSettings} source={listSource} candleTimer={state.tools['Candle timer']!==false} footprint={Boolean(state.tools['Footprint'])} footprintSettings={footprintSettings}/>)} {showBookDebug&&<BookDebug spec={activeSpec}/>}</div>{restored&&activeSpec&&state.tools['DOM']&&<DomLadder key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={mobile} onClose={()=>setState(s=>({...s,tools:{...s.tools,DOM:false}}))}/>}</div>
+        <div className="flex min-h-0 flex-1"><div className="relative min-h-0 min-w-0 flex-1">{restored&&activeSpec&&(state.tools['Heatmap']?<Heatmap key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={mobile}/>:<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} bridge={bridge} mobile={mobile} volumeProfile={Boolean(state.tools['Volume Profile'])} profileSettings={profileSettings} source={listSource} candleTimer={state.tools['Candle timer']!==false} footprint={Boolean(state.tools['Footprint'])} footprintSettings={footprintSettings} cvd={Boolean(state.tools['CVD'])} cvdSettings={cvdSettings} onCvdHeight={ratio=>changeCvdSettings({...cvdSettings,height:ratio})}/>)} {showBookDebug&&<BookDebug spec={activeSpec}/>}</div>{restored&&activeSpec&&state.tools['DOM']&&<DomLadder key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={mobile} onClose={()=>setState(s=>({...s,tools:{...s.tools,DOM:false}}))}/>}</div>
       </main>
     </div>
     {showFootprintSettings&&activeSpec&&<FootprintSettingsPanel settings={footprintSettings} onChange={changeFootprintSettings} onClose={()=>setShowFootprintSettings(false)} mobile={mobile} theme={state.theme} source={listSource} symbol={active.symbol} tick={activeSpec.minMove} minutes={active.minutes}/>}
+    {showCvdSettings&&<CvdSettingsPanel settings={cvdSettings} onChange={changeCvdSettings} onClose={()=>setShowCvdSettings(false)} mobile={mobile} theme={state.theme}/>}
     {showProfileSettings&&<VolumeProfileSettingsPanel settings={profileSettings} onChange={changeProfileSettings} onClose={()=>setShowProfileSettings(false)} mobile={mobile} theme={state.theme}/>}
   </div>;
 }
