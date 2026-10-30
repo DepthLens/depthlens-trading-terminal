@@ -49,19 +49,25 @@ export function addCvdKline(symbol: string, minutes: number, message: { k?: Para
   const e = entry(symbol, minutes);
   e.bars.set(b.time, b); e.revision.set(b.time, (e.revision.get(b.time) ?? 0) + 1); notify();
 }
-type BybitEntry = { trades: Map<string, { time: number; price: number; size: number; buy: boolean }>; pending: Promise<void> | null; loaded: boolean; error: string; first: number | null };
+type BybitEntry = { trades: Map<string, { time: number; price: number; size: number; buy: boolean }>; minutes: DeltaBar[]; dirty: boolean; pending: Promise<void> | null; loaded: boolean; error: string; first: number | null };
 const bybit = new Map<string, BybitEntry>();
 function tradeEntry(symbol: string) {
   let e = bybit.get(symbol);
-  if (!e) { e = { trades: new Map(), pending: null, loaded: false, error: '', first: null }; bybit.set(symbol, e); }
+  if (!e) { e = { trades: new Map(), minutes: [], dirty: false, pending: null, loaded: false, error: '', first: null }; bybit.set(symbol, e); }
   return e;
 }
 function putTrade(e: BybitEntry, id: string, time: number, price: number, size: number, buy: boolean) {
   if (![time, price, size].every(Number.isFinite) || size <= 0 || price <= 0 || e.trades.has(id)) return;
   e.trades.set(id, { time, price, size, buy }); e.first = e.first === null ? time : Math.min(e.first, time);
+  const bucket=Math.floor(time/60000)*60000,last=e.minutes.at(-1);
+  if(!e.dirty&&(!last||bucket>=last.time)){
+    const b=last?.time===bucket?last:deltaBar(bucket,0,0),sign=buy?1:-1;
+    b.quote+=sign*price*size;b.coin+=sign*size;b.quoteHigh=Math.max(b.quoteHigh,b.quote);b.quoteLow=Math.min(b.quoteLow,b.quote);b.coinHigh=Math.max(b.coinHigh,b.coin);b.coinLow=Math.min(b.coinLow,b.coin);b.path=true;
+    if(b!==last)e.minutes.push(b);
+  }else e.dirty=true;
   // Bound memory to the actual most recent 24h; the coverage label follows retained data.
   const cutoff = Date.now() - 86400000;
-  if (e.trades.size > 200000) for (const [key,t] of e.trades) { if (t.time < cutoff || e.trades.size > 200000) e.trades.delete(key); }
+  if (e.trades.size > 200000) for (const [key,t] of e.trades) { if (t.time < cutoff || e.trades.size > 200000) {e.trades.delete(key);e.dirty=true;} }
 }
 export function addCvdTrade(symbol: string, tick: LivePrice) {
   if (tick.exchange !== 'bybit' || tick.source !== 'trade' || tick.size === undefined || !tick.side) return;
@@ -85,12 +91,13 @@ export async function loadBybitCvd(symbol: string) {
 export function cvdData(source: 'binance' | 'bybit', symbol: string, minutes: number, withPath = false) {
   if (source === 'bybit') {
     const e = tradeEntry(symbol), minute = new Map<number, DeltaBar>();
-    for (const t of [...e.trades.values()].sort((a,b) => a.time-b.time)) {
+    if(e.dirty)for (const t of [...e.trades.values()].sort((a,b) => a.time-b.time)) {
       const time = Math.floor(t.time / 60000) * 60000, b = minute.get(time) ?? deltaBar(time, 0, 0), sign = t.buy ? 1 : -1;
       b.quote += sign * t.price * t.size; b.coin += sign * t.size;
       b.quoteHigh = Math.max(b.quoteHigh, b.quote); b.quoteLow = Math.min(b.quoteLow, b.quote); b.coinHigh = Math.max(b.coinHigh, b.coin); b.coinLow = Math.min(b.coinLow, b.coin); b.path = true; minute.set(time,b);
     }
-    return { bars: aggregateDeltas([...minute.values()], minutes), error: e.error, first: e.trades.size ? Math.min(...[...minute.keys()]) : null, pages: 0, limited: false };
+    if(e.dirty){e.minutes=[...minute.values()];e.dirty=false;}
+    return { bars: aggregateDeltas(e.minutes, minutes), error: e.error, first: e.minutes[0]?.time??null, pages: 0, limited: false };
   }
   const e = entry(symbol, minutes), base = [...e.bars.values()].sort((a,b) => a.time-b.time);
   let bars = cvdInterval(minutes) === '1m' && minutes !== 1 ? aggregateDeltas(base,minutes) : base;

@@ -37,6 +37,7 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
       const element=pane.getHTMLElement();if(!element||!host.parentElement)return;
       const top=element.getBoundingClientRect().top-host.parentElement.getBoundingClientRect().top;
       legend.style.top=`${Math.round(top+6)}px`;note.style.top=`${Math.round(top+pane.getHeight()-20)}px`;
+      host.parentElement.style.setProperty('--cvd-h',`${pane.getHeight()+chart.timeScale().height()+2}px`);
       const ratio=pane.getHeight()/Math.max(1,chart.paneSize(0).height+pane.getHeight());
       if(lastHeight&&dragged&&Math.abs(lastHeight-pane.getHeight())>1)heightRef.current(ratio);
       lastHeight=pane.getHeight();
@@ -96,6 +97,7 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
     return()=>{
       disposed=true;cancelAnimationFrame(frame);clearTimeout(rebasing);unsubscribe();observer.disconnect();host.removeEventListener('pointerdown',down);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);refreshRef.current=null;sizeRef.current=null;
       const w=window as Window&{checkPaneAlignment?:typeof alignment};if(w.checkPaneAlignment===alignment)delete w.checkPaneAlignment;
+      host.parentElement?.style.removeProperty('--cvd-h');
       if(!api.disposed){chart.unsubscribeCrosshairMove(crosshair);chart.timeScale().unsubscribeVisibleLogicalRangeChange(viewport);pane.detachPrimitive(marks);chart.removePane(pane.paneIndex());chart.priceScale('right',0).applyOptions({minimumWidth:oldMin});}
     };
   },[chartRef,hostRef,symbol,minutes,source,settings.mode,mobile,revision]);
