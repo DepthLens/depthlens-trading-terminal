@@ -23,7 +23,7 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
     chart.priceScale('right',0).applyOptions({minimumWidth:84});
     chart.applyOptions({layout:{panes:{enableResize:true,separatorColor:api.colors.muted,separatorHoverColor:api.colors.unsplit}}});
     const pane=chart.addPane();
-    const common={priceFormat:{type:'custom' as const,formatter:formatCvd,minMove:.01},priceLineVisible:false,lastValueVisible:true};
+    const common={priceFormat:{type:'custom' as const,formatter:formatCvd,minMove:.01},priceLineVisible:false,lastValueVisible:true,autoscaleInfoProvider:(original:()=>{priceRange:{minValue:number;maxValue:number}}|null)=>{const info=original();return info?{...info,priceRange:{minValue:Math.min(0,info.priceRange.minValue),maxValue:Math.max(0,info.priceRange.maxValue)}}:null;}};
     let series:ISeriesApi<'Baseline'>|ISeriesApi<'Candlestick'>|ISeriesApi<'Histogram'>;
     if(settings.mode==='Candles') series=chart.addSeries(CandlestickSeries,{...common,upColor:api.colors.up,downColor:api.colors.down,wickUpColor:api.colors.up,wickDownColor:api.colors.down,borderVisible:false},pane.paneIndex());
     else if(settings.mode==='Delta histogram') series=chart.addSeries(HistogramSeries,common,pane.paneIndex());
@@ -72,7 +72,7 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
       legend.dataset['source']=source;legend.dataset['rows']=String(rows.length);legend.dataset['pages']=String(data.pages);
       host.dataset['cvdHeight']=String(pane.getHeight());
     };
-    const schedule=()=>{if(!frame&&!disposed)frame=requestAnimationFrame(render);};refreshRef.current=schedule;
+    const schedule=()=>{if(!frame&&!disposed)frame=requestAnimationFrame(render);};
     const load=()=>{
       if(source==='bybit'){void loadBybitCvd(symbol).then(schedule);return;}
       const visible=chart.timeScale().getVisibleRange();
@@ -82,6 +82,7 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
       void loadBinanceCvd(symbol,minutes,anchor).then(schedule);
       if(settings.mode==='Candles'&&minutes>1)void loadBinanceCvd(symbol,1,from).then(schedule);
     };
+    refreshRef.current=()=>{load();schedule();};
     const viewport=()=>{
       if(disposed)return;clearTimeout(rebasing);
       rebasing=setTimeout(()=>{if(disposed||api.disposed)return;const v=chart.timeScale().getVisibleRange();visibleFrom=v?Number(v.from)*1000:-Infinity;load();schedule();},200);
