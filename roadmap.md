@@ -1,9 +1,10 @@
 # Roadmap
 
 ## CVD
-- [ ] Browser-safe exact Binance delta/cache and Bybit real-trade history, anchors, modes and units.
-- [ ] Native synchronized resizable pane, saved settings, legend and alignment diagnostics.
-- [ ] Correctness tests and complete desktop/phone source and protection smoke checks.
+- [x] Browser-safe exact Binance delta/cache and Bybit real-trade history, anchors, modes and units.
+- [x] Native synchronized resizable pane, saved settings, legend and alignment diagnostics.
+- [x] 116 automated tests pass; real Binance BTC 5m/1h and ETH 15m 1m-sum errors below 0.000000000001%; 16 desktop/phone/source cases, 144 alignment measurements at 0px error, equal 84–86px axes, all settings, Bybit price movement, Heatmap hiding, DOM toggles and overlay errors ≤0.91px verified without errors in final matrix.
+- [ ] Full live Binance check blocked: sockets opened but delivered zero trades in all eight Binance samples. Full protection demo matrix/covered Footprint debug and reliably repeated resize-persistence checks remain unverified; do not claim all ten acceptance checks passed.
 
 ## Three-tool redesign
 - [x] Shared theme palette and query-only watermarked demo fixture.
@@ -62,7 +63,7 @@
 
 ## Open
 - Binance primary availability verification: primary sockets did not deliver trades during this environment's stress run; automatic Bybit recovery and real trades passed. Immediate primary recovery is covered by tests and controlled Binance frames.
-- Remaining order flow tools (DOM drawing, CVD, Whale Trades, Liquidations) — coming soon
+- Remaining order flow tools (Whale Trades, Liquidations) — coming soon
 - Real authentication for /login and /register
 
 ## Mobile layout
