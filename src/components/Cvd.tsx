@@ -18,6 +18,7 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
     const api=chartRef.current, host=hostRef.current, legend=legendRef.current, note=noteRef.current;
     if(!api||api.disposed||!host||!legend||!note)return;
     const chart=api.chart, range=chart.timeScale().getVisibleLogicalRange();
+    chart.clearCrosshairPosition();
     const oldMin=chart.priceScale('right',0).options().minimumWidth;
     chart.priceScale('right',0).applyOptions({minimumWidth:84});
     chart.applyOptions({layout:{panes:{enableResize:true,separatorColor:api.colors.muted,separatorHoverColor:api.colors.unsplit}}});
@@ -31,7 +32,7 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
     series.createPriceLine({price:0,color:api.colors.muted,lineStyle:LineStyle.Dashed,lineWidth:1,axisLabelVisible:false});
     const marks=new CvdResetPrimitive(chart,api.colors.muted);pane.attachPrimitive(marks);
     let disposed=false,frame=0,hoverTime:number|null=null, visibleFrom=-Infinity, rebasing:ReturnType<typeof setTimeout>|undefined;
-    let rows:CvdBar[]=[],busy=false,dragged=false,lastHeight=0;
+    let rows:CvdBar[]=[],dragged=false,lastHeight=0;
     const position=()=>{
       if(disposed||api.disposed)return;
       const element=pane.getHTMLElement();if(!element||!host.parentElement)return;
@@ -82,12 +83,14 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
       if(settings.mode==='Candles'&&minutes>1)void loadBinanceCvd(symbol,1,from).then(schedule);
     };
     const viewport=()=>{
-      if(busy||disposed)return;clearTimeout(rebasing);
+      if(disposed)return;clearTimeout(rebasing);
       rebasing=setTimeout(()=>{if(disposed||api.disposed)return;const v=chart.timeScale().getVisibleRange();visibleFrom=v?Number(v.from)*1000:-Infinity;load();schedule();},200);
     };
     const crosshair:Parameters<typeof chart.subscribeCrosshairMove>[0]=event=>{hoverTime=event.time===undefined?null:Number(event.time)*1000;showLegend();};
-    const down=()=>{dragged=true;},up=()=>{position();dragged=false;};
+    const down=()=>{dragged=true;},up=()=>{position();if(pane.getHeight()<90)pane.setHeight(90);dragged=false;};
+    const move=()=>{if(dragged)position();};
     host.addEventListener('pointerdown',down);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
+    window.addEventListener('pointermove',move);
     chart.subscribeCrosshairMove(crosshair);chart.timeScale().subscribeVisibleLogicalRangeChange(viewport);
     const observer=new ResizeObserver(()=>{position();if(pane.getHeight()<90)pane.setHeight(90);});observer.observe(host);
     const unsubscribe=subscribeCvd(schedule);
@@ -95,10 +98,10 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
     (window as Window&{checkPaneAlignment?:typeof alignment}).checkPaneAlignment=alignment;
     size();load();schedule();if(range)chart.timeScale().setVisibleLogicalRange(range);viewport();
     return()=>{
-      disposed=true;cancelAnimationFrame(frame);clearTimeout(rebasing);unsubscribe();observer.disconnect();host.removeEventListener('pointerdown',down);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);refreshRef.current=null;sizeRef.current=null;
+      disposed=true;cancelAnimationFrame(frame);clearTimeout(rebasing);unsubscribe();observer.disconnect();host.removeEventListener('pointerdown',down);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('pointermove',move);refreshRef.current=null;sizeRef.current=null;
       const w=window as Window&{checkPaneAlignment?:typeof alignment};if(w.checkPaneAlignment===alignment)delete w.checkPaneAlignment;
       host.parentElement?.style.removeProperty('--cvd-h');
-      if(!api.disposed){chart.unsubscribeCrosshairMove(crosshair);chart.timeScale().unsubscribeVisibleLogicalRangeChange(viewport);pane.detachPrimitive(marks);chart.removePane(pane.paneIndex());chart.priceScale('right',0).applyOptions({minimumWidth:oldMin});}
+      if(!api.disposed){chart.clearCrosshairPosition();chart.unsubscribeCrosshairMove(crosshair);chart.timeScale().unsubscribeVisibleLogicalRangeChange(viewport);pane.detachPrimitive(marks);chart.removePane(pane.paneIndex());chart.priceScale('right',0).applyOptions({minimumWidth:oldMin});}
     };
   },[chartRef,hostRef,symbol,minutes,source,settings.mode,mobile,revision]);
   return <><div ref={legendRef} data-testid="cvd-legend" className="pointer-events-none absolute left-3 z-10 max-w-[calc(100%-100px)] text-xs tabular-nums"/><div ref={noteRef} data-testid="cvd-note" className="pointer-events-none absolute left-3 z-10 max-w-[calc(100%-100px)] truncate text-[10px] text-t-muted"/></>;
