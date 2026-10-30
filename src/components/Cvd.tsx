@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
-import { BaselineSeries, CandlestickSeries, HistogramSeries, LineStyle, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
+import { BaselineSeries, CandlestickSeries, HistogramSeries, LineStyle, type AutoscaleInfo, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
 import type { ProfileChart } from './VolumeProfile';
 import { buildCvd, cvdPaneHeight, formatCvd, type CvdBar, type CvdSettings } from '@/lib/cvd-data';
 import { cvdData, loadBinanceCvd, loadBybitCvd, subscribeCvd } from '@/lib/cvd-store';
@@ -23,7 +23,7 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
     chart.priceScale('right',0).applyOptions({minimumWidth:84});
     chart.applyOptions({layout:{panes:{enableResize:true,separatorColor:api.colors.muted,separatorHoverColor:api.colors.unsplit}}});
     const pane=chart.addPane();
-    const common={priceFormat:{type:'custom' as const,formatter:formatCvd,minMove:.01},priceLineVisible:false,lastValueVisible:true,autoscaleInfoProvider:(original:()=>{priceRange:{minValue:number;maxValue:number}}|null)=>{const info=original();return info?{...info,priceRange:{minValue:Math.min(0,info.priceRange.minValue),maxValue:Math.max(0,info.priceRange.maxValue)}}:null;}};
+    const common={priceFormat:{type:'custom' as const,formatter:formatCvd,minMove:.01},priceLineVisible:false,lastValueVisible:true,autoscaleInfoProvider:(original:()=>AutoscaleInfo|null)=>{const info=original();return info?.priceRange?{...info,priceRange:{minValue:Math.min(0,info.priceRange.minValue),maxValue:Math.max(0,info.priceRange.maxValue)}}:null;}};
     let series:ISeriesApi<'Baseline'>|ISeriesApi<'Candlestick'>|ISeriesApi<'Histogram'>;
     if(settings.mode==='Candles') series=chart.addSeries(CandlestickSeries,{...common,upColor:api.colors.up,downColor:api.colors.down,wickUpColor:api.colors.up,wickDownColor:api.colors.down,borderVisible:false},pane.paneIndex());
     else if(settings.mode==='Delta histogram') series=chart.addSeries(HistogramSeries,common,pane.paneIndex());
