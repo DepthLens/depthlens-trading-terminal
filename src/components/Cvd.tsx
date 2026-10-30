@@ -62,11 +62,9 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
       const times=new Map(rows.map(b=>[b.time/1000,b]));
       // Whitespace at candle times keeps sparse real Bybit history on the shared grid.
       const all=[...new Set([...api.series.data().map(b=>Number(b.time)),...times.keys()])].sort((a,b)=>a-b);
-      const visible=chart.timeScale().getVisibleRange();
       if(series.seriesType()==='Candlestick') (series as ISeriesApi<'Candlestick'>).setData(all.map(time=>{const b=times.get(time);return b?{time:time as UTCTimestamp,open:b.open,close:b.close,high:b.path?b.high:Math.max(b.open,b.close),low:b.path?b.low:Math.min(b.open,b.close)}:{time:time as UTCTimestamp};}));
       else if(series.seriesType()==='Histogram') (series as ISeriesApi<'Histogram'>).setData(all.map(time=>{const b=times.get(time);return b?{time:time as UTCTimestamp,value:b.delta,color:b.delta>=0?api.colors.up:api.colors.down}:{time:time as UTCTimestamp};}));
       else (series as ISeriesApi<'Baseline'>).setData(all.map(time=>{const b=times.get(time);return b?{time:time as UTCTimestamp,value:b.close}:{time:time as UTCTimestamp};}));
-      if(visible){busy=true;chart.timeScale().setVisibleRange(visible);busy=false;}
       marks.setBars(rows);showLegend();position();
       note.textContent=source==='bybit'?`CVD since ${data.first===null?'—':new Date(data.first).toISOString().slice(11,16)} (Bybit has no taker history)${data.error?' · '+data.error:''}`:data.error||(!rows.length?'Loading CVD history…':data.limited?'CVD · Loaded history limit (6 pages)':'');
       legend.dataset['source']=source;legend.dataset['rows']=String(rows.length);legend.dataset['pages']=String(data.pages);
