@@ -30,3 +30,5 @@
 - Heatmap stores calibrated base row/depth with IndexedDB history and draws a persistent offscreen ring texture; profile updates subscribe to immediate trade deltas rather than scanning historical maps, preserving chart responsiveness.
 - DOM ladder grouping/auto-size/wall rules live in browser-safe `dom-ladder.ts`; `DomLadder.tsx` only reads the existing order-book engine on a ≤10 fps canvas loop and never stores the ladder in React state or opens sockets.
 - CVD exact deltas and cached exchange history live in browser-safe cvd-data/cvd-store; Cvd uses a native lightweight-charts pane sharing the existing time scale, native resize separator, price-axis width and crosshair, with existing LiveQuote feed only. Execution IDs deduplicate recent Bybit trades against live trades; Binance kline totals replace rather than accumulate.
+
+- Whale detection/aggregation and IndexedDB history live in browser-safe whale-data/whale-store; LiveQuote forwards existing trades only, while whale-overlay derives coordinates per draw and WhaleTrades owns isolated feed updates, avoiding sockets and terminal rerenders.

@@ -41,3 +41,4 @@ export function demoHeatmap(price: number, bucket: number, now = Date.now()) {
   }
   return { buffer, span };
 }
+export function demoWhales(bars:Bar[]):import('./whale-data').WhaleEvent[]{return bars.filter((_,i)=>i%3===0).map((b,i)=>({id:`demo-whale-${i}`,time:b.time+1000,lastTime:b.time+2000,side:i%2?'Sell':'Buy',price:(b.high+b.low)/2,lastPrice:(b.high+b.low)/2,quantity:1,notional:[50000,250000,1200000,100000][i%4]??50000,count:i+2}));}

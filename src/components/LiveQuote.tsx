@@ -6,6 +6,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { orderBook } from '@/lib/order-book';
 import { addProfileTrade } from '@/lib/volume-profile';
 import { addFootprintTrade } from '@/lib/footprint-store';
+import { addWhaleTrade } from '@/lib/whale-store';
+import { toolDemoEnabled } from '@/lib/tool-demo';
 import { addCvdTrade, addCvdKline } from '@/lib/cvd-store';
 
 const SOURCE_KEY = 'depthlens.source.v1';
@@ -54,6 +56,7 @@ export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false, 
       bridge.current.latest = tick;
       bridge.current.receive?.(tick);
       bridge.current.heat?.(tick);
+      if (specRef.current && !toolDemoEnabled()) addWhaleTrade(symbol, tick, specRef.current.minMove);
       addCvdTrade(symbol, tick);
       if (profileEnabledRef.current) addProfileTrade(symbol, tick);
       if (specRef.current) addFootprintTrade(symbol, tick, specRef.current.minMove);

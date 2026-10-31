@@ -16,6 +16,7 @@ Read this file before any change. It applies to every future request.
 - Candle chart: live candle, OHLC legend, magnet crosshair, Zoom In, Zoom Out, Reload
 - Live price line with axis tag
 - Candle timer: default-on saved Tools switch, exchange-corrected UTC/custom close countdown below the live axis tag, same direction color, hidden outside visible price range, desktop/mobile.
+- Whale Trades: existing-feed USDT detection, per-source/pair 60min Auto 99.9th percentile with 25K floor or fixed/custom; default 2s/5-tick same-side bursts, VWAP/count, 24h IndexedDB every 10s and real rate-limited backfill. Saved settings, native price/time circle primitive, feed navigation/flash, count, tooltip, hidden during Heatmap and query-only watermarked demo; no sockets.
 - Tools (orderflow) menu with switches
 - CVD: saved free Tools switch and settings; native resizable pane below candles (22% desktop, 25% mobile, minimum 90px), hidden with Heatmap, shared time scale/crosshair and equal fixed-minimum right axes. Exact own-timeframe Binance taker deltas, six cached 1500-candle pages maximum (Custom from 1m), absolute live kline updates; real Bybit trades plus recent 1000 with execution-ID deduplication and honest since label. Daily UTC/Weekly/Visible start (200ms idle)/Continuous, Line/Candles/Delta histogram, USDT/coin, reset marks and zero line; no extra sockets.
 - Volume Profile candle overlay: active-source cached 1m history, live trade volume, tick-aligned histogram, POC/VAH/VAL, hover details, saved settings and mobile sheet; hidden during Heatmap, no extra sockets.
@@ -47,6 +48,8 @@ Read this file before any change. It applies to every future request.
 10. Turn DOM on: best bid/ask match Book debug, ladder updates, sockets ≤3, chart/live price/tools unchanged; turn it off.
 9. Check demo at 1366x768 and 390x844 in navy/light/midnight/ocean: many thin Heatmap rows/bright band, clear VP outside-area and POC, readable Footprint plus consistent empty columns. Confirm watermark is absent without query.
 11. Turn CVD on at desktop/phone, verify Binance BTC 1m/5m/1h and ETH 15m then Bybit, all anchors/modes/units, pane resizing and moving live price; run checkPaneAlignment() after scroll/zoom (candle x and right axes within 1px), with Volume Profile/Footprint/DOM/timer and Heatmap hiding; sockets ≤3 and no console errors.
+
+12. Whale Trades: BTC/ETH/DOGE 1m/5m desktop 1366x768 and phone 390x844, Bybit and Binance when delivering; demo appearance, feed navigation/flash, settings restore, four-direction drag/zoom, circle price stability ≤1px, moving live price, Heatmap hiding and coexistence with all other tools, sockets ≤3, no console errors.
 
 Report the result as a short list.
 
