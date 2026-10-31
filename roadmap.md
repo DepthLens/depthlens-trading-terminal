@@ -1,5 +1,10 @@
 # Roadmap
 
+## Whale Trades
+- [ ] Existing-feed detection, per-source/pair thresholds, burst merging and 24h IndexedDB history with rate-limited real backfill.
+- [ ] Price/time-anchored primitive, feed navigation, saved settings, badge and isolated demo fixtures.
+- [ ] Rule tests and desktop/phone live/demo matrix; protection smoke checks and measured alignment/socket/price results.
+
 ## CVD
 - [x] Browser-safe exact Binance delta/cache and Bybit real-trade history, anchors, modes and units.
 - [x] Native synchronized resizable pane, saved settings, legend and alignment diagnostics.

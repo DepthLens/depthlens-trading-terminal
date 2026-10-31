@@ -1,0 +1,12 @@
+import type { ISeriesPrimitive, IPrimitivePaneView, Time, UTCTimestamp } from 'lightweight-charts';
+import type { OverlayChart, OverlayProbe, OverlaySample } from './chart-overlays';
+import { whaleCandleTime, whaleRadius, whaleLabel, type WhaleEvent, type WhaleSettings } from './whale-data';
+export class WhalePrimitive implements ISeriesPrimitive<Time>,OverlayProbe {
+ events:WhaleEvent[]=[];private request=()=>{};private drawn:OverlaySample[]=[];paused=false;flashId='';flashUntil=0;
+ constructor(private api:OverlayChart,private minutes:number,public settings:WhaleSettings,private colors:{up:string;down:string;outline:string;text:string}){}
+ attached({requestUpdate}:Parameters<NonNullable<ISeriesPrimitive<Time>['attached']>>[0]){this.request=requestUpdate;}
+ detached(){this.request=()=>{};}pause(v:boolean){this.paused=v;}samples=()=>this.drawn;refresh(){this.request();}
+ positions(){const scale=this.api.chart.timeScale(),spacing=scale.options().barSpacing,groups=new Map<number,WhaleEvent[]>();for(const e of this.events.slice(0,this.settings.max)){const time=whaleCandleTime(e.time,this.minutes);const group=groups.get(time)??[];group.push(e);groups.set(time,group);}const points:{e:WhaleEvent;x:number;y:number;r:number}[]=[];for(const [time,group] of groups){const center=scale.timeToCoordinate(time as UTCTimestamp);if(center===null)continue;group.forEach((e,i)=>{const y=this.api.series.priceToCoordinate(e.price);const offset=group.length>1?(i/(group.length-1)-.5)*spacing*.4:0,x=center+offset,r=whaleRadius(e.notional);if(y!==null&&x>=0&&x<=scale.width()&&y>=0&&y<this.api.chart.paneSize().height)points.push({e,x,y,r});});}return points;}
+ at(x:number,y:number){return this.positions().reverse().find(p=>(x-p.x)**2+(y-p.y)**2<=p.r**2)?.e;}
+ private views:IPrimitivePaneView[]=[{zOrder:()=> 'top',renderer:()=>({draw:target=>target.useMediaCoordinateSpace(({context:ctx})=>{this.drawn=[];for(const {e,x,y,r} of this.positions()){ctx.globalAlpha=this.settings.opacity;ctx.fillStyle=e.side==='Buy'?this.colors.up:this.colors.down;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.strokeStyle=this.colors.outline;ctx.lineWidth=this.flashId===e.id&&Date.now()<this.flashUntil?3:1;ctx.stroke();if(r>=14&&this.settings.labels){ctx.font='bold 10px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=this.colors.text;ctx.fillText(whaleLabel(e.notional),x,y);}this.drawn.push({name:'Whale Trades circle',price:e.price,drawnY:y});}ctx.globalAlpha=1;})})}];paneViews(){return this.views;}
+}

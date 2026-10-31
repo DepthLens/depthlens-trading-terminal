@@ -124,7 +124,7 @@ export function livePriceStream(symbol: string, onPrice: (tick: LivePrice) => vo
         if (data.s !== symbol) return;
         const price = Number(data.p), time = Number(data.T), eventTime = Number(data.E ?? data.T), size = Number(data.q);
         if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(time) || !Number.isFinite(eventTime)) return;
-        trade('binance', price, time, eventTime, Number.isFinite(size) ? size : undefined, data.m === undefined ? undefined : data.m ? 'Sell' : 'Buy');
+        trade('binance', price, time, eventTime, Number.isFinite(size) ? size : undefined, data.m === undefined ? undefined : data.m ? 'Sell' : 'Buy', data.a === undefined ? undefined : String(data.a));
       }, live => { if (!live && source === current && !polling) status('Offline'); }, { exchange: 'binance', purpose: 'active', onFailure });
     } else {
       const kTopic = `kline.${BYBIT_INTERVAL[interval] ?? '1'}.${symbol}`;
