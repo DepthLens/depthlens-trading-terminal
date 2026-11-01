@@ -8,7 +8,7 @@ Read this file before any change. It applies to every future request.
 - Heatmap base row is tick-clamped niceStep(synced depthSpan/150), saved with calibration per source/symbol in IndexedDB even after history expires. Center fits 1.15 depthSpan; 20-row minimum and ±5% zoom cap. Persistent offscreen ring texture paints new columns; sampled color histogram every five seconds.
 - VPVR 1px row gaps, 45% outside-area bars, bright yellow outlined POC, shaded VAH/VAL band and range/row label. Nice tick rows target 60 with 40% hysteresis; direct incremental trade deltas, no repeated live-map scans. Visible history beyond three days is labeled honestly.
 - Footprint empty columns keep the cluster width with dashed outlines, a small candle and width-gated no-data text; 1px gaps, minimum 12% volume bars, bold imbalance text with dark shadow. Fit 110px only on enable/timeframe/explicit Fit, never unrelated render or manual zoom; settings show coverage minutes and source.
-- Live price in the top bar with status dot and source selector (Auto, Binance, Bybit)
+- Live price in the top bar with status dot and source selector (Auto, Binance, Bybit); an open but silent source shows amber "No trades from <source> yet" instead of red Offline.
 - WebSocket connection manager (max 3 open sockets, failover, exponential backoff)
 - Pair list with search (pinned BTC/ETH/BNB, sorted by 24h volume), prices follow the active source
 - Chrome-style pair tabs (max 10, per-tab timeframe, persisted)
@@ -52,6 +52,8 @@ Read this file before any change. It applies to every future request.
 12. Whale Trades: BTC/ETH/DOGE 1m/5m desktop 1366x768 and phone 390x844, Bybit and Binance when delivering; demo appearance, feed navigation/flash, settings restore, four-direction drag/zoom, circle price stability ≤1px, moving live price, Heatmap hiding and coexistence with all other tools, sockets ≤3, no console errors.
 
 Report the result as a short list.
+
+Whale Trades last verified Nov 1 2026: sockets, 15 tool pairs, IndexedDB restore, 10-minute live run, Auto→Bybit and Binance silent message pass. Still unverified: live Binance trades (none delivered in the test browser).
 
 ## 4. Keep this list current
 After every change, add any new feature to the list in section 1.
