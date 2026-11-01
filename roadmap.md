@@ -1,9 +1,11 @@
 # Roadmap
 
 ## Whale Trades
-- [ ] Existing-feed detection, per-source/pair thresholds, burst merging and 24h IndexedDB history with rate-limited real backfill.
-- [ ] Price/time-anchored primitive, feed navigation, saved settings, badge and isolated demo fixtures.
-- [ ] Rule tests and desktop/phone live/demo matrix; protection smoke checks and measured alignment/socket/price results.
+- [x] Existing-feed detection, per-source/pair thresholds, burst merging and 24h IndexedDB history with rate-limited real backfill.
+- [x] Price/time-anchored primitive, feed navigation, saved settings, badge and isolated demo fixtures.
+- [x] Rule tests and desktop/phone live/demo matrix; protection smoke checks and measured alignment/socket/price results.
+- [x] Verified (Nov 1): app sockets max 2 on Bybit/Binance and 3 on Auto (excluding dev-reload socket) with Whale+Footprint+DOM+CVD+VP during 10 pair and 10 timeframe switches, no leak; all 15 two-tool combinations (VP, Footprint, DOM, CVD, Heatmap, timer) pass with Heatmap hiding whales only; IndexedDB writes and refresh restore of label/feed pass live, demo stays unsaved; 10.5-minute BTC 1m run: 623 price changes, Live throughout, timer counting, 13→23 visible whale events, heap 44.0→45.5 MB after GC; overlay stability 0px; 128 tests pass.
+- [ ] Unverified: Binance delivered zero trades in this test browser (UI now shows amber "No trades from Binance yet"; Auto chose Bybit with Whale Trades working). One browser-level Binance pair-list socket close message ("Ping received after close") appeared once in 10 minutes; it is emitted by the browser on a remote close and cannot be silenced from page code.
 
 ## CVD
 - [x] Browser-safe exact Binance delta/cache and Bybit real-trade history, anchors, modes and units.
@@ -68,7 +70,7 @@
 
 ## Open
 - Binance primary availability verification: primary sockets did not deliver trades during this environment's stress run; automatic Bybit recovery and real trades passed. Immediate primary recovery is covered by tests and controlled Binance frames.
-- Remaining order flow tools (Whale Trades, Liquidations) — coming soon
+- Remaining order flow tool (Liquidations) — coming soon
 - Real authentication for /login and /register
 
 ## Mobile layout

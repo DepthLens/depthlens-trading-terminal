@@ -39,6 +39,9 @@ export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false, 
   const specRef = useRef(spec); specRef.current = spec;
   const [status, setStatus] = useState<PriceStatus>('Offline');
   const [hovered, setHovered] = useState(false);
+  const [silent, setSilent] = useState(false);
+  useEffect(() => { if (status === 'Live') { setSilent(false); return; } const check = () => { const d = priceDiagnostics(sourceRef.current); setSilent(d.state === 'Open' && d.lastTradeAt === null); }; check(); const t = setInterval(check, 1000); return () => clearInterval(t); }, [status]);
+  const shown = silent ? `No trades from ${sourceName || 'exchange'} yet` : status;
   const [ownMode, changeOwnMode] = useSourceMode();
   const mode = controlledMode !== undefined ? controlledMode : ownMode;
   const changeMode = onModeChange ?? changeOwnMode;
@@ -93,7 +96,7 @@ export function LiveQuote({ symbol, minutes, spec, bridge, bookEnabled = false, 
   }, [hovered, mode]);
   return <>
     <span ref={priceRef} data-testid="live-price" className={`${sizeClass} font-semibold text-t-text`}>—</span>
-    <TooltipProvider delayDuration={0}><Tooltip open={hovered} onOpenChange={setHovered}><TooltipTrigger asChild><span tabIndex={0} role="status" data-testid="price-status" aria-label="Price connection status" className={`flex items-center gap-1 ${compact ? 'shrink-0 text-xs' : 'text-[10px]'} ${status === 'Live' ? 'text-t-up' : status === 'Polling' ? 'text-t-warning' : 'text-t-down'}`}><span aria-hidden="true" className={`${compact ? 'size-2' : 'size-1.5'} rounded-full bg-current`}/>{compact ? (sourceName || status) : status}</span></TooltipTrigger><TooltipContent className="border border-t-border bg-t-panel text-t-text"><div ref={diagnosticsRef} data-testid="price-diagnostics" className="whitespace-pre-line"/></TooltipContent></Tooltip></TooltipProvider>
+    <TooltipProvider delayDuration={0}><Tooltip open={hovered} onOpenChange={setHovered}><TooltipTrigger asChild><span tabIndex={0} role="status" data-testid="price-status" aria-label="Price connection status" className={`flex items-center gap-1 ${compact ? 'shrink-0 text-xs' : 'text-[10px]'} ${status === 'Live' ? 'text-t-up' : status === 'Polling' || silent ? 'text-t-warning' : 'text-t-down'}`}><span aria-hidden="true" className={`${compact ? 'size-2' : 'size-1.5'} rounded-full bg-current`}/>{compact ? (sourceName || shown) : shown}</span></TooltipTrigger><TooltipContent className="border border-t-border bg-t-panel text-t-text"><div ref={diagnosticsRef} data-testid="price-diagnostics" className="whitespace-pre-line"/></TooltipContent></Tooltip></TooltipProvider>
     {!compact && <SourceSelect mode={mode} onChange={changeMode}/>}
   </>;
 }
