@@ -1,4 +1,4 @@
-export const TOOLS = ['Heatmap', 'Volume Profile', 'Footprint', 'DOM', 'CVD', 'Whale Trades', 'Liquidations', 'Candle timer'] as const;
+export const TOOLS = ['Heatmap', 'Volume Profile', 'Footprint', 'DOM', 'CVD', 'Price Pressure', 'Whale Trades', 'Liquidations', 'Candle timer'] as const;
 export const THEMES = ['navy', 'light', 'midnight', 'ocean'] as const;
 export const STORAGE_KEY = 'depthlens.terminal.v1';
 export type TerminalTab = { symbol: string; minutes: number };

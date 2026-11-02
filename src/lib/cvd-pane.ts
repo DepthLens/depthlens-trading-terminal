@@ -24,7 +24,7 @@ export class CvdResetPrimitive implements IPanePrimitive<Time> {
 }
 
 export async function checkPaneAlignment(chart: IChartApi) {
-  const main = chart.panes()[0], cvd = chart.panes()[1], range = chart.timeScale().getVisibleLogicalRange();
+  const main = chart.panes()[0], subs = chart.panes().slice(1), cvd = subs[0], range = chart.timeScale().getVisibleLogicalRange();
   if (!main || !cvd || !range) return [{ name: 'CVD pane present', pass: false, error: Infinity }];
   const results: { name: string; pass: boolean; error: number; main?: number; cvd?: number }[] = [];
   const wait = () => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
@@ -36,13 +36,18 @@ export async function checkPaneAlignment(chart: IChartApi) {
       // not a second hand-maintained transform. Compare a real candle's global x coordinate.
       const candle = main.getSeries()[0]?.data().find(b => chart.timeScale().timeToCoordinate(b.time) !== null);
       const x = candle ? chart.timeScale().timeToCoordinate(candle.time) : null;
-      const mainBox = main.getHTMLElement()?.getBoundingClientRect(), cvdBox = cvd.getHTMLElement()?.getBoundingClientRect();
-      const error = x === null || !mainBox || !cvdBox ? Infinity : Math.abs(mainBox.left+x-(cvdBox.left+x));
-      const a = chart.priceScale('right',0).width(), b = chart.priceScale('right',1).width();
-      results.push({ name: `CVD candle x (${factor})`, pass: error <= 1, error });
-      results.push({ name: `CVD right axes (${factor})`, pass: Math.abs(a-b) <= 1, error: Math.abs(a-b), main:a, cvd:b });
-      const widthError = Math.abs((mainBox?.width ?? NaN)-(cvdBox?.width ?? NaN));
-      results.push({ name: `CVD pane width (${factor})`, pass: widthError <= 1, error: widthError });
+      const mainBox = main.getHTMLElement()?.getBoundingClientRect();
+      for (const sub of subs) {
+        const i = sub.paneIndex(), name = i === 1 && subs.length === 1 ? 'CVD' : `Pane ${i}`;
+        const sx = (sub.getSeries()[0] && candle) ? chart.timeScale().timeToCoordinate(candle.time) : x;
+        const cvdBox = sub.getHTMLElement()?.getBoundingClientRect();
+        const error = x === null || sx === null || !mainBox || !cvdBox ? Infinity : Math.abs(mainBox.left+x-(cvdBox.left+sx));
+        const a = chart.priceScale('right',0).width(), b = chart.priceScale('right',i).width();
+        results.push({ name: `${name} candle x (${factor})`, pass: error <= 1, error });
+        results.push({ name: `${name} right axes (${factor})`, pass: Math.abs(a-b) <= 1, error: Math.abs(a-b), main:a, cvd:b });
+        const widthError = Math.abs((mainBox?.width ?? NaN)-(cvdBox?.width ?? NaN));
+        results.push({ name: `${name} pane width (${factor})`, pass: widthError <= 1, error: widthError });
+      }
     }
   } finally { chart.timeScale().setVisibleLogicalRange(range); await wait(); }
   for (const r of results) console.info(`[DepthLens] ${r.name}: ${r.pass ? 'PASS' : 'FAIL'} (${r.error.toFixed(2)}px)`);
