@@ -146,6 +146,7 @@
 
 /* DepthLens terminal themes */
 :root, [data-theme="navy"] {
+  --pp-bg: #0a1322; --pp-text: #dbe6f5; --pp-muted: #8a9bb4;
   --logo-lens: #2DD4BF; --logo-bid: #22c55e; --logo-ask: #ef4444;
   --t-bg: oklch(0.18 0.05 260); --t-panel: oklch(0.22 0.055 260); --t-border: oklch(0.32 0.06 260);
   --t-text: oklch(0.95 0.01 250); --t-muted: oklch(0.68 0.04 255); --t-accent: oklch(0.72 0.14 230);
