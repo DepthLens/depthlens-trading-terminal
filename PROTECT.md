@@ -27,6 +27,7 @@ Read this file before any change. It applies to every future request.
 - Heatmap view (cells, trade bubbles, controls, zoom/pan, tooltip)
 - Heatmap history: module-level buffer per source+pair that never resets (only a source change clears it), IndexedDB restore after refresh with a dim gap stripe, 60-minute price/trade backfill, "Price and trades only" label
 - Mobile layout (below 768px and phone landscape): Pairs bottom sheet, compact one-row top bar with settings menu, scrollable tabs and timeframe row, Tools icon with Book debug inside, tap-to-expand OHLC legend, floating chart buttons, single status indicator, heatmap controls sheet, safe areas
+- Control & Attack bars: Tools switch (default ON, saved); CONTROL strip above the chart (36px, 40px phone) and ATTACK strip below chart and panes (36px), collapsible, read the chart's loaded candles once per second with Price Pressure scoring, 2-update hold, sentences (tap on phone), gear for lookback/threshold/sentences; hidden in Heatmap view; no sockets.
 - Front page, login and register pages
 - DepthLens logo and favicon
 
@@ -50,6 +51,8 @@ Read this file before any change. It applies to every future request.
 11. Turn CVD on at desktop/phone, verify Binance BTC 1m/5m/1h and ETH 15m then Bybit, all anchors/modes/units, pane resizing and moving live price; run checkPaneAlignment() after scroll/zoom (candle x and right axes within 1px), with Volume Profile/Footprint/DOM/timer and Heatmap hiding; sockets ≤3 and no console errors.
 
 12. Whale Trades: BTC/ETH/DOGE 1m/5m desktop 1366x768 and phone 390x844, Bybit and Binance when delivering; demo appearance, feed navigation/flash, settings restore, four-direction drag/zoom, circle price stability ≤1px, moving live price, Heatmap hiding and coexistence with all other tools, sockets ≤3, no console errors.
+
+13. Control & Attack bars: BTC 1m and ETH 5m at 1366x768 and 390x844 show state words, meter and sentences with no overlap; live price moves; sockets ≤3.
 
 Report the result as a short list.
 
