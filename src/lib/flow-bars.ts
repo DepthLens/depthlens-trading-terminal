@@ -30,7 +30,7 @@ export function controlInfo(closed: PpScores[], n: number): ControlInfo {
 }
 
 /** Live candle counts once at least 20% of its time has passed; otherwise the last closed candle. */
-export const useLiveCandle = (liveStartMs: number, minutes: number, nowMs: number) => (nowMs - liveStartMs) / (minutes * 60000) >= FB_LIVE_FRACTION;
+export const liveCandleCounts = (liveStartMs: number, minutes: number, nowMs: number) => (nowMs - liveStartMs) / (minutes * 60000) >= FB_LIVE_FRACTION;
 
 export type AttackInfo = { state: Attack; p: number; strength: number; live: boolean; scores: PpScores };
 export function attackInfo(scores: PpScores[], live: boolean, threshold: number): AttackInfo | null {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { attackInfo, barHeight, combinedSentence, controlInfo, controlSentence, Hold, scoreAll, useLiveCandle, type AttackInfo, type ControlInfo, type FbSettings } from '@/lib/flow-bars';
+import { attackInfo, barHeight, combinedSentence, controlInfo, controlSentence, Hold, scoreAll, liveCandleCounts, type AttackInfo, type ControlInfo, type FbSettings } from '@/lib/flow-bars';
 import type { Bar } from '@/lib/chart-data';
 import type { Attack, Control } from '@/lib/price-pressure';
 
@@ -22,7 +22,7 @@ function useFlow(chartRef: MutableRefObject<ChartApi | null>, minutes: number, s
       if (bars.length < 2) return;
       const scores = scoreAll(bars), now = Date.now();
       const control = controlInfo(scores.slice(0, -1), settings.lookback);
-      const attack = attackInfo(scores, useLiveCandle(bars.at(-1)!.time, minutes, now), settings.threshold);
+      const attack = attackInfo(scores, liveCandleCounts(bars.at(-1)!.time, minutes, now), settings.threshold);
       setSnap({ control, shownControl: hc.update(control.state, now), attack, shownAttack: ha.update(attack?.state ?? 'NONE', now) });
     };
     run();
