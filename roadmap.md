@@ -77,3 +77,7 @@
 - [x] All 10 mobile items done and tested at 360/390/412, landscape and 1366
 
 - [x] DOM order book ladder (panel, settings, tests, PROTECT entry)
+
+## Control & Attack bars
+- [x] Bars, math reuse, hold, sentences, settings, tests, PROTECT
+- [ ] Browser check at 1366x768 / 390x844 (BTC 1m, ETH 5m) not yet run

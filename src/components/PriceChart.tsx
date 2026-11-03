@@ -17,6 +17,8 @@ import { WhaleTrades } from '@/components/WhaleTrades';
 import type { WhaleSettings } from '@/lib/whale-data';
 import { Cvd } from '@/components/Cvd';
 import { PricePressure } from '@/components/PricePressure';
+import { ControlBar, AttackBar } from '@/components/FlowBars';
+import type { FbSettings } from '@/lib/flow-bars';
 import type { PpSettings } from '@/lib/price-pressure';
 import type { CvdSettings } from '@/lib/cvd-data';
 export type { LivePrice } from '@/lib/live-price';
@@ -28,7 +30,7 @@ function toColor(el: HTMLElement, name: string) {
   const [r,g,b] = ctx.getImageData(0,0,1,1).data;
   return `rgb(${r},${g},${b})`;
 }
-export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false, volumeProfile, profileSettings, source = 'binance', candleTimer = true, footprint = false, footprintSettings, cvd = false, cvdSettings, onCvdHeight, whales = false, whaleSettings, pressure = false, pressureSettings, onPressureChange }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; volumeProfile?: boolean; profileSettings?: ProfileSettings; source?: TradeSource; candleTimer?: boolean; footprint?: boolean; footprintSettings?: FootprintSettings; cvd?:boolean; cvdSettings?:CvdSettings; onCvdHeight?:(ratio:number)=>void; whales?:boolean; whaleSettings?:WhaleSettings; pressure?:boolean; pressureSettings?:PpSettings; onPressureChange?:(s:PpSettings)=>void }) {
+export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false, volumeProfile, profileSettings, source = 'binance', candleTimer = true, footprint = false, footprintSettings, cvd = false, cvdSettings, onCvdHeight, whales = false, whaleSettings, pressure = false, pressureSettings, onPressureChange, flowBars = false, flowSettings, onFlowChange }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; volumeProfile?: boolean; profileSettings?: ProfileSettings; source?: TradeSource; candleTimer?: boolean; footprint?: boolean; footprintSettings?: FootprintSettings; cvd?:boolean; cvdSettings?:CvdSettings; onCvdHeight?:(ratio:number)=>void; whales?:boolean; whaleSettings?:WhaleSettings; pressure?:boolean; pressureSettings?:PpSettings; onPressureChange?:(s:PpSettings)=>void; flowBars?:boolean; flowSettings?:FbSettings; onFlowChange?:(s:FbSettings)=>void }) {
   const [legendOpen, setLegendOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -171,7 +173,10 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     {(['open','high','low','close'] as const).map(key=><span key={key} className={mobile && !legendOpen && key!=='close' ? 'hidden' : undefined}><span className={`mr-1 text-t-muted ${mobile ? 'uppercase' : 'capitalize'}`}>{mobile ? key[0] : key}</span><span data-value={key}>—</span></span>)}
     <span data-value="change">—</span>
   </>;
-  return <div className={`relative flex h-full w-full flex-col ${mobile ? 'min-h-0' : 'min-h-80'}`}>
+  const showFlow = flowBars && flowSettings && onFlowChange;
+  return <div className={`flex h-full w-full flex-col ${mobile ? 'min-h-0' : 'min-h-80'}`}>
+    {showFlow&&<ControlBar chartRef={profileChartRef as any} minutes={minutes} symbol={symbol} settings={flowSettings} onChange={onFlowChange} mobile={mobile}/>}
+    <div className="relative flex min-h-0 w-full flex-1 flex-col">
     {mobile
       ? <button type="button" ref={legendRef as any} onClick={()=>setLegendOpen(o=>!o)} aria-expanded={legendOpen} aria-label="OHLC legend, tap to expand or collapse" className="terminal-tabs absolute left-1.5 top-1.5 z-10 flex max-w-[calc(100%-var(--axis-w,64px)-56px)] items-center gap-x-2 overflow-x-auto whitespace-nowrap min-h-10 rounded bg-t-panel/60 px-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</button>
       : <div ref={legendRef as any} className="pointer-events-none z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs tabular-nums" data-testid="ohlc-legend">{legendItems}</div>}
@@ -189,5 +194,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Reload" title="Reload — latest candle and default zoom" onClick={reset}><RotateCcw /></Button>
     </div>
     {!mobile && <span role="status" className={`pointer-events-none absolute bottom-[calc(var(--pp-strip,0px)+8px)] left-3 text-[10px] ${status==='Live'?'text-t-up':'text-t-muted'}`}>● {status}</span>}
+  </div>
+    {showFlow&&<AttackBar chartRef={profileChartRef as any} minutes={minutes} symbol={symbol} settings={flowSettings} onChange={onFlowChange} mobile={mobile}/>}
   </div>;
 }
