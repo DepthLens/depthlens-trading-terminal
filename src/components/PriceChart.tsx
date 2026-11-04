@@ -30,7 +30,7 @@ function toColor(el: HTMLElement, name: string) {
   const [r,g,b] = ctx.getImageData(0,0,1,1).data;
   return `rgb(${r},${g},${b})`;
 }
-export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false, volumeProfile, profileSettings, source = 'binance', candleTimer = true, footprint = false, footprintSettings, cvd = false, cvdSettings, onCvdHeight, whales = false, whaleSettings, pressure = false, pressureSettings, onPressureChange, flowBars = false, flowSettings, onFlowChange }: { symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; volumeProfile?: boolean; profileSettings?: ProfileSettings; source?: TradeSource; candleTimer?: boolean; footprint?: boolean; footprintSettings?: FootprintSettings; cvd?:boolean; cvdSettings?:CvdSettings; onCvdHeight?:(ratio:number)=>void; whales?:boolean; whaleSettings?:WhaleSettings; pressure?:boolean; pressureSettings?:PpSettings; onPressureChange?:(s:PpSettings)=>void; flowBars?:boolean; flowSettings?:FbSettings; onFlowChange?:(s:FbSettings)=>void }) {
+export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile = false, volumeProfile, profileSettings, source = 'binance', candleTimer = true, footprint = false, footprintSettings, cvd = false, cvdSettings, onCvdHeight, whales = false, whaleSettings, pressure = false, pressureSettings, onPressureChange, flowBars = false, flowSettings, onFlowChange, apiOut, whaleFeedHost }: { apiOut?: MutableRefObject<ProfileChart|null>; whaleFeedHost?: HTMLElement|null; symbol: string; minutes: number; theme: string; priceFormat: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; volumeProfile?: boolean; profileSettings?: ProfileSettings; source?: TradeSource; candleTimer?: boolean; footprint?: boolean; footprintSettings?: FootprintSettings; cvd?:boolean; cvdSettings?:CvdSettings; onCvdHeight?:(ratio:number)=>void; whales?:boolean; whaleSettings?:WhaleSettings; pressure?:boolean; pressureSettings?:PpSettings; onPressureChange?:(s:PpSettings)=>void; flowBars?:boolean; flowSettings?:FbSettings; onFlowChange?:(s:FbSettings)=>void }) {
   const [legendOpen, setLegendOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -60,7 +60,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     (el as any).__crosshairMode = chart.options().crosshair.mode;
     const candles = chart.addSeries(CandlestickSeries,{upColor:up,downColor:down,wickUpColor:up,wickDownColor:down,borderVisible:false,priceFormat:{type:'price',...priceFormat},priceLineVisible:true,priceLineStyle:LineStyle.Dotted,lastValueVisible:false});
     const api: ProfileChart = { chart, series: candles, probes: new Set(), host: el, disposed: false, colors: { up, down, muted: text, poc: toColor(el,'--flow-poc'), unsplit: toColor(el,'--flow-unsplit'), valueArea:toColor(el,'--flow-value-area'), labelText: toColor(el,'--t-bg') } };
-    profileChartRef.current = api;
+    profileChartRef.current = api; if (apiOut) apiOut.current = api;
     setChartRevision(value => value + 1);
     // The primitive owns the live price tag (green up / red down) so it keeps its color even when Footprint outlines candles.
     const timer = new CandleTimerPrimitive(api, minutes, () => sourceRef.current, api.colors, priceFormat);
@@ -155,7 +155,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
       }
     };
     void load();
-    return () => { spacingRef.current=chart.timeScale().options().barSpacing;stopped=true;api.disposed=true;timerRef.current?.detached();timerRef.current=null;const debugWindow=window as Window & { checkOverlayStability?: typeof selfCheck };if(debugWindow.checkOverlayStability===selfCheck)delete debugWindow.checkOverlayStability;abort.abort();clearTimeout(historyRetry);cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;if(bridge.current.kline===handle)bridge.current.kline=null;chartRef.current=null;profileChartRef.current=null;chart.remove(); };
+    return () => { spacingRef.current=chart.timeScale().options().barSpacing;stopped=true;api.disposed=true;timerRef.current?.detached();timerRef.current=null;const debugWindow=window as Window & { checkOverlayStability?: typeof selfCheck };if(debugWindow.checkOverlayStability===selfCheck)delete debugWindow.checkOverlayStability;abort.abort();clearTimeout(historyRetry);cancelAnimationFrame(frame);if(bridge.current.receive===receive)bridge.current.receive=null;if(bridge.current.kline===handle)bridge.current.kline=null;chartRef.current=null;profileChartRef.current=null;if(apiOut&&apiOut.current===api)apiOut.current=null;chart.remove(); };
   },[symbol,minutes,theme,priceFormat.precision,priceFormat.minMove,bridge]);
 
   const zoom = (factor: number) => {
@@ -183,7 +183,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     {toolDemoEnabled()&&<span className="demo-watermark">DEMO DATA</span>}
     <div ref={ref} className="min-h-0 w-full flex-1" aria-label={`${symbol} ${minutes} minute candlestick chart`} />
     {pressure&&pressureSettings&&onPressureChange&&<PricePressure chartRef={profileChartRef} hostRef={ref} symbol={symbol} minutes={minutes} settings={pressureSettings} onChange={onPressureChange} mobile={mobile} revision={chartRevision} cvd={cvd}/>}
-    {whales&&whaleSettings&&<WhaleTrades chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} spec={priceFormat} settings={whaleSettings} mobile={mobile} minutes={minutes} revision={chartRevision}/>}
+    {whales&&whaleSettings&&<WhaleTrades chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} spec={priceFormat} settings={whaleSettings} mobile={mobile} minutes={minutes} revision={chartRevision} feedHost={whaleFeedHost}/>}
     {cvd&&cvdSettings&&onCvdHeight&&<Cvd chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} minutes={minutes} settings={cvdSettings} mobile={mobile} revision={chartRevision} onHeight={onCvdHeight}/>}
     {volumeProfile && profileSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-[calc(var(--cvd-h,0px)+var(--pp-h,0px))] ${mobile?'top-0':'top-8'}`}><VolumeProfile chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={profileSettings} spec={priceFormat} mobile={mobile} minutes={minutes} theme={theme} revision={chartRevision}/></div>}
     {footprint && footprintSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-[calc(var(--cvd-h,0px)+var(--pp-h,0px))] ${mobile?'top-0':'top-8'}`}><Footprint chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={footprintSettings} spec={priceFormat} mobile={mobile} minutes={minutes} revision={chartRevision}/></div>}
