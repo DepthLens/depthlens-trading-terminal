@@ -81,3 +81,7 @@
 ## Control & Attack bars
 - [x] Bars, math reuse, hold, sentences, settings, tests, PROTECT
 - [ ] Browser check at 1366x768 / 390x844 (BTC 1m, ETH 5m) not yet run
+
+## Floating tool windows
+- [x] Part 1: Heatmap, DOM, Book debug, Whale feed as floating windows (unit tests pass; browser check pending)
+- [ ] Part 2: floating CVD and Price Pressure using SatelliteChart

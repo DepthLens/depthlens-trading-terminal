@@ -66,3 +66,8 @@ After every change, add any new feature to the list in section 1.
 - Anchor overlays to price and time values, never to pixel positions. Separate canvas layers are forbidden on the candle chart.
 - The Heatmap view has its own axes and is exempt.
 - Volume Profile levels use native series price lines and bars use a series primitive. Recalculate on pair/timeframe/range/settings changes and 200ms after pan/zoom stops, never while dragging.
+
+## Floating tool windows (Part 1: Heatmap, DOM, Book debug, Whale feed)
+- Rules live in browser-safe `window-manager.ts` (saved under `depthlens-windows`); `ToolWindows.tsx` is a layer above the chart that takes pointer events only on windows and minimized chips, and never touches chart internals.
+- Tools menu: "Tool windows: Floating | Docked" and "Reset windows"; per-tool Dock/Float; Close turns the tool off (Whale feed: feed setting off; Book debug: off). Minimized windows stay mounted and only pause drawing. Phones (below 768px) never use windows.
+- Smoke: at 1366x768 open DOM, Heatmap, Whale feed and Book debug together; drag, resize, minimize, restore, close, refresh (positions return); chart pans/zooms outside windows; live price moves; sockets ≤3; no console errors.
