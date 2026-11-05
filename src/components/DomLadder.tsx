@@ -12,7 +12,9 @@ const compact = (n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 
 const demoPrice = (s: string) => s === 'ETHUSDT' ? 3000 : s === 'DOGEUSDT' ? .15 : 68000;
 type Hit = { side: 'ask' | 'bid'; index: number; price: number; coin: number; usdt: number; cumCoin: number; cumUsdt: number; ticks: number; pct: number };
 
-export function DomLadder({ symbol, spec, bridge, mobile, onClose }: { symbol: string; spec: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile: boolean; onClose: () => void }) {
+export function DomLadder({ symbol, spec, bridge, mobile, onClose, floating = false, paused = false }: { symbol: string; spec: PriceSpec; bridge: MutableRefObject<TradeBridge>; mobile: boolean; onClose: () => void; floating?: boolean; paused?: boolean }) {
+  // Floating: fills its window (the per-frame canvas size read reacts to window resizing); paused skips drawing only.
+  const pausedRef = useRef(paused); pausedRef.current = paused;
   const [settings, setSettings] = useState<DomSettings>({ ...DOM_DEFAULT });
   const [showSettings, setShowSettings] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -36,7 +38,7 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose }: { symbol: s
     let prev = new Map<string, number>(); const flashUntil = new Map<string, number>();
     const draw = (now: number) => {
       frame = requestAnimationFrame(draw);
-      if (now - last < 100) return;
+      if (now - last < 100 || pausedRef.current) return;
       last = now;
       const s = settingsRef.current, rowH = mobile ? 24 : 20, n = s.rows;
       const dbg = orderBook.debug();
@@ -178,9 +180,9 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose }: { symbol: s
   </div>;
   const head = (k: 'dot' | 'source' | 'bid' | 'ask' | 'mid' | 'imb' | 'imbText' | 'note' | 'sync') => (el: HTMLElement | null) => { headRef.current[k] = el; };
   return <section ref={rootRef} aria-label="Order book ladder" data-testid="dom-ladder"
-    style={mobile ? undefined : { width: settings.width }}
-    className={mobile ? 'fixed inset-x-0 bottom-0 z-40 flex h-[60dvh] flex-col rounded-t-xl border-t border-t-border bg-t-panel pb-[env(safe-area-inset-bottom)] text-t-text' : 'relative flex shrink-0 flex-col border-l border-t-border bg-t-panel text-t-text'}>
-    {!mobile && <div role="separator" aria-orientation="vertical" aria-label="Resize DOM" onPointerDown={startResize} className="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize hover:bg-t-accent/40" />}
+    style={mobile || floating ? undefined : { width: settings.width }}
+    className={floating ? 'relative flex h-full min-h-0 w-full flex-col bg-t-panel text-t-text' : mobile ? 'fixed inset-x-0 bottom-0 z-40 flex h-[60dvh] flex-col rounded-t-xl border-t border-t-border bg-t-panel pb-[env(safe-area-inset-bottom)] text-t-text' : 'relative flex shrink-0 flex-col border-l border-t-border bg-t-panel text-t-text'}>
+    {!mobile && !floating && <div role="separator" aria-orientation="vertical" aria-label="Resize DOM" onPointerDown={startResize} className="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize hover:bg-t-accent/40" />}
     <header className="shrink-0 space-y-1 border-b border-t-border px-2 py-1.5 text-xs tabular-nums">
       <div className="flex items-center gap-2"><span ref={head('dot')} className="size-2 rounded-full bg-t-warning" /><span ref={head('source')} className="font-semibold">—</span>{toolDemoEnabled() && <span className="font-mono text-[10px] font-bold text-t-accent">DEMO DATA</span>}<span className="ml-auto text-t-muted">DOM</span>
         <Button variant="ghost" size="icon" className="size-7 text-t-muted hover:bg-t-border mobile:size-10" aria-label="DOM settings" title="DOM settings" onClick={() => setShowSettings(s => !s)}><Settings className="size-4" /></Button>
