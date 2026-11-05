@@ -7,6 +7,7 @@ import { dragWin, focusWin, minimizeWin, openWin, resizeWin, restoreWin, setWin,
 const EDGES: [Edge, string][] = [['n', 'left-2 right-2 -top-1 h-2 cursor-ns-resize'], ['s', 'left-2 right-2 -bottom-1 h-2 cursor-ns-resize'], ['e', 'top-2 bottom-2 -right-1 w-2 cursor-ew-resize'], ['w', 'top-2 bottom-2 -left-1 w-2 cursor-ew-resize'], ['ne', '-right-1 -top-1 size-3 cursor-nesw-resize'], ['nw', '-left-1 -top-1 size-3 cursor-nwse-resize'], ['se', '-right-1 -bottom-1 size-3 cursor-nwse-resize'], ['sw', '-left-1 -bottom-1 size-3 cursor-nesw-resize']];
 export type WinContent = { id: WinId; node: ReactNode };
 
+/** Minimized windows stay mounted but hidden so data collection continues; the content pauses drawing itself. */
 /** Window layer above the chart: only frames/chips take pointer events, the chart stays interactive elsewhere. */
 export function ToolWindowLayer({ wm, setWm, open, subtitle, onDock, onClose }: { wm: WmState; setWm: (f: (s: WmState) => WmState) => void; open: WinContent[]; subtitle: string; onDock: (id: WinId) => void; onClose: (id: WinId) => void }) {
   const layerRef = useRef<HTMLDivElement>(null);
@@ -16,7 +17,7 @@ export function ToolWindowLayer({ wm, setWm, open, subtitle, onDock, onClose }: 
   useEffect(() => { if (!size.w) return; setWm(s => open.reduce((acc, o) => openWin(acc, o.id, size.w, size.h), s)); }, [ids, size.w, size.h]); // eslint-disable-line react-hooks/exhaustive-deps
   const minimized = open.filter(o => wm.wins[o.id]?.min);
   return <div ref={layerRef} data-testid="window-layer" className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
-    {size.w > 0 && open.map(o => { const win = wm.wins[o.id]; return win && !win.min ? <FloatingWindow key={o.id} id={o.id} win={win} vw={size.w} vh={size.h} subtitle={subtitle} setWm={setWm} onDock={() => onDock(o.id)} onClose={() => onClose(o.id)}>{o.node}</FloatingWindow> : null; })}
+    {size.w > 0 && open.map(o => { const win = wm.wins[o.id]; return win ? <FloatingWindow key={o.id} id={o.id} win={win} vw={size.w} vh={size.h} subtitle={subtitle} setWm={setWm} onDock={() => onDock(o.id)} onClose={() => onClose(o.id)}>{o.node}</FloatingWindow> : null; })}
     {minimized.length > 0 && <div className="pointer-events-auto absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] flex-wrap gap-1" data-testid="window-chips">
       {minimized.map(o => <button key={o.id} type="button" onClick={() => setWm(s => restoreWin(s, o.id))} aria-label={`Restore ${o.id}`} className="rounded-md border border-t-border bg-t-panel px-2.5 py-1 text-xs text-t-text shadow-md hover:bg-t-border">{o.id}</button>)}
     </div>}
@@ -38,7 +39,7 @@ function FloatingWindow({ id, win, vw, vh, subtitle, setWm, onDock, onClose, chi
   };
   const btn = 'grid size-6 place-items-center rounded text-t-muted hover:bg-t-border hover:text-t-text';
   return <section role="dialog" aria-label={`${id} window`} data-testid={`window-${id}`} onPointerDown={() => setWm(s => focusWin(s, id))} onWheel={e => e.stopPropagation()}
-    className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-lg border border-t-border bg-t-panel text-t-text shadow-xl" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex: win.z }}>
+    className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-lg border border-t-border bg-t-panel text-t-text shadow-xl" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex: win.z, display: win.min ? 'none' : undefined }}>
     <header onPointerDown={e => start(e, null)} onDoubleClick={() => setWm(s => toggleMax(s, id))} className="flex h-8 shrink-0 cursor-move select-none items-center gap-2 border-b border-t-border bg-t-bg/60 px-2 text-xs touch-none">
       <span className="font-semibold">{id}</span><span className="truncate text-t-muted">{subtitle}</span>
       <span className="ml-auto flex items-center gap-0.5">

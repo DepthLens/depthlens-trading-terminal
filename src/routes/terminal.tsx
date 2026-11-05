@@ -29,6 +29,8 @@ import { useTerminalMobile } from '@/hooks/use-terminal-mobile';
 import { bybitListQuotes } from '@/lib/market-data';
 import { MarketList, QuoteChange } from '@/components/MarketList';
 import { BookDebug } from '@/components/BookDebug';
+import { ToolWindowLayer, FloatButton, type WinContent } from '@/components/ToolWindows';
+import { WM_KEY, wmInitial, restoreWm, isFloating, closeWin, closeTool, dockWin, floatWin, setMode, resetWins, type WinId, type WmState } from '@/lib/window-manager';
 import { priceSpec, type Market, type PriceSpec, type Quote } from '@/lib/market-data';
 export const Route = createFileRoute('/terminal')({
   head:()=>({meta:[{title:'Terminal — DepthLens'},{name:'description',content:'Live Binance USDT futures charts, personalized tabs, and order flow tools.'},{property:'og:title',content:'Terminal — DepthLens'},{property:'og:description',content:'Follow live futures markets with DepthLens candlestick charts and order flow tools.'},{property:'og:type',content:'website'},{name:'twitter:card',content:'summary_large_image'}]}),component:Terminal,
@@ -46,6 +48,12 @@ function Terminal() {
   const [pairStatus,setPairStatus]=useState('Loading markets');
   const [feedLive,setFeedLive]=useState(false);
   const [showBookDebug,setShowBookDebug]=useState(false);
+  const [wm,setWmState]=useState<WmState>(wmInitial);
+  const [wmRestored,setWmRestored]=useState(false);
+  const [feedHost,setFeedHost]=useState<HTMLDivElement|null>(null);
+  useEffect(()=>{try{setWmState(restoreWm(localStorage.getItem(WM_KEY),window.innerWidth,window.innerHeight));}catch{}setWmRestored(true);},[]);
+  useEffect(()=>{if(wmRestored)try{localStorage.setItem(WM_KEY,JSON.stringify(wm));}catch{}},[wm,wmRestored]);
+  const setWm=(f:(s:WmState)=>WmState)=>setWmState(f);
   const [profileSettings,setProfileSettings]=useState<ProfileSettings>({...PROFILE_DEFAULT});
   const [showProfileSettings,setShowProfileSettings]=useState(false);
   const [footprintSettings,setFootprintSettings]=useState<FootprintSettings>({...FOOTPRINT_DEFAULT});
@@ -121,6 +129,18 @@ function Terminal() {
   const timeframe=(minutes:number)=>setState(s=>({...s,tabs:s.tabs.map(t=>t.symbol===s.active?{...t,minutes}:t)}));
   const applyCustom=()=>{const n=validMinutes(custom);if(n===null){setCustomError('Enter a whole number from 1 to 1440.');return;}timeframe(n);setShowCustom(false);setCustomError('');};
   const activeSpec=priceSpecs[active.symbol];
+  // Floating tool windows (desktop only): a layer above the chart, never inside chart internals.
+  const floatOn=(id:WinId)=>!mobile&&isFloating(wm,id);
+  const heatmapOn=Boolean(state.tools['Heatmap']),domOn=Boolean(state.tools['DOM']),feedOn=Boolean(state.tools['Whale Trades'])&&whaleSettings.feed;
+  const minimized=(id:WinId)=>Boolean(wm.wins[id]?.min);
+  const closeWindow=(id:WinId)=>{setWm(s=>closeWin(s,id));if(id==='Book debug')setShowBookDebug(false);else if(id==='Whale feed')changeWhaleSettings({...whaleSettings,feed:false});else setState(s=>({...s,tools:closeTool(s.tools,id)}));};
+  const windows:WinContent[]=restored&&activeSpec?[
+    ...(heatmapOn&&floatOn('Heatmap')?[{id:'Heatmap' as WinId,node:<Heatmap key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} floating paused={minimized('Heatmap')}/>}]:[]),
+    ...(domOn&&floatOn('DOM')?[{id:'DOM' as WinId,node:<DomLadder key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={false} floating paused={minimized('DOM')} onClose={()=>closeWindow('DOM')}/>}]:[]),
+    ...(feedOn&&floatOn('Whale feed')?[{id:'Whale feed' as WinId,node:<div ref={setFeedHost} className="flex min-h-0 flex-1 flex-col"/>}]:[]),
+    ...(showBookDebug&&floatOn('Book debug')?[{id:'Book debug' as WinId,node:<BookDebug spec={activeSpec} floating/>}]:[]),
+  ]:[];
+  const dockedOn:WinId[]=mobile?[]:(['Heatmap','DOM','Whale feed','Book debug'] as WinId[]).filter(id=>!floatOn(id)&&(id==='Heatmap'?heatmapOn:id==='DOM'?domOn:id==='Whale feed'?feedOn:showBookDebug));
   const control='text-t-muted hover:bg-t-border/50 hover:text-t-text';
   const profileMenu=<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border mobile:size-10`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} data-mobile={mobile||undefined} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text mobile:min-h-10"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem asChild className="focus:bg-t-border focus:text-t-text mobile:min-h-10"><Link to="/"><LogOut/>Logout</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>;
   const customForm=showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs mobile:h-10 mobile:text-sm"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90 mobile:h-10">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>;
@@ -186,6 +206,8 @@ function Terminal() {
           <DropdownMenuContent data-theme={state.theme} align="end" className="w-80 border-t-border bg-t-panel p-2 text-t-text">
             <div className="mb-1 flex justify-between px-2 py-2 text-xs font-semibold"><span>Order flow tools</span><span className="text-t-up">Free · Unlocked</span></div>
             {TOOLS.map(t=><div key={t} className="flex items-center gap-2 px-2 py-2.5"><label htmlFor={`tool-${t}`} className="flex-1 text-sm">{t}</label><span className="text-[10px] text-t-muted">{t!=='Volume Profile'&&t!=='Candle timer'&&t!=='Footprint'&&t!=='DOM'&&t!=='CVD'&&t!=='Whale Trades'&&t!=='Price Pressure'&&t!=='Control & Attack bars'&&'Coming soon'}</span>{t==='Volume Profile'&&<VolumeProfileGear onClick={()=>setShowProfileSettings(true)}/>}{t==='Footprint'&&<FootprintGear onClick={()=>setShowFootprintSettings(true)}/>}{t==='Whale Trades'&&<><WhaleCount source={listSource} symbol={active.symbol} tick={activeSpec?.minMove??.01}/><WhaleGear onClick={()=>setShowWhaleSettings(true)}/></>}{t==='CVD'&&<CvdGear onClick={()=>setShowCvdSettings(true)}/>}{t==='Price Pressure'&&<PricePressureGear onClick={()=>setShowPpSettings(true)}/>}{t==='Control & Attack bars'&&<FlowBarsGear onClick={()=>setShowFbSettings(true)}/>}<Switch id={`tool-${t}`} aria-label={t} checked={state.tools[t]??false} onCheckedChange={checked=>setState(s=>({...s,tools:{...s.tools,[t]:checked}}))} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border"/></div>)}
+            <div className="mt-1 flex items-center gap-2 border-t border-t-border px-2 pt-2.5 pb-1"><label htmlFor="tool-window-mode" className="flex-1 text-sm">Tool windows</label><select id="tool-window-mode" aria-label="Tool windows" value={wm.mode} onChange={e=>setWm(s=>setMode(s,e.target.value==='docked'?'docked':'floating'))} className="h-8 rounded border border-t-border bg-t-bg px-2 text-xs text-t-text"><option value="floating">Floating</option><option value="docked">Docked</option></select></div>
+            <DropdownMenuItem onSelect={()=>setWm(resetWins)} className="text-sm focus:bg-t-border focus:text-t-text">Reset windows</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         </div>
@@ -194,7 +216,7 @@ function Terminal() {
         </div>
         </>}
         {notice&&<div role="alert" className="border-b border-t-border px-3 py-2 text-xs text-t-down">{notice}</div>}
-        <div className="flex min-h-0 flex-1"><div className="relative min-h-0 min-w-0 flex-1">{restored&&activeSpec&&(state.tools['Heatmap']?<Heatmap key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={mobile}/>:<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} bridge={bridge} mobile={mobile} volumeProfile={Boolean(state.tools['Volume Profile'])} profileSettings={profileSettings} source={listSource} candleTimer={state.tools['Candle timer']!==false} footprint={Boolean(state.tools['Footprint'])} footprintSettings={footprintSettings} cvd={Boolean(state.tools['CVD'])} cvdSettings={cvdSettings} whales={Boolean(state.tools['Whale Trades'])} whaleSettings={whaleSettings} pressure={Boolean(state.tools['Price Pressure'])} pressureSettings={ppSettings} onPressureChange={changePpSettings} flowBars={state.tools['Control & Attack bars']!==false} flowSettings={fbSettings} onFlowChange={changeFbSettings} onCvdHeight={ratio=>changeCvdSettings({...cvdSettings,height:ratio})}/>)} {showBookDebug&&<BookDebug spec={activeSpec}/>}</div>{restored&&activeSpec&&state.tools['DOM']&&<DomLadder key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={mobile} onClose={()=>setState(s=>({...s,tools:{...s.tools,DOM:false}}))}/>}</div>
+        <div className="flex min-h-0 flex-1"><div className="relative min-h-0 min-w-0 flex-1">{restored&&activeSpec&&(heatmapOn&&!floatOn('Heatmap')?<Heatmap key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={mobile}/>:<PriceChart key={active.symbol} symbol={active.symbol} minutes={active.minutes} theme={state.theme} priceFormat={activeSpec} bridge={bridge} mobile={mobile} volumeProfile={Boolean(state.tools['Volume Profile'])} profileSettings={profileSettings} source={listSource} candleTimer={state.tools['Candle timer']!==false} footprint={Boolean(state.tools['Footprint'])} footprintSettings={footprintSettings} cvd={Boolean(state.tools['CVD'])} cvdSettings={cvdSettings} whales={Boolean(state.tools['Whale Trades'])} whaleSettings={whaleSettings} pressure={Boolean(state.tools['Price Pressure'])} pressureSettings={ppSettings} onPressureChange={changePpSettings} flowBars={state.tools['Control & Attack bars']!==false} flowSettings={fbSettings} onFlowChange={changeFbSettings} onCvdHeight={ratio=>changeCvdSettings({...cvdSettings,height:ratio})} whaleFeedHost={feedOn&&floatOn('Whale feed')?feedHost:null}/>)} {showBookDebug&&!floatOn('Book debug')&&<BookDebug spec={activeSpec}/>}{!mobile&&<ToolWindowLayer wm={wm} setWm={setWm} open={windows} subtitle={`${active.symbol} · ${listSource==='bybit'?'Bybit':'Binance'}`} onDock={id=>setWm(s=>dockWin(s,id))} onClose={closeWindow}/>}{dockedOn.length>0&&<div className="absolute left-1/2 top-1 z-30 flex -translate-x-1/2 gap-1">{dockedOn.map(id=><FloatButton key={id} id={id} onFloat={()=>setWm(s=>floatWin(s,id))}/>)}</div>}</div>{restored&&activeSpec&&domOn&&!floatOn('DOM')&&<DomLadder key={active.symbol} symbol={active.symbol} spec={activeSpec} bridge={bridge} mobile={mobile} onClose={()=>setState(s=>({...s,tools:{...s.tools,DOM:false}}))}/>}</div>
       </main>
     </div>
     {showFootprintSettings&&activeSpec&&<FootprintSettingsPanel settings={footprintSettings} onChange={changeFootprintSettings} onClose={()=>setShowFootprintSettings(false)} mobile={mobile} theme={state.theme} source={listSource} symbol={active.symbol} tick={activeSpec.minMove} minutes={active.minutes}/>}
