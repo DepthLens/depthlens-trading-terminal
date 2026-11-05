@@ -21,7 +21,9 @@ function compact(n: number): string {
   return n.toFixed(0);
 }
 
-export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: string; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge>; mobile?: boolean }) {
+export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false, paused = false }: { symbol: string; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; floating?: boolean; paused?: boolean }) {
+  // Paused (minimized window) skips drawing only; column collection keeps running.
+  const pausedRef = useRef(paused); pausedRef.current = paused;
   const [showSettings, setShowSettings] = useState(false);
   const mobileRef = useRef(mobile); mobileRef.current = mobile;
   const centerRef = useRef<(() => void) | null>(null);
@@ -107,12 +109,14 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
 
     const onVisibility = () => { hidden = document.hidden; if (!hidden) dirty = true; };
     document.addEventListener('visibilitychange', onVisibility);
+    const resizeObs = new ResizeObserver(() => { dirty = true; schedule(); });
+    if (canvas) resizeObs.observe(canvas);
 
     const priceToY = (price: number, top: number, band: number, H: number) => ((top - price) / band) * H;
 
     const draw = () => {
       frame = 0;
-      if (stopped || hidden) return;
+      if (stopped || hidden || pausedRef.current) return;
       // Phones only draw when something changed (battery); desktop keeps its loop.
       if (!dirty) { if (!mobileRef.current) schedule(); return; }
       dirty = false;
@@ -361,7 +365,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
     return () => {
       stopped = true;
       clearInterval(timer); clearInterval(pulse); clearInterval(persistTimer); cancelAnimationFrame(frame);
-      document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('visibilitychange', onVisibility); resizeObs.disconnect();
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
@@ -375,7 +379,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false }: { symbol: stri
 
   const center = () => centerRef.current?.();
   const control = 'text-t-muted hover:bg-t-border/50 hover:text-t-text';
-  return <div className={`heatmap-surface relative flex h-full w-full flex-col ${mobile ? 'min-h-0' : 'min-h-80'}`} data-testid="heatmap">
+  return <div className={`heatmap-surface relative flex h-full w-full flex-col ${mobile || floating ? 'min-h-0' : 'min-h-80'}`} data-testid="heatmap">
     {mobile ? <div className="flex h-11 shrink-0 items-center gap-2 border-b border-t-border px-2 text-xs">
       <span className="min-w-0 flex-1 truncate font-semibold text-t-text">{symbol} · Heatmap · {windowMin}m</span>
       <Button variant="ghost" size="sm" onClick={center} className={`h-10 px-3 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-4" />Center</Button>
