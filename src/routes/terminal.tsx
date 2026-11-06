@@ -31,6 +31,7 @@ import { MarketList, QuoteChange } from '@/components/MarketList';
 import { BookDebug } from '@/components/BookDebug';
 import { ToolWindowLayer, FloatButton, type WinContent } from '@/components/ToolWindows';
 import { WM_KEY, wmInitial, restoreWm, isFloating, closeWin, closeTool, dockWin, floatWin, setMode, resetWins, type WinId, type WmState } from '@/lib/window-manager';
+import { openPopout, shouldPopout, stripPopoutTools, isSyncMessage, SYNC_CHANNEL, type SyncMessage } from '@/lib/popout';
 import { priceSpec, type Market, type PriceSpec, type Quote } from '@/lib/market-data';
 export const Route = createFileRoute('/terminal')({
   head:()=>({meta:[{title:'Terminal — DepthLens'},{name:'description',content:'Live Binance USDT futures charts, personalized tabs, and order flow tools.'},{property:'og:title',content:'Terminal — DepthLens'},{property:'og:description',content:'Follow live futures markets with DepthLens candlestick charts and order flow tools.'},{property:'og:type',content:'website'},{name:'twitter:card',content:'summary_large_image'}]}),component:Terminal,
@@ -141,6 +142,32 @@ function Terminal() {
     ...(showBookDebug&&floatOn('Book debug')?[{id:'Book debug' as WinId,node:<BookDebug spec={activeSpec} floating/>}]:[]),
   ]:[];
   const dockedOn:WinId[]=mobile?[]:(['Heatmap','DOM','Whale feed','Book debug'] as WinId[]).filter(id=>!floatOn(id)&&(id==='Heatmap'?heatmapOn:id==='DOM'?domOn:id==='Whale feed'?feedOn:showBookDebug));
+  // Pop-out windows (desktop, "Pop-out window" mode): Price Pressure opens in its own browser window.
+  const popupRef=useRef<Window|null>(null);
+  const popoutPp=shouldPopout(wm.mode,'Price Pressure',mobile)&&Boolean(state.tools['Price Pressure'])&&popupRef.current&&!popupRef.current.closed;
+  const togglePricePressure=(checked:boolean)=>{
+    if(shouldPopout(wm.mode,'Price Pressure',mobile)){
+      if(checked){
+        if(popupRef.current&&!popupRef.current.closed){popupRef.current.focus();return;}
+        const w=openPopout('Price Pressure',{symbol:active.symbol,tf:active.minutes,source:listSource,follow:true});
+        if(!w){setNotice('Allow pop-ups for this site to use pop-out windows.');setState(s=>({...s,tools:{...s.tools,'Price Pressure':true}}));return;}
+        popupRef.current=w;setNotice('');setState(s=>({...s,tools:{...s.tools,'Price Pressure':true}}));
+      }else{popupRef.current?.close();popupRef.current=null;setState(s=>({...s,tools:{...s.tools,'Price Pressure':false}}));}
+      return;
+    }
+    setState(s=>({...s,tools:{...s.tools,'Price Pressure':checked}}));
+  };
+  // Pop-out tools always start OFF on a page load, never auto-open.
+  useEffect(()=>{if(restored&&wmRestored&&wm.mode==='popout')setState(s=>s.tools['Price Pressure']?{...s,tools:stripPopoutTools(s.tools,'popout')}:s);},[restored,wmRestored]);
+  // Follow-sync: broadcast the active pair/timeframe/source/theme and answer popup "hello"; popups report "closed".
+  useEffect(()=>{
+    const channel=new BroadcastChannel(SYNC_CHANNEL);
+    const post=()=>{const m:SyncMessage={type:'state',state:{symbol:active.symbol,timeframe:active.minutes,source:listSource,theme:state.theme}};channel.postMessage(m);};
+    channel.onmessage=ev=>{if(!isSyncMessage(ev.data))return;if(ev.data.type==='hello')post();else if(ev.data.type==='closed'&&ev.data.tool==='Price Pressure'){popupRef.current=null;setState(s=>({...s,tools:{...s.tools,'Price Pressure':false}}));}};
+    const bye=()=>{const m:SyncMessage={type:'bye'};channel.postMessage(m);};
+    window.addEventListener('beforeunload',bye);
+    return()=>{window.removeEventListener('beforeunload',bye);bye();channel.close();};
+  },[active.symbol,active.minutes,listSource,state.theme]);
   const control='text-t-muted hover:bg-t-border/50 hover:text-t-text';
   const profileMenu=<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border mobile:size-10`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} data-mobile={mobile||undefined} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text mobile:min-h-10"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem asChild className="focus:bg-t-border focus:text-t-text mobile:min-h-10"><Link to="/"><LogOut/>Logout</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>;
   const customForm=showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs mobile:h-10 mobile:text-sm"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90 mobile:h-10">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>;
