@@ -29,8 +29,8 @@ type Built = { kind: PpPane; pane: IPaneApi<Time>; series: ISeriesApi<'Candlesti
 const tfLabel = (m: number) => m % 1440 === 0 ? `${m / 1440}d` : m % 60 === 0 ? `${m / 60}h` : `${m}m`;
 const f = (v: number) => formatK(v, Math.abs(v) < 10 ? 3 : 2);
 
-export function PricePressure({ chartRef, hostRef, symbol, minutes, settings, onChange, mobile, revision, cvd }: {
-  chartRef: MutableRefObject<ProfileChart | null>; hostRef: MutableRefObject<HTMLDivElement | null>; symbol: string; minutes: number; settings: PpSettings; onChange: (s: PpSettings) => void; mobile: boolean; revision: number; cvd: boolean;
+export function PricePressure({ chartRef, hostRef, symbol, minutes, settings, onChange, mobile, revision, cvd, floating = false }: {
+  chartRef: MutableRefObject<ProfileChart | null>; hostRef: MutableRefObject<HTMLDivElement | null>; symbol: string; minutes: number; settings: PpSettings; onChange: (s: PpSettings) => void; mobile: boolean; revision: number; cvd: boolean; floating?: boolean;
 }) {
   const settingsRef = useRef(settings); settingsRef.current = settings;
   const changeRef = useRef(onChange); changeRef.current = onChange;
@@ -106,10 +106,17 @@ export function PricePressure({ chartRef, hostRef, symbol, minutes, settings, on
       const panes = chart.panes(), total = panes.reduce((a, p) => a + p.getHeight(), 0);
       const ci = cvdIndex(), cvdPane = ci === null ? null : panes[ci]!;
       const s = settingsRef.current;
-      const h = subPaneHeights(total, built.map((_, i) => ({ ratio: s.heights[i] ?? null, collapsed: s.collapsed[i] ?? false })), cvdPane ? cvdPane.getHeight() : null, mobile);
-      if (cvdPane && h.cvd !== null && h.cvd < cvdPane.getHeight()) cvdPane.setHeight(Math.max(80, h.cvd));
-      built.forEach((b, i) => b.pane.setHeight(h.pp[i]!));
-      setHeights = h.pp;
+      if (floating) {
+        // Pop-out window: the hidden candle pane shrinks to almost nothing and the tool panes fill the window.
+        panes[0]?.setStretchFactor(0.02);
+        built.forEach((b, i) => b.pane.setStretchFactor(s.collapsed[i] ? 0.02 : 1));
+        setHeights = built.map(() => 0);
+      } else {
+        const h = subPaneHeights(total, built.map((_, i) => ({ ratio: s.heights[i] ?? null, collapsed: s.collapsed[i] ?? false })), cvdPane ? cvdPane.getHeight() : null, mobile);
+        if (cvdPane && h.cvd !== null && h.cvd < cvdPane.getHeight()) cvdPane.setHeight(Math.max(80, h.cvd));
+        built.forEach((b, i) => b.pane.setHeight(h.pp[i]!));
+        setHeights = h.pp;
+      }
       requestAnimationFrame(position);
     };
     sizeRef.current = size;
