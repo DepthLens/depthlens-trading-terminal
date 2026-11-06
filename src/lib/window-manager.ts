@@ -2,12 +2,13 @@
 export const WIN_IDS = ['Heatmap', 'DOM', 'CVD', 'Price Pressure', 'Whale feed', 'Book debug'] as const;
 export type WinId = typeof WIN_IDS[number];
 export type Win = { x: number; y: number; w: number; h: number; min: boolean; max: boolean; z: number };
-export type WmState = { mode: 'floating' | 'docked'; docked: Partial<Record<WinId, boolean>>; wins: Partial<Record<WinId, Win>>; z: number };
+export type WmState = { mode: 'floating' | 'docked' | 'popout'; docked: Partial<Record<WinId, boolean>>; wins: Partial<Record<WinId, Win>>; z: number };
 export type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 export const WM_KEY = 'depthlens-windows';
 export const MIN_W = 260, MIN_H = 180, CASCADE = 24;
 export const DEFAULT_SIZE: Record<WinId, [number, number]> = { Heatmap: [560, 380], DOM: [300, 460], CVD: [480, 240], 'Price Pressure': [520, 380], 'Whale feed': [320, 300], 'Book debug': [320, 260] };
-export const wmInitial = (): WmState => ({ mode: 'floating', docked: {}, wins: {}, z: 1 });
+// Pop-out is the desktop default; phones never use it (guarded by the caller) and unsupported tools fall back to floating.
+export const wmInitial = (): WmState => ({ mode: 'popout', docked: {}, wins: {}, z: 1 });
 
 /** Keep a window at least MIN size and fully inside the vw×vh layer. */
 export function clampWin(win: Win, vw: number, vh: number): Win {
@@ -53,7 +54,7 @@ export function restoreWm(raw: string | null, vw: number, vh: number): WmState {
   const base = wmInitial();
   try {
     const d = raw ? JSON.parse(raw) : null; if (!d || typeof d !== 'object') return base;
-    const mode = d.mode === 'docked' ? 'docked' : 'floating';
+    const mode = d.mode === 'docked' ? 'docked' : d.mode === 'popout' ? 'popout' : 'floating';
     const docked: WmState['docked'] = {}, wins: WmState['wins'] = {}; let z = 1;
     for (const id of WIN_IDS) {
       if (typeof d.docked?.[id] === 'boolean') docked[id] = d.docked[id];
