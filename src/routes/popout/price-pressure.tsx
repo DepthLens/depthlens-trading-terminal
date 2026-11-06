@@ -34,7 +34,8 @@ function PricePressurePopout() {
         setSymbol(m.state.symbol); setMinutes(m.state.timeframe); setSource(m.state.source); setTheme(m.state.theme);
       } else if (m.type === 'bye') setMainClosed(true);
     };
-    channel.postMessage({ type: 'hello', tool: 'Price Pressure' } satisfies SyncMessage extends never ? never : never);
+    const hello: SyncMessage = { type: 'hello', tool: 'Price Pressure' };
+    channel.postMessage(hello);
     const sayClosed = () => channel.postMessage({ type: 'closed', tool: 'Price Pressure' });
     window.addEventListener('beforeunload', sayClosed);
     return () => { window.removeEventListener('beforeunload', sayClosed); sayClosed(); channel.close(); };
