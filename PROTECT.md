@@ -71,3 +71,9 @@ After every change, add any new feature to the list in section 1.
 - Rules live in browser-safe `window-manager.ts` (saved under `depthlens-windows`); `ToolWindows.tsx` is a layer above the chart that takes pointer events only on windows and minimized chips, and never touches chart internals.
 - Tools menu: "Tool windows: Floating | Docked" and "Reset windows"; per-tool Dock/Float; Close turns the tool off (Whale feed: feed setting off; Book debug: off). Minimized windows stay mounted and only pause drawing. Phones (below 768px) never use windows.
 - Smoke: at 1366x768 open DOM, Heatmap, Whale feed and Book debug together; drag, resize, minimize, restore, close, refresh (positions return); chart pans/zooms outside windows; live price moves; sockets ≤3; no console errors.
+
+## Pop-out windows (Step 1: Price Pressure)
+- Popup routes never import or touch main chart internals; each popup owns its chart and uses at most 1 WebSocket (the source kline stream). The main window's 3-socket limit and behavior stay unchanged.
+- Sync uses the same-origin BroadcastChannel "depthlens-sync" only; popups never auto-open on page load; blocked popups fall back to the in-page Floating window with a notice; phones (below 768px) never use pop-out.
+- Tools menu "Tool windows": Pop-out window (desktop default) | Floating | Docked; tools without pop-out support use Floating.
+- Smoke: turn Price Pressure on in Pop-out mode (popup opens, follows pair/timeframe/source/theme, lock banner works, closing it turns the switch off, switch off closes it); main window live price moves; sockets ≤3 plus ≤1 per popup; no console errors.

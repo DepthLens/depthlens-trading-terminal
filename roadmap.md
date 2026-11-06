@@ -85,3 +85,7 @@
 ## Floating tool windows
 - [x] Part 1: Heatmap, DOM, Book debug, Whale feed as floating windows (unit tests pass; browser check pending)
 - [ ] Part 2: floating CVD and Price Pressure using SatelliteChart
+
+## Pop-out windows
+- [x] Step 1: Price Pressure pop-out (/popout/price-pressure, own chart + 1 kline socket, BroadcastChannel follow/lock, blocked-popup fallback, never auto-open; 10 unit tests, 155 total pass; real popup not browser-tested)
+- [ ] Next: CVD pop-out, then DOM / Whale feed / Book debug, then Heatmap, then popup position memory
