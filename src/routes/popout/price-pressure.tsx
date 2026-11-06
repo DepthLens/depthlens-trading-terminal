@@ -4,9 +4,10 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { Lock, LockOpen } from 'lucide-react';
 import { PopoutChart } from '@/components/PopoutChart';
-import { parsePopoutQuery, isSyncMessage, SYNC_CHANNEL, type SyncState } from '@/lib/popout';
-import { tfLabel } from '@/lib/price-pressure';
+import { parsePopoutQuery, isSyncMessage, SYNC_CHANNEL, type SyncMessage } from '@/lib/popout';
 import type { TradeSource } from '@/lib/live-price';
+
+const tfLabel = (m: number) => (m % 1440 === 0 ? `${m / 1440}d` : m % 60 === 0 ? `${m / 60}h` : `${m}m`);
 
 export const Route = createFileRoute('/popout/price-pressure')({
   validateSearch: (search: Record<string, unknown>) => parsePopoutQuery(search),
