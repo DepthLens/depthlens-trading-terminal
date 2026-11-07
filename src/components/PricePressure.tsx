@@ -29,8 +29,8 @@ type Built = { kind: PpPane; pane: IPaneApi<Time>; series: ISeriesApi<'Candlesti
 const tfLabel = (m: number) => m % 1440 === 0 ? `${m / 1440}d` : m % 60 === 0 ? `${m / 60}h` : `${m}m`;
 const f = (v: number) => formatK(v, Math.abs(v) < 10 ? 3 : 2);
 
-export function PricePressure({ chartRef, hostRef, symbol, minutes, settings, onChange, mobile, revision, cvd, floating = false }: {
-  chartRef: MutableRefObject<ProfileChart | null>; hostRef: MutableRefObject<HTMLDivElement | null>; symbol: string; minutes: number; settings: PpSettings; onChange: (s: PpSettings) => void; mobile: boolean; revision: number; cvd: boolean; floating?: boolean;
+export function PricePressure({ chartRef, hostRef, symbol, minutes, settings, onChange, mobile, revision, cvd, floating = false, showCandles = false }: {
+  chartRef: MutableRefObject<ProfileChart | null>; hostRef: MutableRefObject<HTMLDivElement | null>; symbol: string; minutes: number; settings: PpSettings; onChange: (s: PpSettings) => void; mobile: boolean; revision: number; cvd: boolean; floating?: boolean; showCandles?: boolean;
 }) {
   const settingsRef = useRef(settings); settingsRef.current = settings;
   const changeRef = useRef(onChange); changeRef.current = onChange;
@@ -108,8 +108,8 @@ export function PricePressure({ chartRef, hostRef, symbol, minutes, settings, on
       const s = settingsRef.current;
       if (floating) {
         // Pop-out window: the hidden candle pane shrinks to almost nothing and the tool panes fill the window.
-        panes[0]?.setStretchFactor(0.02);
-        built.forEach((b, i) => b.pane.setStretchFactor(s.collapsed[i] ? 0.02 : 1));
+        panes[0]?.setStretchFactor(showCandles ? 1.4 : 0.02);
+        built.forEach((b, i) => b.pane.setStretchFactor(s.collapsed[i] ? 0.02 : showCandles ? 0.6 : 1));
         setHeights = built.map(() => 0);
       } else {
         const h = subPaneHeights(total, built.map((_, i) => ({ ratio: s.heights[i] ?? null, collapsed: s.collapsed[i] ?? false })), cvdPane ? cvdPane.getHeight() : null, mobile);
@@ -183,7 +183,7 @@ export function PricePressure({ chartRef, hostRef, symbol, minutes, settings, on
     };
     refreshRef.current = () => { sync(true); };
     const loadHistory = () => {
-      if (toolDemoEnabled()) return;
+      if (floating || toolDemoEnabled()) return;
       const bars = chartBars(); const first = bars[0]?.time; if (first === undefined) return;
       const s = settingsRef.current, span = minutes * 60000, day = 86400000;
       const anchorStart = s.anchor === 'Daily UTC' ? Math.floor(first / day) * day : s.anchor === 'Weekly' ? Math.floor((first - 4 * day) / (7 * day)) * 7 * day + 4 * day : first;
@@ -230,7 +230,7 @@ export function PricePressure({ chartRef, hostRef, symbol, minutes, settings, on
         if (!chart.panes().some(p => p.paneIndex() > 0)) chart.priceScale('right', 0).applyOptions({ minimumWidth: ownMin });
       }
     };
-  }, [chartRef, hostRef, symbol, minutes, mobile, tab, revision]);
+  }, [chartRef, hostRef, symbol, minutes, mobile, tab, revision, floating, showCandles]);
 
   const toggle = (i: number) => { const collapsed = [...settings.collapsed]; collapsed[i] = !collapsed[i]; onChange({ ...settings, collapsed }); };
   const tone = 'data-[tone=up]:text-t-up data-[tone=down]:text-t-down data-[tone=flat]:text-t-muted font-semibold';

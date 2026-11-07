@@ -5,16 +5,26 @@ import type { TradeSource } from './live-price';
 export const SYNC_CHANNEL = 'depthlens-sync';
 export const POPOUT_TOOLS = ['Price Pressure'] as const;
 export type PopoutTool = (typeof POPOUT_TOOLS)[number];
-export const POPOUT_ROUTE: Record<PopoutTool, string> = { 'Price Pressure': '/popout/price-pressure' };
-export const POPOUT_NAME: Record<PopoutTool, string> = { 'Price Pressure': 'depthlens-price-pressure' };
+export const POPOUT_ROUTE: Record<PopoutTool, string> = { 'Price Pressure': '/popout/pressure' };
+export const POPOUT_NAME: Record<PopoutTool, string> = { 'Price Pressure': 'depthlens-pressure' };
 
-export type PopoutParams = { symbol: string; tf: number; source: TradeSource; follow: boolean };
+export type PressureSection = 'pp' | 'ca';
+export const SECTIONS_KEY = 'depthlens-pressure-sections';
+export const parseSections = (value: unknown): PressureSection[] => {
+  if (value === undefined || value === null) return ['pp'];
+  const items = Array.isArray(value) ? value : String(value).split(',');
+  return (['pp', 'ca'] as PressureSection[]).filter(s => items.includes(s));
+};
+export const toggleSection = (sections: PressureSection[], section: PressureSection): PressureSection[] => sections.includes(section) ? sections.filter(s => s !== section) : parseSections([...sections, section]);
+export const pressureButtonActive = (open: boolean, sections: PressureSection[]) => open && sections.length > 0;
+export type PopoutParams = { symbol: string; tf: number; source: TradeSource; follow: boolean; sections?: PressureSection[] };
 export type SyncState = { symbol: string; timeframe: number; source: TradeSource; theme: string };
 export type SyncMessage =
   | { type: 'hello'; tool: PopoutTool }
   | { type: 'state'; state: SyncState }
   | { type: 'closed'; tool: PopoutTool }
   | { type: 'bye' };
+export type SectionsMessage = { type: 'sections'; sections: PressureSection[] };
 
 export const popoutSupported = (tool: string): tool is PopoutTool => (POPOUT_TOOLS as readonly string[]).includes(tool);
 
@@ -23,6 +33,7 @@ export const shouldPopout = (mode: string, tool: string, mobile: boolean) => !mo
 
 export function buildPopoutUrl(tool: PopoutTool, p: PopoutParams): string {
   const q = new URLSearchParams({ symbol: p.symbol, tf: String(p.tf), source: p.source, follow: p.follow ? '1' : '0' });
+  q.set('sections', (p.sections ?? ['pp']).join(','));
   return `${POPOUT_ROUTE[tool]}?${q.toString()}`;
 }
 
@@ -36,6 +47,7 @@ export function parsePopoutQuery(search: string | Record<string, unknown>): Popo
     tf: Number.isFinite(tf) && tf >= 1 && tf <= 1440 ? Math.round(tf) : 1,
     source: get('source') === 'bybit' ? 'bybit' : 'binance',
     follow: followRaw === undefined || followRaw === null ? true : String(followRaw) !== '0',
+    sections: parseSections(get('sections')),
   };
 }
 
@@ -43,7 +55,7 @@ export type PopupOpener = (url: string, name: string, features: string) => Windo
 
 /** Open (or focus) the popup. Must be called inside a user click so popup blockers allow it. Returns null when blocked. */
 export function openPopout(tool: PopoutTool, p: PopoutParams, opener: PopupOpener = (u, n, f) => window.open(u, n, f)): Window | null {
-  const w = opener(buildPopoutUrl(tool, p), POPOUT_NAME[tool], 'popup=yes,width=900,height=520');
+  const w = opener(buildPopoutUrl(tool, p), POPOUT_NAME[tool], 'popup=yes,width=1000,height=700');
   if (w) w.focus();
   return w;
 }
@@ -56,5 +68,9 @@ export function stripPopoutTools(tools: Record<string, boolean>, mode: string): 
   return next;
 }
 
-export const isSyncMessage = (d: unknown): d is SyncMessage =>
-  Boolean(d && typeof d === 'object' && ['hello', 'state', 'closed', 'bye'].includes(String((d as { type?: unknown }).type)));
+export const isSyncMessage = (d: unknown): d is SyncMessage | SectionsMessage => {
+  if (!d || typeof d !== 'object') return false;
+  const m = d as { type?: unknown; sections?: unknown };
+  if (m.type === 'sections') return Array.isArray(m.sections) && m.sections.every(s => s === 'pp' || s === 'ca');
+  return ['hello', 'state', 'closed', 'bye'].includes(String(m.type));
+};
