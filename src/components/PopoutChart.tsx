@@ -1,4 +1,4 @@
-// Standalone chart host for pop-out tool windows. Owns its own lightweight-charts chart with a hidden candle
+// Standalone chart host for pop-out tool windows. Owns its own lightweight-charts chart with a visible candle
 // series, its own kline history load and exactly ONE WebSocket (the source's kline stream). It never imports or
 // touches the main chart internals; tools render on it through the same api shape as the main chart.
 import { useEffect, useRef, useState } from 'react';
@@ -8,6 +8,9 @@ import type { TradeSource } from '@/lib/live-price';
 import type { ProfileChart } from '@/components/VolumeProfile';
 import { PricePressure } from '@/components/PricePressure';
 import { PP_KEY, PP_DEFAULT, restorePressure, type PpSettings } from '@/lib/price-pressure';
+import { PressureStrip } from './PressureStrip';
+import type { PressureSection } from '@/lib/popout';
+import { priceSpec } from '@/lib/market-data';
 
 function toColor(el: HTMLElement, name: string) {
   return getComputedStyle(el).getPropertyValue(name).trim() || '#8aa0c0';
@@ -36,7 +39,7 @@ async function loadKlines(symbol: string, minutes: number, source: TradeSource, 
   return native ? bars : aggregate(bars, minutes);
 }
 
-export function PopoutChart({ symbol, minutes, source, onStatus }: { symbol: string; minutes: number; source: TradeSource; onStatus?: (s: string) => void }) {
+export function PopoutChart({ symbol, minutes, source, theme, sections, onStatus }: { symbol: string; minutes: number; source: TradeSource; theme: string; sections: PressureSection[]; onStatus?: (s: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ProfileChart | null>(null);
   const [revision, setRevision] = useState(0);
@@ -60,20 +63,37 @@ export function PopoutChart({ symbol, minutes, source, onStatus }: { symbol: str
       rightPriceScale: { visible: true, borderColor: grid, scaleMargins: { top: 0.08, bottom: 0.08 } },
       timeScale: { borderColor: grid, timeVisible: true, barSpacing: 8, rightOffset: 8 },
     });
-    // Hidden candle series: only the time and price base for the tools rendered on top.
-    const candles = chart.addSeries(CandlestickSeries, { visible: false, upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: false, lastValueVisible: false });
+    const candles = chart.addSeries(CandlestickSeries, { visible: true, upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: true, lastValueVisible: true });
     const api: ProfileChart = { chart, series: candles, probes: new Set(), host: el, disposed: false, colors: { up, down, muted: text, poc: toColor(el, '--flow-poc'), unsplit: toColor(el, '--flow-unsplit'), valueArea: toColor(el, '--flow-value-area'), labelText: toColor(el, '--t-bg') } };
-    chart.panes()[0]?.setStretchFactor(0.02);
+    chart.panes()[0]?.setStretchFactor(1.4);
     chartRef.current = api;
     setRevision(v => v + 1);
 
     let stopped = false, ready = false, ws: WebSocket | null = null, retry: ReturnType<typeof setTimeout> | undefined, attempts = 0;
     const abort = new AbortController();
+    // Price precision belongs to this popup's active exchange, independent of the main chart.
+    const loadPrecision = async () => {
+      try {
+        const url = source === 'bybit' ? `https://api.bybit.com/v5/market/instruments-info?category=linear&symbol=${symbol}` : 'https://fapi.binance.com/fapi/v1/exchangeInfo';
+        const r = await fetch(url, { signal: abort.signal });
+        if (!r.ok) return;
+        const d = await r.json();
+        const m = source === 'bybit' ? d.result?.list?.[0] : d.symbols?.find((v: { symbol: string }) => v.symbol === symbol);
+        if (!m || stopped) return;
+        const tick = source === 'bybit' ? m.priceFilter?.tickSize : m.filters?.find((f: { filterType: string }) => f.filterType === 'PRICE_FILTER')?.tickSize;
+        const spec = priceSpec({ symbol, pricePrecision: source === 'bybit' ? Number(m.priceScale) || 0 : m.pricePrecision, filters: [{ filterType: 'PRICE_FILTER', tickSize: tick }] });
+        candles.applyOptions({ priceFormat: { type: 'price', ...spec } });
+        el.dataset.precision = String(spec.precision);
+      } catch {}
+    };
+    void loadPrecision();
     let latest: Bar | undefined;
     const applyBar = (b: Bar) => {
       if (stopped || !ready || !Number.isFinite(b.close)) return;
       latest = b;
       candles.update({ ...b, time: (b.time / 1000) as UTCTimestamp });
+      el.dataset.lastClose = String(b.close);
+      el.dataset.liveUpdates = String(Number(el.dataset.liveUpdates ?? 0) + 1);
     };
     // Exactly one WebSocket: the source's kline stream for this symbol and timeframe.
     const connect = () => {
@@ -118,6 +138,8 @@ export function PopoutChart({ symbol, minutes, source, onStatus }: { symbol: str
         if (stopped) return;
         latest = bars.at(-1);
         candles.setData(bars.map(b => ({ ...b, time: (b.time / 1000) as UTCTimestamp })));
+        el.dataset.candles = String(bars.length);
+        el.dataset.lastClose = String(latest?.close ?? '');
         ready = true;
         chart.timeScale().scrollToRealTime();
         onStatus?.('Live');
@@ -130,12 +152,19 @@ export function PopoutChart({ symbol, minutes, source, onStatus }: { symbol: str
     };
     void load();
     return () => { stopped = true; api.disposed = true; abort.abort(); clearTimeout(retry); const s = ws; ws = null; s?.close(); chartRef.current = null; chart.remove(); };
-  }, [symbol, minutes, source]);
+  }, [symbol, minutes, source, theme]);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" data-testid="popout-chart">
-      <div ref={ref} className="min-h-0 flex-1" />
-      {chartRef.current && <PricePressure chartRef={chartRef} hostRef={ref} symbol={symbol} minutes={minutes} settings={settings} onChange={changeSettings} mobile={false} revision={revision} cvd={false} floating />}
+      <div ref={ref} data-testid="popup-candles" className="min-h-0 flex-1" />
+      {chartRef.current && <PopupSections key={`${revision}:${sections.join(',')}`} chartRef={chartRef} hostRef={ref} symbol={symbol} minutes={minutes} sections={sections} settings={settings} onChange={changeSettings} revision={revision} />}
     </div>
   );
+}
+
+function PopupSections({ chartRef, hostRef, symbol, minutes, sections, settings, onChange, revision }: { chartRef: React.MutableRefObject<ProfileChart | null>; hostRef: React.MutableRefObject<HTMLDivElement | null>; symbol: string; minutes: number; sections: PressureSection[]; settings: PpSettings; onChange: (s: PpSettings) => void; revision: number }) {
+  return <>
+    {sections.includes('ca') && <PressureStrip chartRef={chartRef} symbol={symbol} minutes={minutes} />}
+    {sections.includes('pp') && <PricePressure chartRef={chartRef} hostRef={hostRef} symbol={symbol} minutes={minutes} settings={settings} onChange={onChange} mobile={false} revision={revision} cvd={false} floating showCandles />}
+  </>;
 }
