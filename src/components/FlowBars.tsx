@@ -10,7 +10,7 @@ type ChartApi = { series: { data(): readonly unknown[] }; disposed?: boolean };
 type Snapshot = { control: ControlInfo; shownControl: Control; attack: AttackInfo | null; shownAttack: Attack };
 
 /** Reads the chart's own loaded candles at most once per second and applies the 2-update hold. */
-function useFlow(chartRef: MutableRefObject<ChartApi | null>, minutes: number, settings: FbSettings, symbol: string) {
+export function useFlow(chartRef: MutableRefObject<ChartApi | null>, minutes: number, settings: FbSettings, symbol: string) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   useEffect(() => {
     const hc = new Hold<Control>(), ha = new Hold<Attack>();
@@ -22,7 +22,9 @@ function useFlow(chartRef: MutableRefObject<ChartApi | null>, minutes: number, s
       if (bars.length < 2) return;
       const scores = scoreAll(bars), now = Date.now();
       const control = controlInfo(scores.slice(0, -1), settings.lookback);
-      const attack = attackInfo(scores, liveCandleCounts(bars.at(-1)!.time, minutes, now), settings.threshold);
+      const last = bars.at(-1);
+      if (!last) return;
+      const attack = attackInfo(scores, liveCandleCounts(last.time, minutes, now), settings.threshold);
       setSnap({ control, shownControl: hc.update(control.state, now), attack, shownAttack: ha.update(attack?.state ?? 'NONE', now) });
     };
     run();
@@ -74,7 +76,7 @@ export function AttackBar({ chartRef, minutes, symbol, settings, onChange, mobil
   const snap = useFlow(chartRef, minutes, settings, symbol);
   const state = snap?.shownAttack ?? 'NONE', a = snap?.attack;
   const word = state === 'NONE' ? 'NO ATTACK' : `${state} ATTACK`;
-  const sentence = a ? combinedSentence(snap!.shownControl, state, a.scores) : '';
+  const sentence = a && snap ? combinedSentence(snap.shownControl, state, a.scores) : '';
   return <Shell top={false} mobile={mobile} settings={settings} onChange={onChange} title="Who is attacking now" sentence={sentence}>
     <span data-testid="attack-state" className={`flex shrink-0 items-center gap-0.5 text-xs font-bold ${tone(state)}`}>{state === 'BUYERS' ? <ArrowUp className="size-3.5" /> : state === 'SELLERS' ? <ArrowDown className="size-3.5" /> : null}{snap ? word : '…'}</span>
     <div className="h-1.5 min-w-12 flex-1 overflow-hidden rounded-full bg-t-border" role="meter" aria-label="Attack strength" aria-valuenow={Math.round((a?.strength ?? 0) * 100)} aria-valuemin={0} aria-valuemax={100}>

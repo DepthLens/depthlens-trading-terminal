@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as TerminalRouteImport } from './routes/terminal'
+import { Route as PopoutPressureRouteImport } from './routes/popout/pressure'
 import { Route as PopoutPricePressureRouteImport } from './routes/popout/price-pressure'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +36,11 @@ const TerminalRoute = TerminalRouteImport.update({
   path: '/terminal',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PopoutPressureRoute = PopoutPressureRouteImport.update({
+  id: '/popout/pressure',
+  path: '/popout/pressure',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PopoutPricePressureRoute = PopoutPricePressureRouteImport.update({
   id: '/popout/price-pressure',
   path: '/popout/price-pressure',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/terminal': typeof TerminalRoute
+  '/popout/pressure': typeof PopoutPressureRoute
   '/popout/price-pressure': typeof PopoutPricePressureRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/terminal': typeof TerminalRoute
+  '/popout/pressure': typeof PopoutPressureRoute
   '/popout/price-pressure': typeof PopoutPricePressureRoute
 }
 export interface FileRoutesById {
@@ -61,20 +69,33 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/terminal': typeof TerminalRoute
+  '/popout/pressure': typeof PopoutPressureRoute
   '/popout/price-pressure': typeof PopoutPricePressureRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/login' | '/register' | '/terminal' | '/popout/price-pressure'
+    | '/'
+    | '/login'
+    | '/register'
+    | '/terminal'
+    | '/popout/pressure'
+    | '/popout/price-pressure'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/register' | '/terminal' | '/popout/price-pressure'
+  to:
+    | '/'
+    | '/login'
+    | '/register'
+    | '/terminal'
+    | '/popout/pressure'
+    | '/popout/price-pressure'
   id:
     | '__root__'
     | '/'
     | '/login'
     | '/register'
     | '/terminal'
+    | '/popout/pressure'
     | '/popout/price-pressure'
   fileRoutesById: FileRoutesById
 }
@@ -83,6 +104,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   TerminalRoute: typeof TerminalRoute
+  PopoutPressureRoute: typeof PopoutPressureRoute
   PopoutPricePressureRoute: typeof PopoutPricePressureRoute
 }
 
@@ -116,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TerminalRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/popout/pressure': {
+      id: '/popout/pressure'
+      path: '/popout/pressure'
+      fullPath: '/popout/pressure'
+      preLoaderRoute: typeof PopoutPressureRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/popout/price-pressure': {
       id: '/popout/price-pressure'
       path: '/popout/price-pressure'
@@ -131,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   TerminalRoute: TerminalRoute,
+  PopoutPressureRoute: PopoutPressureRoute,
   PopoutPricePressureRoute: PopoutPricePressureRoute,
 }
 export const routeTree = rootRouteImport
