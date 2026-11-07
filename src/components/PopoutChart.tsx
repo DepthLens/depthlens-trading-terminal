@@ -83,7 +83,7 @@ export function PopoutChart({ symbol, minutes, source, theme, sections, onStatus
         const tick = source === 'bybit' ? m.priceFilter?.tickSize : m.filters?.find((f: { filterType: string }) => f.filterType === 'PRICE_FILTER')?.tickSize;
         const spec = priceSpec({ symbol, pricePrecision: source === 'bybit' ? Number(m.priceScale) || 0 : m.pricePrecision, filters: [{ filterType: 'PRICE_FILTER', tickSize: tick }] });
         candles.applyOptions({ priceFormat: { type: 'price', ...spec } });
-        el.dataset.precision = String(spec.precision);
+        el.dataset['precision'] = String(spec.precision);
       } catch {}
     };
     void loadPrecision();
@@ -92,8 +92,8 @@ export function PopoutChart({ symbol, minutes, source, theme, sections, onStatus
       if (stopped || !ready || !Number.isFinite(b.close)) return;
       latest = b;
       candles.update({ ...b, time: (b.time / 1000) as UTCTimestamp });
-      el.dataset.lastClose = String(b.close);
-      el.dataset.liveUpdates = String(Number(el.dataset.liveUpdates ?? 0) + 1);
+      el.dataset['lastClose'] = String(b.close);
+      el.dataset['liveUpdates'] = String(Number(el.dataset['liveUpdates'] ?? 0) + 1);
     };
     // Exactly one WebSocket: the source's kline stream for this symbol and timeframe.
     const connect = () => {
@@ -138,8 +138,8 @@ export function PopoutChart({ symbol, minutes, source, theme, sections, onStatus
         if (stopped) return;
         latest = bars.at(-1);
         candles.setData(bars.map(b => ({ ...b, time: (b.time / 1000) as UTCTimestamp })));
-        el.dataset.candles = String(bars.length);
-        el.dataset.lastClose = String(latest?.close ?? '');
+        el.dataset['candles'] = String(bars.length);
+        el.dataset['lastClose'] = String(latest?.close ?? '');
         ready = true;
         chart.timeScale().scrollToRealTime();
         onStatus?.('Live');
