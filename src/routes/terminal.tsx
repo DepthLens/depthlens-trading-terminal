@@ -31,7 +31,7 @@ import { MarketList, QuoteChange } from '@/components/MarketList';
 import { BookDebug } from '@/components/BookDebug';
 import { ToolWindowLayer, FloatButton, type WinContent } from '@/components/ToolWindows';
 import { WM_KEY, wmInitial, restoreWm, isFloating, closeWin, closeTool, dockWin, floatWin, setMode, resetWins, type WinId, type WmState } from '@/lib/window-manager';
-import { openPopout, stripPopoutTools, isSyncMessage, SYNC_CHANNEL, type SyncMessage, SECTIONS_KEY, parseSections, toggleSection, pressureButtonActive, type PressureSection } from '@/lib/popout';
+import { stripPopoutTools, isSyncMessage, SYNC_CHANNEL, type SyncMessage, buildPressureUrl } from '@/lib/popout';
 import { priceSpec, type Market, type PriceSpec, type Quote } from '@/lib/market-data';
 export const Route = createFileRoute('/terminal')({
   head:()=>({meta:[{title:'Terminal — DepthLens'},{name:'description',content:'Live Binance USDT futures charts, personalized tabs, and order flow tools.'},{property:'og:title',content:'Terminal — DepthLens'},{property:'og:description',content:'Follow live futures markets with DepthLens candlestick charts and order flow tools.'},{property:'og:type',content:'website'},{name:'twitter:card',content:'summary_large_image'}]}),component:Terminal,
@@ -142,40 +142,22 @@ function Terminal() {
     ...(showBookDebug&&floatOn('Book debug')?[{id:'Book debug' as WinId,node:<BookDebug spec={activeSpec} floating/>}]:[]),
   ]:[];
   const dockedOn:WinId[]=mobile?[]:(['Heatmap','DOM','Whale feed','Book debug'] as WinId[]).filter(id=>!floatOn(id)&&(id==='Heatmap'?heatmapOn:id==='DOM'?domOn:id==='Whale feed'?feedOn:showBookDebug));
-  // One Pressure popup; section state is separate from main-chart switches.
-  const popupRef=useRef<Window|null>(null);
+  // The Pressure button opens the standalone /pressure page in a new tab; the channel keeps its follow/lock in sync.
   const syncRef=useRef<BroadcastChannel|null>(null);
   const syncStateRef=useRef({symbol:active.symbol,timeframe:active.minutes,source:listSource,theme:state.theme});
   syncStateRef.current={symbol:active.symbol,timeframe:active.minutes,source:listSource,theme:state.theme};
-  const [popupOpen,setPopupOpen]=useState(false);
-  const [pressureSections,setPressureSections]=useState<PressureSection[]>(['pp']);
-  useEffect(()=>{try{const raw=localStorage.getItem(SECTIONS_KEY);if(raw)setPressureSections(parseSections(JSON.parse(raw)));}catch{}},[]);
-  const saveSections=(next:PressureSection[])=>{setPressureSections(next);try{localStorage.setItem(SECTIONS_KEY,JSON.stringify(next));}catch{}};
-  const togglePressure=(section:PressureSection)=>{
-    if(!mobile){
-      const existing=popupRef.current&&!popupRef.current.closed?popupRef.current:null;
-      const next=existing?toggleSection(pressureSections,section):[section];
-      if(existing){existing.focus();saveSections(next);syncRef.current?.postMessage({type:'sections',sections:next});return;}
-      const w=openPopout('Price Pressure',{symbol:active.symbol,tf:active.minutes,source:listSource,follow:true,sections:next});
-      if(w){popupRef.current=w;setPopupOpen(true);saveSections(next);setNotice('');return;}
-      setNotice('Allow pop-ups for this site to use pop-out windows.');
-    }
-    const tool=section==='pp'?'Price Pressure':'Control & Attack bars';
-    setState(s=>({...s,tools:{...s.tools,[tool]:!s.tools[tool]}}));
-  };
   // Never auto-open popup tools from saved switches. Mobile keeps its in-page settings.
   useEffect(()=>{if(restored&&wmRestored&&!mobile&&wm.mode==='popout')setState(s=>s.tools['Price Pressure']?{...s,tools:stripPopoutTools(s.tools,'popout')}:s);},[restored,wmRestored,mobile]);
   useEffect(()=>{
     const channel=new BroadcastChannel(SYNC_CHANNEL);syncRef.current=channel;
     const post=()=>channel.postMessage({type:'state',state:syncStateRef.current});
-    channel.onmessage=ev=>{if(!isSyncMessage(ev.data))return;const m=ev.data;if(m.type==='hello')post();else if(m.type==='sections')saveSections(m.sections);else if(m.type==='closed'&&m.tool==='Price Pressure'){popupRef.current=null;setPopupOpen(false);}};
+    channel.onmessage=ev=>{if(!isSyncMessage(ev.data))return;const m=ev.data;if(m.type==='hello')post();};
     const bye=()=>channel.postMessage({type:'bye'});
     window.addEventListener('beforeunload',bye);
-    const check=setInterval(()=>{if(popupRef.current?.closed){popupRef.current=null;setPopupOpen(false);}},500);
-    return()=>{clearInterval(check);window.removeEventListener('beforeunload',bye);bye();channel.close();syncRef.current=null;};
+    return()=>{window.removeEventListener('beforeunload',bye);bye();channel.close();syncRef.current=null;};
   },[]);
   useEffect(()=>{const m:SyncMessage={type:'state',state:syncStateRef.current};syncRef.current?.postMessage(m);},[active.symbol,active.minutes,listSource,state.theme]);
-  const pressureMenu=<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm" aria-label="Pressure" aria-pressed={pressureButtonActive(popupOpen,pressureSections)} className={`shrink-0 mobile:h-10 ${popupOpen?'bg-t-border text-t-accent':'text-t-muted hover:bg-t-border/50 hover:text-t-text'}`}>Pressure<ChevronDown/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} data-mobile={mobile||undefined} align="end" className="border-t-border bg-t-panel text-t-text">{(['pp','ca'] as PressureSection[]).map(section=><DropdownMenuItem key={section} role="menuitemcheckbox" aria-checked={popupOpen?pressureSections.includes(section):Boolean(state.tools[section==='pp'?'Price Pressure':'Control & Attack bars'])} onSelect={e=>{e.preventDefault();togglePressure(section);}} className="focus:bg-t-border focus:text-t-text mobile:min-h-10"><Check className={`size-4 ${(popupOpen?pressureSections.includes(section):Boolean(state.tools[section==='pp'?'Price Pressure':'Control & Attack bars']))?'opacity-100':'opacity-0'}`}/>{section==='pp'?'Price Pressure':'Control & Attack bar'}</DropdownMenuItem>)}<div className="flex justify-end border-t border-t-border"><PricePressureGear onClick={()=>setShowPpSettings(true)}/><FlowBarsGear onClick={()=>setShowFbSettings(true)}/></div></DropdownMenuContent></DropdownMenu>;
+  const pressureMenu=<Button asChild variant="ghost" size="sm" className="shrink-0 text-t-muted hover:bg-t-border/50 hover:text-t-text mobile:h-10"><a href={buildPressureUrl({symbol:active.symbol,tf:active.minutes,source:listSource})} target="_blank" rel="noopener" aria-label="Pressure">Pressure</a></Button>;
   const control='text-t-muted hover:bg-t-border/50 hover:text-t-text';
   const profileMenu=<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border mobile:size-10`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} data-mobile={mobile||undefined} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text mobile:min-h-10"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem asChild className="focus:bg-t-border focus:text-t-text mobile:min-h-10"><Link to="/"><LogOut/>Logout</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>;
   const customForm=showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs mobile:h-10 mobile:text-sm"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90 mobile:h-10">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>;
