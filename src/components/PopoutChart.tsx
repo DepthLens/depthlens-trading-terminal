@@ -9,11 +9,23 @@ import type { ProfileChart } from '@/components/VolumeProfile';
 import { PricePressure } from '@/components/PricePressure';
 import { PP_KEY, PP_DEFAULT, restorePressure, type PpSettings } from '@/lib/price-pressure';
 import { PressureStrip } from './PressureStrip';
-import type { PressureSection } from '@/lib/popout';
 import { priceSpec } from '@/lib/market-data';
 
-function toColor(el: HTMLElement, name: string) {
-  return getComputedStyle(el).getPropertyValue(name).trim() || '#8aa0c0';
+// lightweight-charts cannot parse oklch(); resolve every theme token to rgb through a canvas, with a safe fallback
+// so a missing or unparsable variable can never crash chart creation.
+const FALLBACK: Record<string, string> = { '--t-muted': 'rgb(138,160,192)', '--t-border': 'rgb(30,45,70)', '--t-bg': 'rgb(10,19,34)', '--flow-up': 'rgb(38,166,154)', '--flow-down': 'rgb(239,83,80)', '--flow-poc': 'rgb(230,190,80)', '--flow-unsplit': 'rgb(40,170,190)', '--flow-value-area': 'rgb(60,140,200)' };
+export function toColor(el: HTMLElement, name: string) {
+  const fallback = FALLBACK[name] ?? 'rgb(138,160,192)';
+  try {
+    const raw = getComputedStyle(el).getPropertyValue(name).trim();
+    const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    if (!raw || !ctx) return fallback;
+    ctx.fillStyle = '#010203'; ctx.fillStyle = raw;
+    if (ctx.fillStyle === '#010203' && raw !== '#010203') return fallback;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    return `rgb(${r},${g},${b})`;
+  } catch { return fallback; }
 }
 
 const bybitInterval = (minutes: number) => (minutes === 1440 ? 'D' : String(minutes));
@@ -39,10 +51,12 @@ async function loadKlines(symbol: string, minutes: number, source: TradeSource, 
   return native ? bars : aggregate(bars, minutes);
 }
 
-export function PopoutChart({ symbol, minutes, source, theme, sections, onStatus }: { symbol: string; minutes: number; source: TradeSource; theme: string; sections: PressureSection[]; onStatus?: (s: string) => void }) {
+export function PopoutChart({ symbol, minutes, source, theme, onStatus }: { symbol: string; minutes: number; source: TradeSource; theme: string; onStatus?: (s: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ProfileChart | null>(null);
   const [revision, setRevision] = useState(0);
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [attempt, setAttempt] = useState(0);
   const [settings, setSettings] = useState<PpSettings>({ ...PP_DEFAULT });
   useEffect(() => { setSettings(restorePressure(localStorage.getItem(PP_KEY))); }, []);
   const changeSettings = (next: PpSettings) => { setSettings(next); try { localStorage.setItem(PP_KEY, JSON.stringify(next)); } catch {} };
@@ -50,7 +64,7 @@ export function PopoutChart({ symbol, minutes, source, theme, sections, onStatus
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    onStatus?.('Connecting');
+    onStatus?.('Connecting'); setPhase('loading');
     const text = toColor(el, '--t-muted'), grid = toColor(el, '--t-border'), up = toColor(el, '--flow-up'), down = toColor(el, '--flow-down');
     const soft = text.replace('rgb(', 'rgba(').replace(')', ',0.75)'), labelBg = toColor(el, '--t-border');
     const line = { color: soft, width: 1 as const, style: LineStyle.Dashed, visible: true, labelVisible: true, labelBackgroundColor: labelBg };
@@ -65,9 +79,8 @@ export function PopoutChart({ symbol, minutes, source, theme, sections, onStatus
     });
     const candles = chart.addSeries(CandlestickSeries, { visible: true, upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: true, lastValueVisible: true });
     const api: ProfileChart = { chart, series: candles, probes: new Set(), host: el, disposed: false, colors: { up, down, muted: text, poc: toColor(el, '--flow-poc'), unsplit: toColor(el, '--flow-unsplit'), valueArea: toColor(el, '--flow-value-area'), labelText: toColor(el, '--t-bg') } };
-    chart.panes()[0]?.setStretchFactor(1.4);
+    chart.panes()[0]?.setStretchFactor(2.2);
     chartRef.current = api;
-    setRevision(v => v + 1);
 
     let stopped = false, ready = false, ws: WebSocket | null = null, retry: ReturnType<typeof setTimeout> | undefined, attempts = 0;
     const abort = new AbortController();
@@ -143,28 +156,30 @@ export function PopoutChart({ symbol, minutes, source, theme, sections, onStatus
         ready = true;
         chart.timeScale().scrollToRealTime();
         onStatus?.('Live');
+        setPhase('ready'); setRevision(v => v + 1);
         connect();
       } catch {
         if (stopped) return;
-        onStatus?.('History unavailable · retrying');
-        retry = setTimeout(load, 5000);
+        onStatus?.('History unavailable'); setPhase('error');
       }
     };
     void load();
     return () => { stopped = true; api.disposed = true; abort.abort(); clearTimeout(retry); const s = ws; ws = null; s?.close(); chartRef.current = null; chart.remove(); };
-  }, [symbol, minutes, source, theme]);
+  }, [symbol, minutes, source, theme, attempt]);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" data-testid="popout-chart">
       <div ref={ref} data-testid="popup-candles" className="min-h-0 flex-1" />
-      {chartRef.current && <PopupSections key={`${revision}:${sections.join(',')}`} chartRef={chartRef} hostRef={ref} symbol={symbol} minutes={minutes} sections={sections} settings={settings} onChange={changeSettings} revision={revision} />}
+      {phase === 'ready' && chartRef.current && <PopupSections key={revision} chartRef={chartRef} hostRef={ref} symbol={symbol} minutes={minutes} settings={settings} onChange={changeSettings} revision={revision} />}
+      {phase === 'loading' && <div role="status" className="absolute inset-0 z-20 flex items-center justify-center bg-t-bg text-sm text-t-muted">Loading candles...</div>}
+      {phase === 'error' && <div role="alert" className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-t-bg text-sm"><span className="text-t-down">Could not load candles for {symbol}.</span><button type="button" onClick={() => setAttempt(v => v + 1)} className="rounded border border-t-border bg-t-panel px-3 py-1.5 text-t-text hover:bg-t-border">Retry</button></div>}
     </div>
   );
 }
 
-function PopupSections({ chartRef, hostRef, symbol, minutes, sections, settings, onChange, revision }: { chartRef: React.MutableRefObject<ProfileChart | null>; hostRef: React.MutableRefObject<HTMLDivElement | null>; symbol: string; minutes: number; sections: PressureSection[]; settings: PpSettings; onChange: (s: PpSettings) => void; revision: number }) {
+function PopupSections({ chartRef, hostRef, symbol, minutes, settings, onChange, revision }: { chartRef: React.MutableRefObject<ProfileChart | null>; hostRef: React.MutableRefObject<HTMLDivElement | null>; symbol: string; minutes: number; settings: PpSettings; onChange: (s: PpSettings) => void; revision: number }) {
   return <>
-    {sections.includes('ca') && <PressureStrip chartRef={chartRef} symbol={symbol} minutes={minutes} />}
-    {sections.includes('pp') && <PricePressure chartRef={chartRef} hostRef={hostRef} symbol={symbol} minutes={minutes} settings={settings} onChange={onChange} mobile={false} revision={revision} cvd={false} floating showCandles />}
+    <PressureStrip chartRef={chartRef} symbol={symbol} minutes={minutes} />
+    <PricePressure chartRef={chartRef} hostRef={hostRef} symbol={symbol} minutes={minutes} settings={settings} onChange={onChange} mobile={false} revision={revision} cvd={false} floating showCandles />
   </>;
 }
