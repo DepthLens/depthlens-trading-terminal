@@ -35,7 +35,7 @@ function Login() {
         <input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className="mb-4 h-10 w-full rounded-md border border-t-border bg-t-bg px-3 text-sm outline-none focus:border-t-accent" placeholder="you@example.com" />
         <label className="mb-1 block text-xs font-medium text-t-muted" htmlFor="password">Password</label>
         <input id="password" type="password" required value={password} onChange={e => setPassword(e.target.value)} className="mb-6 h-10 w-full rounded-md border border-t-border bg-t-bg px-3 text-sm outline-none focus:border-t-accent" placeholder="••••••••" />
-        <button type="submit" className="h-10 w-full rounded-md bg-t-accent text-sm font-semibold text-t-bg hover:opacity-90">Log in</button>
+        <button type="submit" className="h-10 w-full rounded-md bg-t-accent hover:bg-t-accent-hover active:bg-t-accent-press text-sm font-semibold text-t-accent-fg">Log in</button>
         <p className="mt-4 text-center text-xs text-t-muted">No account yet? <Link to="/register" className="font-medium text-t-accent hover:underline">Register</Link></p>
         <p className="mt-2 text-center text-xs"><Link to="/" className="text-t-muted hover:underline">← Back to home</Link></p>
       </form>

@@ -13,7 +13,7 @@ import { priceSpec } from '@/lib/market-data';
 
 // lightweight-charts cannot parse oklch(); resolve every theme token to rgb through a canvas, with a safe fallback
 // so a missing or unparsable variable can never crash chart creation.
-const FALLBACK: Record<string, string> = { '--t-muted': 'rgb(138,160,192)', '--t-border': 'rgb(30,45,70)', '--t-bg': 'rgb(10,19,34)', '--flow-up': 'rgb(38,166,154)', '--flow-down': 'rgb(239,83,80)', '--flow-poc': 'rgb(230,190,80)', '--flow-unsplit': 'rgb(40,170,190)', '--flow-value-area': 'rgb(60,140,200)' };
+const FALLBACK: Record<string, string> = { '--t-muted': 'rgb(138,160,192)', '--t-border': 'rgb(42,59,110)', '--t-grid': 'rgba(255,255,255,0.06)', '--t-bg': 'rgb(10,19,34)', '--flow-up': 'rgb(38,166,154)', '--flow-down': 'rgb(239,83,80)', '--flow-poc': 'rgb(230,190,80)', '--flow-unsplit': 'rgb(40,170,190)', '--flow-value-area': 'rgb(60,140,200)' };
 export function toColor(el: HTMLElement, name: string) {
   const fallback = FALLBACK[name] ?? 'rgb(138,160,192)';
   try {
@@ -65,7 +65,7 @@ export function PopoutChart({ symbol, minutes, source, theme, onStatus }: { symb
     const el = ref.current;
     if (!el) return;
     onStatus?.('Connecting'); setPhase('loading');
-    const text = toColor(el, '--t-muted'), grid = toColor(el, '--t-border'), up = toColor(el, '--flow-up'), down = toColor(el, '--flow-down');
+    const text = toColor(el, '--t-muted'), grid = toColor(el, '--t-grid'), border = toColor(el, '--t-border'), up = toColor(el, '--flow-up'), down = toColor(el, '--flow-down');
     const soft = text.replace('rgb(', 'rgba(').replace(')', ',0.75)'), labelBg = toColor(el, '--t-border');
     const line = { color: soft, width: 1 as const, style: LineStyle.Dashed, visible: true, labelVisible: true, labelBackgroundColor: labelBg };
     const chart = createChart(el, {
@@ -74,12 +74,12 @@ export function PopoutChart({ symbol, minutes, source, theme, onStatus }: { symb
       layout: { background: { color: 'transparent' }, textColor: text, panes: { enableResize: true, separatorColor: text, separatorHoverColor: toColor(el, '--flow-unsplit') } },
       grid: { vertLines: { color: grid }, horzLines: { color: grid } },
       crosshair: { mode: CrosshairMode.MagnetOHLC, vertLine: line, horzLine: line },
-      rightPriceScale: { visible: true, borderColor: grid, scaleMargins: { top: 0.08, bottom: 0.08 } },
-      timeScale: { borderColor: grid, timeVisible: true, barSpacing: 8, rightOffset: 8 },
+      rightPriceScale: { visible: true, borderColor: border, scaleMargins: { top: 0.08, bottom: 0.08 } },
+      timeScale: { borderColor: border, timeVisible: true, barSpacing: 8, rightOffset: 8 },
     });
-    const candles = chart.addSeries(CandlestickSeries, { visible: true, upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: true, lastValueVisible: true });
+    const candles = chart.addSeries(CandlestickSeries, { visible: true, upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: false, lastValueVisible: false });
     const api: ProfileChart = { chart, series: candles, probes: new Set(), host: el, disposed: false, colors: { up, down, muted: text, poc: toColor(el, '--flow-poc'), unsplit: toColor(el, '--flow-unsplit'), valueArea: toColor(el, '--flow-value-area'), labelText: toColor(el, '--t-bg') } };
-    chart.panes()[0]?.setStretchFactor(2.2);
+    chart.panes()[0]?.setStretchFactor(0.02);
     chartRef.current = api;
 
     let stopped = false, ready = false, ws: WebSocket | null = null, retry: ReturnType<typeof setTimeout> | undefined, attempts = 0;
@@ -180,6 +180,6 @@ export function PopoutChart({ symbol, minutes, source, theme, onStatus }: { symb
 function PopupSections({ chartRef, hostRef, symbol, minutes, settings, onChange, revision }: { chartRef: React.MutableRefObject<ProfileChart | null>; hostRef: React.MutableRefObject<HTMLDivElement | null>; symbol: string; minutes: number; settings: PpSettings; onChange: (s: PpSettings) => void; revision: number }) {
   return <>
     <PressureStrip chartRef={chartRef} symbol={symbol} minutes={minutes} />
-    <PricePressure chartRef={chartRef} hostRef={hostRef} symbol={symbol} minutes={minutes} settings={settings} onChange={onChange} mobile={false} revision={revision} cvd={false} floating showCandles />
+    <PricePressure chartRef={chartRef} hostRef={hostRef} symbol={symbol} minutes={minutes} settings={settings} onChange={onChange} mobile={false} revision={revision} cvd={false} floating />
   </>;
 }
