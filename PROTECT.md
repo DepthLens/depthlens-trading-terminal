@@ -78,3 +78,5 @@ After every change, add any new feature to the list in section 1.
 - Theme tokens must be converted to rgb (canvas) with fallbacks before reaching lightweight-charts; it cannot parse oklch.
 - Smoke: open /pressure?symbol=BTCUSDT&tf=1&source=bybit at 1000x700 and 390x844: "Loading candles..." then candles, strip text and both pane labels, live updates, 1 socket, no console errors.
 - Tools menu "Tool windows": Pop-out window | Floating | Docked; tools without pop-out support use Floating.
+- /pressure shows only header, Control & Attack strip and the two Price Pressure panes; the candle series stays hidden (pane stretch 0.02, no price line/last-value label).
+- Default navy theme: bg #0F1B3D, panel #162651, border #2A3B6E, text white, accent hot pink #FF3D8B via `btn-accent`; pink never means buy/sell, grid uses --t-grid.

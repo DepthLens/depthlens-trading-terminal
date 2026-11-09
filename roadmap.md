@@ -90,3 +90,5 @@
 - [x] Pressure button opens /pressure in a new tab; the page shows candles, Control & Attack strip and Price Pressure panes together (theme-color crash fixed).
 - [x] Step 1: Price Pressure pop-out (/popout/price-pressure, own chart + 1 kline socket, BroadcastChannel follow/lock, blocked-popup fallback, never auto-open; 10 unit tests, 155 total pass; real popup not browser-tested)
 - [ ] Next: CVD pop-out, then DOM / Whale feed / Book debug, then Heatmap, then popup position memory
+- [x] /pressure: live candle chart removed (hidden base series), strip + two panes fill the page.
+- [x] Navy/white/hot-pink default theme tokens applied to terminal, /pressure, landing, login, register.
