@@ -45,7 +45,7 @@ function Register() {
         <label className={label} htmlFor="confirm">Confirm password</label>
         <input id="confirm" type="password" required value={confirm} onChange={e => setConfirm(e.target.value)} className={field} placeholder="Repeat your password" />
         {error && <p role="alert" className="mb-3 text-xs text-t-down">{error}</p>}
-        <button type="submit" className="mt-2 h-10 w-full rounded-md bg-t-accent text-sm font-semibold text-t-bg hover:opacity-90">Register</button>
+        <button type="submit" className="mt-2 h-10 w-full rounded-md bg-t-accent hover:bg-t-accent-hover active:bg-t-accent-press text-sm font-semibold text-t-accent-fg">Register</button>
         <p className="mt-4 text-center text-xs text-t-muted">Already have an account? <Link to="/login" className="font-medium text-t-accent hover:underline">Log in</Link></p>
         <p className="mt-2 text-center text-xs"><Link to="/" className="text-t-muted hover:underline">← Back to home</Link></p>
       </form>

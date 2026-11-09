@@ -31,14 +31,14 @@ function Landing() {
         <span className="text-lg font-bold tracking-wide text-t-accent">DepthLens</span>
         <nav className="ml-auto flex items-center gap-2">
           <Link to="/login" className="rounded-md px-4 py-2 text-sm font-medium text-t-text hover:bg-t-border/50">Login</Link>
-          <Link to="/register" className="rounded-md bg-t-accent px-4 py-2 text-sm font-semibold text-t-bg hover:opacity-90">Register</Link>
+          <Link to="/register" className="rounded-md bg-t-accent hover:bg-t-accent-hover active:bg-t-accent-press px-4 py-2 text-sm font-semibold text-t-accent-fg">Register</Link>
         </nav>
       </header>
       <main className="flex flex-1 flex-col items-center px-6 py-16 text-center">
         <img src={logo.url} alt="" className="mb-8 size-28 rounded-2xl shadow-2xl" />
         <h1 className="max-w-2xl text-4xl font-bold leading-tight sm:text-5xl">See the order flow behind every candle</h1>
         <p className="mt-4 max-w-xl text-base text-t-muted">A live order flow terminal for Binance USDT futures. Real-time charts, multi-pair tabs, and any timeframe you want — free, in your browser.</p>
-        <Link to="/terminal" className="mt-8 rounded-md bg-t-accent px-8 py-3 text-base font-semibold text-t-bg hover:opacity-90">Open Terminal</Link>
+        <Link to="/terminal" className="mt-8 rounded-md bg-t-accent hover:bg-t-accent-hover active:bg-t-accent-press px-8 py-3 text-base font-semibold text-t-accent-fg">Open Terminal</Link>
         <div className="mt-16 grid w-full max-w-4xl gap-4 sm:grid-cols-2">
           {FEATURES.map(f => (
             <div key={f.title} className="rounded-xl border border-t-border bg-t-panel p-6 text-left">
