@@ -48,12 +48,12 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     if (!el) return;
     delete el.dataset['lastClose'];
     setStatus('Connecting');
-    const text = toColor(el,'--t-muted'), grid = toColor(el,'--t-border'), up = toColor(el,'--flow-up'), down = toColor(el,'--flow-down');
+    const text = toColor(el,'--t-muted'), grid = getComputedStyle(el).getPropertyValue('--t-grid').trim() || toColor(el,'--t-border'), border = toColor(el,'--t-border'), up = toColor(el,'--flow-up'), down = toColor(el,'--flow-down');
     const soft = toColor(el,'--t-muted').replace('rgb(','rgba(').replace(')',',0.75)'), labelBg = toColor(el,'--t-border');
     const line = { color: soft, width: 1 as const, style: LineStyle.Dashed, visible: true, labelVisible: true, labelBackgroundColor: labelBg };
     // Magnet mode must be present on every chart creation; theme/pair/timeframe all recreate the chart here.
     const crosshairOptions = { mode: CrosshairMode.MagnetOHLC, vertLine: line, horzLine: line };
-    const chart = createChart(el, { autoSize:true, localization:{locale:'en-US'}, layout:{ background:{ color:'transparent' }, textColor:text }, grid:{ vertLines:{color:grid},horzLines:{color:grid} }, crosshair:crosshairOptions, rightPriceScale:{visible:true,borderColor:grid,scaleMargins:{top:0.08,bottom:0.08}}, timeScale:{borderColor:grid,timeVisible:true,barSpacing:8,rightOffset:8} });
+    const chart = createChart(el, { autoSize:true, localization:{locale:'en-US'}, layout:{ background:{ color:'transparent' }, textColor:text }, grid:{ vertLines:{color:grid},horzLines:{color:grid} }, crosshair:crosshairOptions, rightPriceScale:{visible:true,borderColor:border,scaleMargins:{top:0.08,bottom:0.08}}, timeScale:{borderColor:border,timeVisible:true,barSpacing:8,rightOffset:8} });
     chart.timeScale().applyOptions({barSpacing:spacingRef.current});
     chartRef.current = chart;
     chart.applyOptions({ crosshair: crosshairOptions });

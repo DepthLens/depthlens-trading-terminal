@@ -65,7 +65,7 @@ export function PopoutChart({ symbol, minutes, source, theme, onStatus }: { symb
     const el = ref.current;
     if (!el) return;
     onStatus?.('Connecting'); setPhase('loading');
-    const text = toColor(el, '--t-muted'), grid = toColor(el, '--t-grid'), border = toColor(el, '--t-border'), up = toColor(el, '--flow-up'), down = toColor(el, '--flow-down');
+    const text = toColor(el, '--t-muted'), grid = getComputedStyle(el).getPropertyValue('--t-grid').trim() || toColor(el, '--t-border'), border = toColor(el, '--t-border'), up = toColor(el, '--flow-up'), down = toColor(el, '--flow-down');
     const soft = text.replace('rgb(', 'rgba(').replace(')', ',0.75)'), labelBg = toColor(el, '--t-border');
     const line = { color: soft, width: 1 as const, style: LineStyle.Dashed, visible: true, labelVisible: true, labelBackgroundColor: labelBg };
     const chart = createChart(el, {

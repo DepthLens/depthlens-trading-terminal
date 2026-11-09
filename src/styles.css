@@ -151,7 +151,7 @@
   --t-bg: #0F1B3D; --t-panel: #162651; --t-border: #2A3B6E;
   --t-text: #FFFFFF; --t-muted: #B8C2E0; --t-accent: #FF3D8B;
   --t-accent-hover: #FF5C9E; --t-accent-press: #E52F79; --t-accent-fg: #FFFFFF; --t-accent-fg-sm: #0F1B3D;
-  --t-grid: rgb(255 255 255 / 0.06);
+  --t-grid: rgba(255,255,255,0.06);
   --t-up: oklch(0.74 0.16 165); --t-down: oklch(0.65 0.2 20);
   --t-warning: oklch(0.8 0.16 80);
   --vp-poc: oklch(0.88 0.17 95); --vp-unsplit: oklch(0.75 0.13 185);
