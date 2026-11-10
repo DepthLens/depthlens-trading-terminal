@@ -92,3 +92,4 @@
 - [ ] Next: CVD pop-out, then DOM / Whale feed / Book debug, then Heatmap, then popup position memory
 - [x] /pressure: live candle chart removed (hidden base series), strip + two panes fill the page.
 - [x] Navy/white/hot-pink default theme tokens applied to terminal, /pressure, landing, login, register.
+- [x] Black & White theme: chrome-only palette, top-bar contrast toggle + Profile theme row, saved; 154 tests pass; browser-checked at 1366x768 (candles and pair colors untouched, /pressure follows it, no console errors).
