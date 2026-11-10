@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { Search, X, SlidersHorizontal, Check, ChevronDown, UserRound, LogOut, List, Settings } from 'lucide-react';
+import { Search, X, SlidersHorizontal, Check, ChevronDown, UserRound, LogOut, List, Settings, Contrast } from 'lucide-react';
 import { PriceChart } from '@/components/PriceChart';
 import { Heatmap } from '@/components/Heatmap';
 import { DomLadder } from '@/components/DomLadder';
@@ -22,7 +22,7 @@ import logo from '@/assets/depthlens-logo.png.asset.json';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_KEY, TOOLS } from '@/lib/terminal-state';
+import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_KEY, TOOLS, THEMES, THEME_LABELS } from '@/lib/terminal-state';
 import { marketStream } from '@/lib/market-stream';
 import { LiveQuote, SourceSelect, useSourceMode, type TradeBridge } from '@/components/LiveQuote';
 import { useTerminalMobile } from '@/hooks/use-terminal-mobile';
@@ -159,6 +159,11 @@ function Terminal() {
   useEffect(()=>{const m:SyncMessage={type:'state',state:syncStateRef.current};syncRef.current?.postMessage(m);},[active.symbol,active.minutes,listSource,state.theme]);
   const pressureMenu=<Button asChild variant="ghost" size="sm" className="btn-accent shrink-0 mobile:h-10"><a href={buildPressureUrl({symbol:active.symbol,tf:active.minutes,source:listSource})} target="_blank" rel="noopener" aria-label="Pressure">Pressure</a></Button>;
   const control='text-t-muted hover:bg-t-border/50 hover:text-t-text';
+  const prevThemeRef=useRef('navy');
+  const setTheme=(t:string)=>setState(s=>({...s,theme:t}));
+  const toggleBw=()=>setState(s=>{if(s.theme==='bw')return{...s,theme:prevThemeRef.current||'navy'};prevThemeRef.current=s.theme;return{...s,theme:'bw'};});
+  const themeToggle=<Button variant="ghost" size="icon" aria-label="Black and white theme" title="Black and white theme" aria-pressed={state.theme==='bw'} onClick={toggleBw} className={`${control} ${state.theme==='bw'?'bg-t-border/60 text-t-text':''} rounded-full border border-t-border mobile:size-10`}><Contrast/></Button>;
+  const themePicker=<div className="space-y-2"><p className="text-xs text-t-muted">Theme</p><div className="flex flex-wrap gap-1.5">{THEMES.map(t=><Button key={t} size="sm" onClick={()=>setTheme(t)} aria-pressed={state.theme===t} className={`${state.theme===t?'btn-accent text-t-accent-fg-sm':'border border-t-border bg-t-bg text-t-text hover:bg-t-border/50'} mobile:h-10`}>{THEME_LABELS[t]??t}</Button>)}</div></div>;
   const profileMenu=<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border mobile:size-10`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} data-mobile={mobile||undefined} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text mobile:min-h-10"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem asChild className="focus:bg-t-border focus:text-t-text mobile:min-h-10"><Link to="/"><LogOut/>Logout</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>;
   const customForm=showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs mobile:h-10 mobile:text-sm"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90 mobile:h-10">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>;
   return <div data-theme={state.theme} data-mobile={mobile||undefined} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text mobile:min-h-0 mobile:pt-[env(safe-area-inset-top)] mobile:pr-[env(safe-area-inset-right)] mobile:pb-[env(safe-area-inset-bottom)] mobile:pl-[env(safe-area-inset-left)]">
@@ -171,17 +176,19 @@ function Terminal() {
           <div className="flex items-center justify-between gap-2"><span className="text-t-muted">24h change</span><QuoteChange symbol={active.symbol} quotes={quotes}/></div>
           <label className="flex items-center justify-between gap-2"><span className="text-t-muted">Price source</span><SourceSelect mode={mode} onChange={changeMode} className="h-10 rounded border border-t-border bg-t-bg px-2 text-sm text-t-text"/></label>
         </DropdownMenuContent></DropdownMenu>
+        {themeToggle}
         {profileMenu}
       </div>
     </header>:<header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-t-border bg-t-panel px-4 py-2">
       <Link to="/" className="flex items-center gap-2 text-lg font-bold text-t-accent"><img src={logo.url} alt="DepthLens logo" className="size-8 shrink-0 rounded-md" />DepthLens</Link>
       <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span><LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge} bookEnabled={Boolean(state.tools['Heatmap'] || state.tools['DOM'])} profileEnabled={Boolean(state.tools['Volume Profile'])} mode={mode} onModeChange={changeMode} onSourceChange={src=>setListSource(src==='bybit'?'bybit':'binance')}/><QuoteChange symbol={active.symbol} quotes={quotes}/></div>
       <div className="ml-auto flex items-center gap-2">
+        {themeToggle}
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem asChild className="focus:bg-t-border focus:text-t-text"><Link to="/"><LogOut/>Logout</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
 
       </div>
     </header>}
-    {showProfile&&<div role="dialog" aria-modal="true" aria-label="Profile" className="fixed inset-0 z-50 flex items-center justify-center bg-t-bg/80 p-4"><div className="w-full max-w-sm rounded-md border border-t-border bg-t-panel p-5"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Profile</h2><Button variant="ghost" size="icon" className={control} aria-label="Close profile" onClick={()=>setShowProfile(false)}><X/></Button></div><div className="flex items-center gap-3 py-6"><UserRound className="size-10 rounded-full border border-t-border p-2 text-t-accent"/><span>Guest</span></div><Button asChild variant="outline" className="border-t-border bg-t-bg text-t-text"><Link to="/">Logout</Link></Button></div></div>}
+    {showProfile&&<div role="dialog" aria-modal="true" aria-label="Profile" className="fixed inset-0 z-50 flex items-center justify-center bg-t-bg/80 p-4"><div className="w-full max-w-sm rounded-md border border-t-border bg-t-panel p-5"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Profile</h2><Button variant="ghost" size="icon" className={control} aria-label="Close profile" onClick={()=>setShowProfile(false)}><X/></Button></div><div className="flex items-center gap-3 py-6"><UserRound className="size-10 rounded-full border border-t-border p-2 text-t-accent"/><span>Guest</span></div>{themePicker}<Button asChild variant="outline" className="border-t-border bg-t-bg text-t-text"><Link to="/">Logout</Link></Button></div></div>}
 
     {mobile&&showPairs&&<div className="fixed inset-0 z-50 flex flex-col bg-t-bg/70 pt-[max(1.5rem,env(safe-area-inset-top))]" onClick={()=>setShowPairs(false)}><div role="dialog" aria-modal="true" aria-label="Pairs" onClick={e=>e.stopPropagation()} className="flex min-h-0 flex-1 flex-col rounded-t-xl border-t border-t-border bg-t-panel pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-between px-3 pt-2"><h2 className="text-base font-semibold">Pairs <span className="text-xs font-normal text-t-muted">{pairs.length} USDT futures · {listSource==='bybit'?'Bybit':'Binance'}</span></h2><Button variant="ghost" size="icon" className={`size-10 ${control}`} aria-label="Close pairs" onClick={()=>setShowPairs(false)}><X/></Button></div>
