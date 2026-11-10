@@ -91,5 +91,6 @@
 - [x] Step 1: Price Pressure pop-out (/popout/price-pressure, own chart + 1 kline socket, BroadcastChannel follow/lock, blocked-popup fallback, never auto-open; 10 unit tests, 155 total pass; real popup not browser-tested)
 - [ ] Next: CVD pop-out, then DOM / Whale feed / Book debug, then Heatmap, then popup position memory
 - [x] /pressure: live candle chart removed (hidden base series), strip + two panes fill the page.
-- [x] Navy/white/hot-pink default theme tokens applied to terminal, /pressure, landing, login, register.
+- [x] Default palette replaced with black/white tokens across terminal, /pressure, landing, login and register; color only where it carries meaning, other themes retained.
 - [x] Black & White theme: chrome-only palette, top-bar contrast toggle + Profile theme row, saved; 154 tests pass; browser-checked at 1366x768 (candles and pair colors untouched, /pressure follows it, no console errors).
+- [ ] Default monochrome verification: unit suite once and no-screenshot desktop/phone computed-color and live Pressure checks.
