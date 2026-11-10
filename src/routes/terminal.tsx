@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { Search, X, SlidersHorizontal, Check, ChevronDown, UserRound, LogOut, List, Settings } from 'lucide-react';
+import { Search, X, SlidersHorizontal, Check, ChevronDown, UserRound, LogOut, List, Settings, Contrast } from 'lucide-react';
 import { PriceChart } from '@/components/PriceChart';
 import { Heatmap } from '@/components/Heatmap';
 import { DomLadder } from '@/components/DomLadder';
@@ -22,7 +22,7 @@ import logo from '@/assets/depthlens-logo.png.asset.json';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_KEY, TOOLS } from '@/lib/terminal-state';
+import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_KEY, TOOLS, THEMES, THEME_LABELS } from '@/lib/terminal-state';
 import { marketStream } from '@/lib/market-stream';
 import { LiveQuote, SourceSelect, useSourceMode, type TradeBridge } from '@/components/LiveQuote';
 import { useTerminalMobile } from '@/hooks/use-terminal-mobile';
@@ -159,6 +159,11 @@ function Terminal() {
   useEffect(()=>{const m:SyncMessage={type:'state',state:syncStateRef.current};syncRef.current?.postMessage(m);},[active.symbol,active.minutes,listSource,state.theme]);
   const pressureMenu=<Button asChild variant="ghost" size="sm" className="btn-accent shrink-0 mobile:h-10"><a href={buildPressureUrl({symbol:active.symbol,tf:active.minutes,source:listSource})} target="_blank" rel="noopener" aria-label="Pressure">Pressure</a></Button>;
   const control='text-t-muted hover:bg-t-border/50 hover:text-t-text';
+  const prevThemeRef=useRef('navy');
+  const setTheme=(t:string)=>setState(s=>({...s,theme:t}));
+  const toggleBw=()=>setState(s=>{if(s.theme==='bw')return{...s,theme:prevThemeRef.current||'navy'};prevThemeRef.current=s.theme;return{...s,theme:'bw'};});
+  const themeToggle=<Button variant="ghost" size="icon" aria-label="Black and white theme" title="Black and white theme" aria-pressed={state.theme==='bw'} onClick={toggleBw} className={`${control} ${state.theme==='bw'?'bg-t-border/60 text-t-text':''} rounded-full border border-t-border mobile:size-10`}><Contrast/></Button>;
+  const themePicker=<div className="space-y-2"><p className="text-xs text-t-muted">Theme</p><div className="flex flex-wrap gap-1.5">{THEMES.map(t=><Button key={t} size="sm" onClick={()=>setTheme(t)} aria-pressed={state.theme===t} className={`${state.theme===t?'btn-accent':'border border-t-border bg-t-bg text-t-text hover:bg-t-border/50'} mobile:h-10`}>{THEME_LABELS[t]??t}</Button>)}</div></div>;
   const profileMenu=<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border mobile:size-10`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} data-mobile={mobile||undefined} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text mobile:min-h-10"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem asChild className="focus:bg-t-border focus:text-t-text mobile:min-h-10"><Link to="/"><LogOut/>Logout</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>;
   const customForm=showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs mobile:h-10 mobile:text-sm"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90 mobile:h-10">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>;
   return <div data-theme={state.theme} data-mobile={mobile||undefined} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text mobile:min-h-0 mobile:pt-[env(safe-area-inset-top)] mobile:pr-[env(safe-area-inset-right)] mobile:pb-[env(safe-area-inset-bottom)] mobile:pl-[env(safe-area-inset-left)]">
