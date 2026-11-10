@@ -21,7 +21,8 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
     chart.clearCrosshairPosition();
     const oldMin=chart.priceScale('right',0).options().minimumWidth;
     chart.priceScale('right',0).applyOptions({minimumWidth:84});
-    chart.applyOptions({layout:{panes:{enableResize:true,separatorColor:api.colors.muted,separatorHoverColor:api.colors.unsplit}}});
+    const monochrome=['navy','bw'].includes(host.closest('[data-theme]')?.getAttribute('data-theme')??'navy');
+    chart.applyOptions({layout:{panes:{enableResize:true,separatorColor:api.colors.muted,separatorHoverColor:monochrome?api.colors.muted:api.colors.unsplit}}});
     const pane=chart.addPane();
     const common={priceFormat:{type:'custom' as const,formatter:formatCvd,minMove:.01},priceLineVisible:false,lastValueVisible:true,autoscaleInfoProvider:(original:()=>AutoscaleInfo|null)=>{const info=original();return info?.priceRange?{...info,priceRange:{minValue:Math.min(0,info.priceRange.minValue),maxValue:Math.max(0,info.priceRange.maxValue)}}:null;}};
     let series:ISeriesApi<'Baseline'>|ISeriesApi<'Candlestick'>|ISeriesApi<'Histogram'>;
