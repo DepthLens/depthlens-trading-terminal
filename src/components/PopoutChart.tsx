@@ -13,9 +13,9 @@ import { priceSpec } from '@/lib/market-data';
 
 // lightweight-charts cannot parse oklch(); resolve every theme token to rgb through a canvas, with a safe fallback
 // so a missing or unparsable variable can never crash chart creation.
-const FALLBACK: Record<string, string> = { '--t-muted': 'rgb(138,160,192)', '--t-border': 'rgb(42,59,110)', '--t-grid': 'rgba(255,255,255,0.06)', '--t-bg': 'rgb(10,19,34)', '--flow-up': 'rgb(38,166,154)', '--flow-down': 'rgb(239,83,80)', '--flow-poc': 'rgb(230,190,80)', '--flow-unsplit': 'rgb(40,170,190)', '--flow-value-area': 'rgb(60,140,200)' };
+const FALLBACK: Record<string, string> = { '--t-muted': 'rgb(163,163,163)', '--t-border': 'rgb(42,42,42)', '--t-grid': 'rgba(255,255,255,0.06)', '--t-bg': 'rgb(0,0,0)', '--flow-up': 'rgb(38,166,154)', '--flow-down': 'rgb(239,83,80)', '--flow-poc': 'rgb(230,190,80)', '--flow-unsplit': 'rgb(40,170,190)', '--flow-value-area': 'rgb(60,140,200)' };
 export function toColor(el: HTMLElement, name: string) {
-  const fallback = FALLBACK[name] ?? 'rgb(138,160,192)';
+  const fallback = FALLBACK[name] ?? 'rgb(163,163,163)';
   try {
     const raw = getComputedStyle(el).getPropertyValue(name).trim();
     const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
@@ -66,12 +66,12 @@ export function PopoutChart({ symbol, minutes, source, theme, onStatus }: { symb
     if (!el) return;
     onStatus?.('Connecting'); setPhase('loading');
     const text = toColor(el, '--t-muted'), grid = getComputedStyle(el).getPropertyValue('--t-grid').trim() || toColor(el, '--t-border'), border = toColor(el, '--t-border'), up = toColor(el, '--flow-up'), down = toColor(el, '--flow-down');
-    const soft = text.replace('rgb(', 'rgba(').replace(')', ',0.75)'), labelBg = toColor(el, '--t-border');
+    const soft = theme === 'navy' || theme === 'bw' ? getComputedStyle(el).getPropertyValue('--t-crosshair').trim() : text.replace('rgb(', 'rgba(').replace(')', ',0.75)'), labelBg = toColor(el, '--t-border');
     const line = { color: soft, width: 1 as const, style: LineStyle.Dashed, visible: true, labelVisible: true, labelBackgroundColor: labelBg };
     const chart = createChart(el, {
       autoSize: true,
       localization: { locale: 'en-US' },
-      layout: { background: { color: 'transparent' }, textColor: text, panes: { enableResize: true, separatorColor: text, separatorHoverColor: toColor(el, '--flow-unsplit') } },
+      layout: { background: { color: 'transparent' }, textColor: text, panes: { enableResize: true, separatorColor: text, separatorHoverColor: theme === 'navy' || theme === 'bw' ? text : toColor(el, '--flow-unsplit') } },
       grid: { vertLines: { color: grid }, horzLines: { color: grid } },
       crosshair: { mode: CrosshairMode.MagnetOHLC, vertLine: line, horzLine: line },
       rightPriceScale: { visible: true, borderColor: border, scaleMargins: { top: 0.08, bottom: 0.08 } },

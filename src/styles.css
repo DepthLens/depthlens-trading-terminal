@@ -146,19 +146,47 @@
 
 /* DepthLens terminal themes */
 :root, [data-theme="navy"] {
-  --pp-bg: #0a1322; --pp-text: #dbe6f5; --pp-muted: #8a9bb4;
+  --pp-bg: var(--t-bg); --pp-text: var(--t-text); --pp-muted: var(--t-muted);
   --logo-lens: #2DD4BF; --logo-bid: #22c55e; --logo-ask: #ef4444;
-  --t-bg: #0F1B3D; --t-panel: #162651; --t-border: #2A3B6E;
-  --t-text: #FFFFFF; --t-muted: #B8C2E0; --t-accent: #FF3D8B;
-  --t-accent-hover: #FF5C9E; --t-accent-press: #E52F79; --t-accent-fg: #FFFFFF; --t-accent-fg-sm: #0F1B3D;
+  --t-bg: #000000; --t-panel: #0D0D0D; --t-border: #2A2A2A;
+  --t-raised: #1A1A1A; --t-control-border: #3A3A3A; --t-disabled: #6B6B6B;
+  --t-text: #FFFFFF; --t-muted: #A3A3A3; --t-accent: #FFFFFF;
+  --t-accent-hover: #E5E5E5; --t-accent-press: #CFCFCF; --t-accent-fg: #000000; --t-accent-fg-sm: #000000;
+  --t-crosshair: rgba(255,255,255,0.6);
   --t-grid: rgba(255,255,255,0.06);
   --t-up: oklch(0.74 0.16 165); --t-down: oklch(0.65 0.2 20);
   --t-warning: oklch(0.8 0.16 80);
   --vp-poc: oklch(0.88 0.17 95); --vp-unsplit: oklch(0.75 0.13 185);
   --fp-text: oklch(1 0 0); --fp-outline: oklch(0.94 0.01 250);
   --flow-up: var(--t-up); --flow-down: var(--t-down); --flow-poc: var(--vp-poc);
-  --flow-value-area: var(--t-accent); --flow-unsplit: var(--vp-unsplit); --flow-text: oklch(1 0 0);
+  --flow-value-area: rgb(255,61,139); --flow-unsplit: var(--vp-unsplit); --flow-text: oklch(1 0 0);
   --flow-shadow: #050b18; --heat-bg: #050b18; --heat-text: oklch(.82 .025 250); --heat-grid: oklch(.30 .035 250);
+}
+/* Shared component chrome follows the terminal tokens; signal colors remain independent. */
+:root, [data-theme="navy"], [data-theme="bw"] {
+  --background: var(--t-bg); --foreground: var(--t-text);
+  --card: var(--t-panel); --card-foreground: var(--t-text);
+  --popover: var(--t-panel); --popover-foreground: var(--t-text);
+  --primary: var(--t-accent); --primary-foreground: var(--t-accent-fg);
+  --secondary: var(--t-raised); --secondary-foreground: var(--t-text);
+  --muted: var(--t-raised); --muted-foreground: var(--t-muted);
+  --accent: var(--t-raised); --accent-foreground: var(--t-text);
+  --border: var(--t-border); --input: var(--t-border); --ring: var(--t-accent);
+}
+:where([data-theme="navy"], [data-theme="bw"]) :is([data-variant="ghost"], [data-variant="secondary"]):not(.btn-accent):not([role="tab"]) {
+  background: transparent; border: 1px solid var(--t-control-border); color: var(--t-text);
+}
+:where([data-theme="navy"], [data-theme="bw"]) :is([data-variant="ghost"], [data-variant="secondary"]):not(.btn-accent):hover {
+  background: var(--t-raised); color: var(--t-text);
+}
+:where([data-theme="navy"], [data-theme="bw"]) [data-variant="default"] {
+  font-weight: 600;
+}
+:where([data-theme="navy"], [data-theme="bw"]) [role="menuitem"][data-highlighted] {
+  background: var(--t-accent); color: var(--t-accent-fg);
+}
+:where([data-theme="navy"], [data-theme="bw"]) button:disabled {
+  color: var(--t-disabled);
 }
 [data-theme="light"] {
   --t-bg: oklch(0.97 0.01 250); --t-panel: oklch(1 0 0); --t-border: oklch(0.88 0.02 255);
@@ -175,14 +203,19 @@
   --t-text: oklch(0.95 0.01 200); --t-muted: oklch(0.7 0.04 205); --t-accent: oklch(0.8 0.13 190);
   --t-up: oklch(0.78 0.15 160); --t-down: oklch(0.68 0.18 30);
 }
+[data-theme="light"], [data-theme="midnight"], [data-theme="ocean"] {
+  --pp-bg: #0a1322; --pp-text: #dbe6f5; --pp-muted: #8a9bb4;
+  --t-accent-hover: rgb(255,92,158); --t-accent-press: rgb(229,47,121);
+  --t-accent-fg: #FFFFFF; --t-accent-fg-sm: rgb(15,27,61);
+}
 /* Black & White: chrome only. Candles, buy/sell, heatmap, footprint, whale and pair colors are untouched. */
 [data-theme="bw"] {
-  --pp-bg: #000000; --pp-text: #FFFFFF; --pp-muted: #A8A8A8;
-  --t-bg: #000000; --t-panel: #0E0E0E; --t-border: #3D3D3D;
-  --t-text: #FFFFFF; --t-muted: #B4B4B4; --t-accent: #FFFFFF;
-  --t-accent-hover: #E4E4E4; --t-accent-press: #C8C8C8; --t-accent-fg: #000000; --t-accent-fg-sm: #000000;
-  --t-grid: rgba(255,255,255,0.08);
-  --t-crosshair: #9A9A9A;
+  --pp-bg: var(--t-bg); --pp-text: var(--t-text); --pp-muted: var(--t-muted);
+  --t-bg: #000000; --t-panel: #0D0D0D; --t-border: #2A2A2A;
+  --t-text: #FFFFFF; --t-muted: #A3A3A3; --t-accent: #FFFFFF;
+  --t-accent-hover: #E5E5E5; --t-accent-press: #CFCFCF; --t-accent-fg: #000000; --t-accent-fg-sm: #000000;
+  --t-grid: rgba(255,255,255,0.06);
+  --t-crosshair: rgba(255,255,255,0.6);
 }
 @theme inline {
   --color-t-bg: var(--t-bg); --color-t-panel: var(--t-panel); --color-t-border: var(--t-border);

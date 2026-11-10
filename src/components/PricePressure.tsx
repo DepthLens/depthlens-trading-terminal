@@ -52,7 +52,8 @@ export function PricePressure({ chartRef, hostRef, symbol, minutes, settings, on
     const bg = css.getPropertyValue('--pp-bg').trim() || '#0a1322';
     const ownMin = chart.priceScale('right', 0).options().minimumWidth;
     chart.priceScale('right', 0).applyOptions({ minimumWidth: 84 });
-    chart.applyOptions({ layout: { panes: { enableResize: true, separatorColor: api.colors.muted, separatorHoverColor: api.colors.unsplit } } });
+    const monochrome = ['navy', 'bw'].includes(host.closest('[data-theme]')?.getAttribute('data-theme') ?? 'navy');
+    chart.applyOptions({ layout: { panes: { enableResize: true, separatorColor: api.colors.muted, separatorHoverColor: monochrome ? api.colors.muted : api.colors.unsplit } } });
     const fmt = { type: 'custom' as const, formatter: (v: number) => formatK(v), minMove: 0.001 };
     const built: Built[] = kinds.map(kind => {
       const pane = chart.addPane();
