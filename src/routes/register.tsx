@@ -31,7 +31,7 @@ function Register() {
   const field = "mb-4 h-10 w-full rounded-md border border-t-border bg-t-bg px-3 text-sm outline-none focus:border-t-accent";
   const label = "mb-1 block text-xs font-medium text-t-muted";
   return (
-    <div data-theme="navy" className="flex min-h-dvh flex-col items-center justify-center bg-t-bg px-4 text-t-text">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-t-bg px-4 text-t-text">
       <form onSubmit={submit} className="w-full max-w-sm rounded-xl border border-t-border bg-t-panel p-8">
         <div className="mb-6 flex flex-col items-center">
           <img src={logo.url} alt="DepthLens logo" className="size-14 rounded-lg" />

@@ -1,10 +1,11 @@
+import { DEFAULT_THEME, isPreset } from './themes';
 export const TOOLS = ['Heatmap', 'Volume Profile', 'Footprint', 'DOM', 'CVD', 'Price Pressure', 'Whale Trades', 'Liquidations', 'Candle timer', 'Control & Attack bars'] as const;
 export const THEMES = ['navy', 'light', 'midnight', 'ocean', 'bw'] as const;
 export const THEME_LABELS: Record<string, string> = { navy: 'Black & White (default)', light: 'Light', midnight: 'Midnight', ocean: 'Ocean', bw: 'Black & White' };
 export const STORAGE_KEY = 'depthlens.terminal.v1';
 export type TerminalTab = { symbol: string; minutes: number };
 export type TerminalState = { tabs: TerminalTab[]; active: string; tools: Record<string, boolean>; theme: string };
-export const initialState = (): TerminalState => ({ tabs: [{ symbol: 'BTCUSDT', minutes: 1 }], active: 'BTCUSDT', tools: Object.fromEntries(TOOLS.map(t => [t, t === 'Candle timer' || t === 'Control & Attack bars'])), theme: 'navy' });
+export const initialState = (): TerminalState => ({ tabs: [{ symbol: 'BTCUSDT', minutes: 1 }], active: 'BTCUSDT', tools: Object.fromEntries(TOOLS.map(t => [t, t === 'Candle timer' || t === 'Control & Attack bars'])), theme: DEFAULT_THEME });
 export function validMinutes(value: string | number): number | null {
   const n = Number(value);
   return Number.isInteger(n) && n >= 1 && n <= 1440 ? n : null;
@@ -21,7 +22,7 @@ export function restoreState(raw: string | null): TerminalState {
       if (tabs.length === 10) break;
     }
     if (!tabs.length) return fallback;
-    return { tabs, active: tabs.some(t => t.symbol === d.active) ? d.active : tabs[0]?.symbol ?? 'BTCUSDT', tools: Object.fromEntries(TOOLS.map(t => [t, t === 'Candle timer' || t === 'Control & Attack bars' ? d.tools?.[t] !== false : d.tools?.[t] === true])), theme: THEMES.includes(d.theme) ? d.theme : 'navy' };
+    return { tabs, active: tabs.some(t => t.symbol === d.active) ? d.active : tabs[0]?.symbol ?? 'BTCUSDT', tools: Object.fromEntries(TOOLS.map(t => [t, t === 'Candle timer' || t === 'Control & Attack bars' ? d.tools?.[t] !== false : d.tools?.[t] === true])), theme: isPreset(d.theme) ? d.theme : DEFAULT_THEME };
   } catch { return fallback; }
 }
 export function openPair(state: TerminalState, symbol: string): TerminalState {

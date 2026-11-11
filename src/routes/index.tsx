@@ -25,7 +25,7 @@ const FEATURES = [
 
 function Landing() {
   return (
-    <div data-theme="navy" className="flex min-h-dvh flex-col bg-t-bg text-t-text">
+    <div className="flex min-h-dvh flex-col bg-t-bg text-t-text">
       <header className="flex items-center gap-3 border-b border-t-border bg-t-panel px-5 py-3">
         <img src={logo.url} alt="DepthLens logo" className="size-9 rounded-md" />
         <span className="text-lg font-bold tracking-wide text-t-accent">DepthLens</span>

@@ -94,3 +94,5 @@
 - [x] Default palette replaced with black/white tokens across terminal, /pressure, landing, login and register; color only where it carries meaning, other themes retained.
 - [x] Black & White theme: chrome-only palette, top-bar contrast toggle + Profile theme row, saved; 154 tests pass; browser-checked at 1366x768 (candles and pair colors untouched, /pressure follows it, no console errors).
 - [ ] Default monochrome verification: unit suite once and no-screenshot desktop/phone computed-color and live Pressure checks.
+- [x] /pressure candle pane fully hidden (pane 0 measured 2px).
+- [x] Theme picker with three presets in one themes file; colors only carry meaning for buy/sell, POC, heatmap and status.

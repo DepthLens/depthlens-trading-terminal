@@ -163,7 +163,7 @@
   --flow-shadow: #050b18; --heat-bg: #050b18; --heat-text: oklch(.82 .025 250); --heat-grid: oklch(.30 .035 250);
 }
 /* Shared component chrome follows the terminal tokens; signal colors remain independent. */
-:root, [data-theme="navy"], [data-theme="bw"] {
+:root, [data-theme="navy"], [data-theme="bw"], [data-theme="royal"], [data-theme="navypink"] {
   --background: var(--t-bg); --foreground: var(--t-text);
   --card: var(--t-panel); --card-foreground: var(--t-text);
   --popover: var(--t-panel); --popover-foreground: var(--t-text);
@@ -173,19 +173,19 @@
   --accent: var(--t-raised); --accent-foreground: var(--t-text);
   --border: var(--t-border); --input: var(--t-border); --ring: var(--t-accent);
 }
-:where([data-theme="navy"], [data-theme="bw"]) :is([data-variant="ghost"], [data-variant="secondary"]):not(.btn-accent):not([role="tab"]) {
+:where([data-theme="navy"], [data-theme="bw"], [data-theme="royal"], [data-theme="navypink"]) :is([data-variant="ghost"], [data-variant="secondary"]):not(.btn-accent):not([role="tab"]) {
   background: transparent; border: 1px solid var(--t-control-border); color: var(--t-text);
 }
-:where([data-theme="navy"], [data-theme="bw"]) :is([data-variant="ghost"], [data-variant="secondary"]):not(.btn-accent):hover {
+:where([data-theme="navy"], [data-theme="bw"], [data-theme="royal"], [data-theme="navypink"]) :is([data-variant="ghost"], [data-variant="secondary"]):not(.btn-accent):hover {
   background: var(--t-raised); color: var(--t-text);
 }
-:where([data-theme="navy"], [data-theme="bw"]) [data-variant="default"] {
+:where([data-theme="navy"], [data-theme="bw"], [data-theme="royal"], [data-theme="navypink"]) [data-variant="default"] {
   font-weight: 600;
 }
-:where([data-theme="navy"], [data-theme="bw"]) [role="menuitem"][data-highlighted] {
+:where([data-theme="navy"], [data-theme="bw"], [data-theme="royal"], [data-theme="navypink"]) [role="menuitem"][data-highlighted] {
   background: var(--t-accent); color: var(--t-accent-fg);
 }
-:where([data-theme="navy"], [data-theme="bw"]) button:disabled {
+:where([data-theme="navy"], [data-theme="bw"], [data-theme="royal"], [data-theme="navypink"]) button:disabled {
   color: var(--t-disabled);
 }
 [data-theme="light"] {

@@ -66,20 +66,23 @@ export function PopoutChart({ symbol, minutes, source, theme, onStatus }: { symb
     if (!el) return;
     onStatus?.('Connecting'); setPhase('loading');
     const text = toColor(el, '--t-muted'), grid = getComputedStyle(el).getPropertyValue('--t-grid').trim() || toColor(el, '--t-border'), border = toColor(el, '--t-border'), up = toColor(el, '--flow-up'), down = toColor(el, '--flow-down');
-    const soft = theme === 'navy' || theme === 'bw' ? getComputedStyle(el).getPropertyValue('--t-crosshair').trim() : text.replace('rgb(', 'rgba(').replace(')', ',0.75)'), labelBg = toColor(el, '--t-border');
+    const soft = theme !== 'light' && theme !== 'midnight' && theme !== 'ocean' ? getComputedStyle(el).getPropertyValue('--t-crosshair').trim() : text.replace('rgb(', 'rgba(').replace(')', ',0.75)'), labelBg = toColor(el, '--t-border');
     const line = { color: soft, width: 1 as const, style: LineStyle.Dashed, visible: true, labelVisible: true, labelBackgroundColor: labelBg };
     const chart = createChart(el, {
       autoSize: true,
       localization: { locale: 'en-US' },
-      layout: { background: { color: 'transparent' }, textColor: text, panes: { enableResize: true, separatorColor: text, separatorHoverColor: theme === 'navy' || theme === 'bw' ? text : toColor(el, '--flow-unsplit') } },
+      layout: { background: { color: 'transparent' }, textColor: text, panes: { enableResize: true, separatorColor: text, separatorHoverColor: theme !== 'light' && theme !== 'midnight' && theme !== 'ocean' ? text : toColor(el, '--flow-unsplit') } },
       grid: { vertLines: { color: grid }, horzLines: { color: grid } },
       crosshair: { mode: CrosshairMode.MagnetOHLC, vertLine: line, horzLine: line },
       rightPriceScale: { visible: true, borderColor: border, scaleMargins: { top: 0.08, bottom: 0.08 } },
       timeScale: { borderColor: border, timeVisible: true, barSpacing: 8, rightOffset: 8 },
     });
-    const candles = chart.addSeries(CandlestickSeries, { visible: true, upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: false, lastValueVisible: false });
+    // Candles stay as the hidden time/price base for the formulas; pane 0 takes no visible space.
+    const candles = chart.addSeries(CandlestickSeries, { visible: false, upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: false, lastValueVisible: false });
     const api: ProfileChart = { chart, series: candles, probes: new Set(), host: el, disposed: false, colors: { up, down, muted: text, poc: toColor(el, '--flow-poc'), unsplit: toColor(el, '--flow-unsplit'), valueArea: toColor(el, '--flow-value-area'), labelText: toColor(el, '--t-bg') } };
-    chart.panes()[0]?.setStretchFactor(0.02);
+    candles.priceScale().applyOptions({ visible: false });
+    const hidePane0 = () => { const p = chart.panes()[0]; if (p) { p.setStretchFactor(0.00001); try { p.setHeight(0); } catch {} } };
+    hidePane0();
     chartRef.current = api;
 
     let stopped = false, ready = false, ws: WebSocket | null = null, retry: ReturnType<typeof setTimeout> | undefined, attempts = 0;

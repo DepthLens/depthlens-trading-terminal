@@ -4,6 +4,8 @@ import { Lock, LockOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PopoutChart } from '@/components/PopoutChart';
 import { parsePopoutQuery, isSyncMessage, SYNC_CHANNEL } from '@/lib/popout';
+import { readSavedTheme, applyTheme } from '@/lib/themes';
+import { STORAGE_KEY } from '@/lib/terminal-state';
 import type { TradeSource } from '@/lib/live-price';
 
 export const Route = createFileRoute('/pressure')({
@@ -17,7 +19,9 @@ function PressurePage() {
   const [symbol, setSymbol] = useState(params.symbol);
   const [minutes, setMinutes] = useState(params.tf);
   const [source, setSource] = useState<TradeSource>(params.source);
-  const [theme, setTheme] = useState('navy');
+  const [theme, setTheme] = useState(() => typeof document === 'undefined' ? 'royal' : document.documentElement.getAttribute('data-theme') ?? 'royal');
+  useEffect(() => { setTheme(readSavedTheme(STORAGE_KEY)); }, []);
+  useEffect(() => { applyTheme(theme); }, [theme]);
   const [follow, setFollow] = useState(params.follow);
   const [status, setStatus] = useState('Connecting');
   const [mainClosed, setMainClosed] = useState(false);
@@ -39,7 +43,7 @@ function PressurePage() {
     const check = setInterval(() => { if (window.opener?.closed) setMainClosed(true); }, 1000);
     return () => { clearInterval(check); window.removeEventListener('beforeunload', closed); closed(); channel.close(); channelRef.current = null; };
   }, []);
-  return <div data-theme={theme} className="flex h-dvh flex-col overflow-y-auto bg-t-bg text-t-text">
+  return <div className="flex h-dvh flex-col overflow-y-auto bg-t-bg text-t-text">
     <header className="flex min-h-9 shrink-0 flex-wrap items-center gap-2 border-b border-t-border bg-t-panel px-3 py-1 text-xs">
       <strong>Pressure</strong><span className="text-t-muted">{symbol} · {minutes}m · {source === 'bybit' ? 'Bybit' : 'Binance'}</span>
       <span className={`ml-auto ${status === 'Live' ? 'text-t-up' : 'text-t-warning'}`} role="status">● {status}</span>
