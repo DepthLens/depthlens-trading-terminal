@@ -21,7 +21,7 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   return (
-    <div data-theme="navy" className="flex min-h-dvh flex-col items-center justify-center bg-t-bg px-4 text-t-text">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-t-bg px-4 text-t-text">
       <form
         onSubmit={e => { e.preventDefault(); void navigate({ to: "/terminal" }); }}
         className="w-full max-w-sm rounded-xl border border-t-border bg-t-panel p-8"

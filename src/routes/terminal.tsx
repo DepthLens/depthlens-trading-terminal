@@ -21,7 +21,7 @@ import { PROFILE_DEFAULT, PROFILE_KEY, restoreProfile, type ProfileSettings } fr
 import logo from '@/assets/depthlens-logo.png.asset.json';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu';
 import { THEME_PRESETS, DEFAULT_THEME, applyTheme } from '@/lib/themes';
 import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_KEY, TOOLS, THEMES, THEME_LABELS } from '@/lib/terminal-state';
 import { marketStream } from '@/lib/market-stream';
