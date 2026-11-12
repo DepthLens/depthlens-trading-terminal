@@ -91,6 +91,9 @@ class ConnectionManager {
           const payload = message.data ?? message;
           const name = message.topic ?? message.stream ?? (payload.e === 'depthUpdate' && typeof payload.s === 'string' ? `${payload.s.toLowerCase()}@depth@100ms` : '');
           this.topics.get(key)?.get(name)?.receive(message);
+          // Bybit rejects a topic without naming it in `topic`; route the rejection to the topic quoted in ret_msg.
+          const reject = message as { success?: boolean; ret_msg?: string };
+          if (!name && reject.success === false && typeof reject.ret_msg === 'string') for (const [topic, item] of this.topics.get(key) ?? []) if (reject.ret_msg.includes(topic)) item.receive(message);
         }
         receive(data);
       };
