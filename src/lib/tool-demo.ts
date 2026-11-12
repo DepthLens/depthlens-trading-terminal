@@ -42,3 +42,11 @@ export function demoHeatmap(price: number, bucket: number, now = Date.now()) {
   return { buffer, span };
 }
 export function demoWhales(bars:Bar[]):import('./whale-data').WhaleEvent[]{return bars.filter((_,i)=>i%3===0).map((b,i)=>({id:`demo-whale-${i}`,time:b.time+1000,lastTime:b.time+2000,side:i%2?'Sell':'Buy',price:(b.high+b.low)/2,lastPrice:(b.high+b.low)/2,quantity:1,notional:[50000,250000,1200000,100000][i%4]??50000,count:i+2}));}
+/** Synthetic liquidations for ?demo=1 only; never stored. */
+export function demoLiquidations(bars: Bar[]) {
+  return bars.flatMap((b, i) => i % 3 === 0 ? [] : [0, 1, 2].filter(k => (i + k) % 2 === 0 || k === 0).map(k => {
+    const side = (i + k) % 4 < 2 ? 'long' as const : 'short' as const, price = side === 'long' ? b.low + (b.high - b.low) * .15 * k : b.high - (b.high - b.low) * .15 * k;
+    const notional = 8000 * (1 + ((i * 7 + k * 13) % 23)) * (i % 11 === 0 ? 12 : 1), qty = notional / price;
+    return { id: `demo-liq-${i}-${k}`, time: b.time + 5000 + k * 9000, side, price, qty, notional };
+  }));
+}
