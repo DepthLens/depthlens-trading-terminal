@@ -23,6 +23,8 @@ export class CvdResetPrimitive implements IPanePrimitive<Time> {
   paneViews() { return this.views; }
 }
 
+// Optional readable names for checkPaneAlignment, keyed by a pane's first series.
+export const paneLabels = new WeakMap<object, string>();
 export async function checkPaneAlignment(chart: IChartApi) {
   const main = chart.panes()[0], subs = chart.panes().slice(1), cvd = subs[0], range = chart.timeScale().getVisibleLogicalRange();
   if (!main || !cvd || !range) return [{ name: 'CVD pane present', pass: false, error: Infinity }];
@@ -38,7 +40,7 @@ export async function checkPaneAlignment(chart: IChartApi) {
       const x = candle ? chart.timeScale().timeToCoordinate(candle.time) : null;
       const mainBox = main.getHTMLElement()?.getBoundingClientRect();
       for (const sub of subs) {
-        const i = sub.paneIndex(), name = i === 1 && subs.length === 1 ? 'CVD' : `Pane ${i}`;
+        const i = sub.paneIndex(), label = sub.getSeries()[0] ? paneLabels.get(sub.getSeries()[0] as object) : undefined, name = label ?? (i === 1 && subs.length === 1 ? 'CVD' : `Pane ${i}`);
         const sx = (sub.getSeries()[0] && candle) ? chart.timeScale().timeToCoordinate(candle.time) : x;
         const cvdBox = sub.getHTMLElement()?.getBoundingClientRect();
         const error = x === null || sx === null || !mainBox || !cvdBox ? Infinity : Math.abs(mainBox.left+x-(cvdBox.left+sx));
