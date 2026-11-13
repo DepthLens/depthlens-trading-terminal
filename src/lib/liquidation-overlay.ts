@@ -8,6 +8,7 @@ export class LiquidationPrimitive implements ISeriesPrimitive<Time>, OverlayProb
   constructor(private api: OverlayChart, private minutes: number, private colors: { up: string; down: string; outline: string; text: string }) {}
   attached({ requestUpdate }: Parameters<NonNullable<ISeriesPrimitive<Time>['attached']>>[0]) { this.request = requestUpdate; }
   detached() { this.request = () => {}; }
+  paused = false; pause(v: boolean) { this.paused = v; }
   samples = () => this.drawn; refresh() { this.request(); }
   positions() {
     const scale = this.api.chart.timeScale(), h = this.api.chart.paneSize(0).height, w = scale.width(), out: { b: LiqBubble; x: number; y: number; r: number }[] = [];
