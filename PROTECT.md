@@ -84,3 +84,5 @@ After every change, add any new feature to the list in section 1.
 - Theme smoke: unit suite once, computed colors at 1366x768/390x844, meaningful candles unchanged; /pressure retains hidden candles, strip and two live panes without overlap or console errors.
 - Themes are three presets defined only in `src/lib/themes.ts` (White & Royal Blue default, Black & White, Navy & Pink), picked in the profile menu, saved in localStorage, applied to <html> before paint and synced to /pressure; colors carry meaning only for buy/sell, POC, heatmap and status.
 - /pressure: candle pane 0 stays hidden (series invisible, no scale, ≤2px tall); only header, strip and two Price Pressure panes are visible.
+
+- Flow Radar (Order Flow menu): own Binance REST klines per radar timeframe (default 1h), Flow Momentum/Trapped Sweep setups, native markers (arrow → ✓/✗/–), stop/target lines for open setups, toast on new setup, scoreboard; rules in flow-radar.ts with tests. No sockets.
