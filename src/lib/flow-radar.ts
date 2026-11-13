@@ -63,4 +63,4 @@ export function scoreSetups(list: RadarSetup[], kind: SetupKind, s: RadarSetting
   return { setups: k.length, perMonth: months > 0 ? k.length / months : 0, wins, losses, accuracy: wins + losses ? 100 * wins / (wins + losses) : null, breakeven: breakeven(s.r), avgR: closed.length ? closed.reduce((a, x) => a + (x.resultR ?? 0), 0) / closed.length : null };
 }
 // Binance futures kline row -> bar; index 9 is taker buy base volume.
-export const parseKline = (k: (string | number)[]): RadarBar => ({ time: +k[0], open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5], takerBuy: +k[9] });
+export const parseKline = (k: (string | number)[]): RadarBar => ({ time: Number(k[0]), open: Number(k[1]), high: Number(k[2]), low: Number(k[3]), close: Number(k[4]), volume: Number(k[5]), takerBuy: Number(k[9]) });

@@ -18,7 +18,7 @@ export function FlowRadar({ chartRef, symbol, minutes, revision, mobile }: { cha
       try {
         const r = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${s.tf}&limit=1500`, { signal: ab.signal });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const now = Date.now(), rows = (await r.json() as (string | number)[][]).filter(k => +k[6] < now).map(parseKline);
+        const now = Date.now(), rows = (await r.json() as (string | number)[][]).filter(k => Number(k[6]) < now).map(parseKline);
         if (dead || rows.length < 26) return;
         const setups = findSetups(rows, s), key = setups.map(x => x.kind + x.side + x.time).join();
         const last = setups.at(-1);
