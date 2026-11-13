@@ -23,7 +23,7 @@ export function FlowRadar({ chartRef, symbol, minutes, revision, mobile }: { cha
         const setups = findSetups(rows, s), key = setups.map(x => x.kind + x.side + x.time).join();
         const last = setups.at(-1);
         if (seen.current && last && !seen.current.includes(last.kind + last.side + last.time)) toast(`Flow Radar: ${last.side.toUpperCase()} setup on ${symbol}`, { description: `${last.kind === 'momentum' ? 'Flow Momentum' : 'Trapped Sweep'} · ${s.tf} · stop ${last.stop.toPrecision(6)}` });
-        seen.current = key; setData({ setups, span: rows.at(-1)!.time - rows[0].time }); setErr('');
+        seen.current = key; setData({ setups, span: rows.at(-1)!.time - rows[0]!.time }); setErr('');
       } catch (e) { if (!dead && (e as Error).name !== 'AbortError') setErr('Could not load Binance candles for Flow Radar.'); }
     };
     load(); const id = setInterval(load, 30000);
@@ -61,7 +61,7 @@ export function FlowRadar({ chartRef, symbol, minutes, revision, mobile }: { cha
         {n('r', 'R', 0.1)}{n('fee', 'Fee % / side', 0.01)}{n('dr', 'dr threshold', 0.01)}{n('vz', 'vz threshold', 0.1)}{n('hold', 'Hold candles', 1)}
         <label className="flex items-center gap-1"><input type="checkbox" checked={s.momentum} onChange={e => save({ momentum: e.target.checked })}/>Flow Momentum</label>
         <label className="flex items-center gap-1"><input type="checkbox" checked={s.sweep} onChange={e => save({ sweep: e.target.checked })}/>Trapped Sweep</label></div>}
-      {shortTfWarning(s.tf) && <div className="text-t-warn">Setups on short timeframes performed worse in testing.</div>}
+      {shortTfWarning(s.tf) && <div className="text-t-warning">Setups on short timeframes performed worse in testing.</div>}
       {err && <div className="text-t-down">{err}</div>}
       {!data && !err && <div className="text-t-muted">Loading {s.tf} candles…</div>}
       {rows.length > 0 && <table className="w-full tabular-nums"><thead className="text-t-muted"><tr><th className="text-left font-normal">Setup</th><th>N</th><th>/mo</th><th>W</th><th>L</th><th>Acc</th><th>BE</th><th>Avg R</th></tr></thead>

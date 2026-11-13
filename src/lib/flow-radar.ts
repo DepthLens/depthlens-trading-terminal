@@ -24,14 +24,14 @@ export function findSetups(bars: RadarBar[], s: RadarSettings): RadarSetup[] {
   const out: RadarSetup[] = [], dayHL = new Map<number, { h: number; l: number }>(), used = new Set<string>();
   for (const b of bars) { const d = day(b.time), e = dayHL.get(d); dayHL.set(d, e ? { h: Math.max(e.h, b.high), l: Math.min(e.l, b.low) } : { h: b.high, l: b.low }); }
   const add = (kind: SetupKind, side: 'buy' | 'sell', i: number) => {
-    const b = bars[i], entry = b.close, stop = side === 'buy' ? b.low * (1 - STOP_BUFFER) : b.high * (1 + STOP_BUFFER), risk = Math.abs(entry - stop);
+    const b = bars[i]!, entry = b.close, stop = side === 'buy' ? b.low * (1 - STOP_BUFFER) : b.high * (1 + STOP_BUFFER), risk = Math.abs(entry - stop);
     if (risk / entry < MIN_STOP || risk / entry > MAX_STOP) return;
     out.push(resolve({ kind, side, time: b.time, entry, stop, target: side === 'buy' ? entry + s.r * risk : entry - s.r * risk, outcome: 'open' }, bars, i, s));
   };
   for (let i = 0; i < bars.length; i++) {
-    const b = bars[i], dr = deltaRatio(b);
+    const b = bars[i]!, dr = deltaRatio(b);
     if (s.momentum && i >= 24) {
-      let avg = 0; for (let j = i - 24; j < i; j++) avg += bars[j].volume; avg /= 24;
+      let avg = 0; for (let j = i - 24; j < i; j++) avg += bars[j]!.volume; avg /= 24;
       const vz = avg > 0 ? b.volume / avg : 0;
       if (vz >= s.vz && dr >= s.dr) add('momentum', 'buy', i); else if (vz >= s.vz && dr <= -s.dr) add('momentum', 'sell', i);
     }
@@ -48,11 +48,11 @@ export function findSetups(bars: RadarBar[], s: RadarSettings): RadarSetup[] {
 function resolve(x: RadarSetup, bars: RadarBar[], i: number, s: RadarSettings): RadarSetup {
   const risk = Math.abs(x.entry - x.stop), feeR = (2 * s.fee / 100) * x.entry / risk, buy = x.side === 'buy';
   for (let j = i + 1; j < bars.length && j <= i + s.hold; j++) {
-    const b = bars[j], hitStop = buy ? b.low <= x.stop : b.high >= x.stop, hitTarget = buy ? b.high >= x.target : b.low <= x.target;
+    const b = bars[j]!, hitStop = buy ? b.low <= x.stop : b.high >= x.stop, hitTarget = buy ? b.high >= x.target : b.low <= x.target;
     if (hitStop) return { ...x, outcome: 'loss', exitTime: b.time, exitPrice: x.stop, resultR: -1 - feeR }; // stop first when both touch (conservative)
     if (hitTarget) return { ...x, outcome: 'win', exitTime: b.time, exitPrice: x.target, resultR: s.r - feeR };
   }
-  if (i + s.hold < bars.length) { const b = bars[i + s.hold]; return { ...x, outcome: 'expired', exitTime: b.time, exitPrice: b.close, resultR: (buy ? b.close - x.entry : x.entry - b.close) / risk - feeR }; }
+  if (i + s.hold < bars.length) { const b = bars[i + s.hold]!; return { ...x, outcome: 'expired', exitTime: b.time, exitPrice: b.close, resultR: (buy ? b.close - x.entry : x.entry - b.close) / risk - feeR }; }
   return x;
 }
 
