@@ -1,5 +1,5 @@
 import { DEFAULT_THEME, isPreset } from './themes';
-export const TOOLS = ['Heatmap', 'Volume Profile', 'Footprint', 'DOM', 'CVD', 'Price Pressure', 'Whale Trades', 'Liquidations', 'Candle timer', 'Control & Attack bars'] as const;
+export const TOOLS = ['Heatmap', 'Volume Profile', 'Footprint', 'DOM', 'CVD', 'Price Pressure', 'Whale Trades', 'Liquidations', 'Candle timer', 'Control & Attack bars', 'Flow Radar'] as const;
 export const THEMES = ['navy', 'light', 'midnight', 'ocean', 'bw'] as const;
 export const THEME_LABELS: Record<string, string> = { navy: 'Black & White (default)', light: 'Light', midnight: 'Midnight', ocean: 'Ocean', bw: 'Black & White' };
 export const STORAGE_KEY = 'depthlens.terminal.v1';

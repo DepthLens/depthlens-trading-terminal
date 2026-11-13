@@ -36,7 +36,7 @@ export function Liquidations({ chartRef, hostRef, source, symbol, minutes, spec,
     };
     const size = () => { const total = chart.paneSize(0).height + pane.getHeight(); pane.setHeight(Math.max(90, Math.round(total * (settings.height ?? .16)))); lastH = 0; position(); };
     const showLegend = () => {
-      const b = hover === null ? rows.at(-1) : rows.find(r => r.time === hover), u = settings.unit === 'coin' ? spec.baseAsset ?? 'coin' : 'USDT';
+      const b = hover === null ? rows.at(-1) : rows.find(r => r.time === hover), u = settings.unit === 'coin' ? 'coin' : 'USDT';
       legend.textContent = `Liquidations (${u})   Long ${b ? formatLiq(b.long) : '—'}   Short ${b ? formatLiq(b.short) : '—'}   Net ${b ? formatLiq(b.short - b.long) : '—'}`;
     };
     const render = () => {

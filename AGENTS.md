@@ -32,3 +32,5 @@
 - CVD exact deltas and cached exchange history live in browser-safe cvd-data/cvd-store; Cvd uses a native lightweight-charts pane sharing the existing time scale, native resize separator, price-axis width and crosshair, with existing LiveQuote feed only. Execution IDs deduplicate recent Bybit trades against live trades; Binance kline totals replace rather than accumulate.
 
 - Whale detection/aggregation and IndexedDB history live in browser-safe whale-data/whale-store; LiveQuote forwards existing trades only, while whale-overlay derives coordinates per draw and WhaleTrades owns isolated feed updates, avoiding sockets and terminal rerenders.
+
+- Flow Radar rules live in browser-safe flow-radar.ts; FlowRadar.tsx polls Binance REST klines (taker buy volume) every 30s and marks only via native markers/price lines on existing chart candles, never opening sockets.

@@ -96,3 +96,6 @@
 - [ ] Default monochrome verification: unit suite once and no-screenshot desktop/phone computed-color and live Pressure checks.
 - [x] /pressure candle pane fully hidden (pane 0 measured 2px).
 - [x] Theme picker with three presets in one themes file; colors only carry meaning for buy/sell, POC, heatmap and status.
+
+- [x] Flow Radar tool with setups, outcome marks, scoreboard, settings and tests.
+- [x] Fixed leftover Liquidations build error.
