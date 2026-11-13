@@ -16,7 +16,7 @@ describe('flow radar', () => {
   });
   it('sell momentum hits stop = loss with fees', () => {
     const b = flat(30); b[24] = { ...b[24]!, volume: 15, takerBuy: 6 }; b[26] = { ...b[26]!, high: 101 };
-    const [x] = findSetups(b, RADAR_DEFAULT); expect(x.side).toBe('sell'); expect(x.outcome).toBe('loss'); expect(x.resultR!).toBeLessThan(-1);
+    const x = findSetups(b, RADAR_DEFAULT)[0]!; expect(x.side).toBe('sell'); expect(x.outcome).toBe('loss'); expect(x.resultR!).toBeLessThan(-1);
   });
   it('trapped sweep sell above previous day high, only first per day', () => {
     const b = flat(48); b[30] = { ...b[30]!, high: 101, close: 100, volume: 10, takerBuy: 6 }; b[31] = { ...b[31]!, high: 101, close: 100, takerBuy: 6 };
