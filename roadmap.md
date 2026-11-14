@@ -99,3 +99,7 @@
 
 - [x] Flow Radar tool with setups, outcome marks, scoreboard, settings and tests.
 - [x] Fixed leftover Liquidations build error.
+
+## Flow Radar v2
+- [ ] Exact uploaded core, active-timeframe Binance delta/Custom aggregation, Setup/Watch policy, docked scoreboard and saved settings.
+- [ ] Synthetic rule tests and no-screenshot desktop/phone browser checks.
