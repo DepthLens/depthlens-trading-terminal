@@ -188,6 +188,7 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     {pressure&&pressureSettings&&onPressureChange&&<PricePressure chartRef={profileChartRef} hostRef={ref} symbol={symbol} minutes={minutes} settings={pressureSettings} onChange={onPressureChange} mobile={mobile} revision={chartRevision} cvd={cvd}/>}
     {whales&&whaleSettings&&<WhaleTrades chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} spec={priceFormat} settings={whaleSettings} mobile={mobile} minutes={minutes} revision={chartRevision} feedHost={whaleFeedHost}/>}
     {cvd&&cvdSettings&&onCvdHeight&&<Cvd chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} minutes={minutes} settings={cvdSettings} mobile={mobile} revision={chartRevision} onHeight={onCvdHeight}/>}
+    {flowRadar&&<FlowRadar chartRef={profileChartRef} symbol={symbol} minutes={minutes} revision={chartRevision} mobile={mobile}/>}
     {liquidations&&liqSettings&&onLiqHeight&&<Liquidations chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} minutes={minutes} spec={priceFormat} settings={liqSettings} mobile={mobile} revision={chartRevision} onHeight={onLiqHeight}/>}
     {volumeProfile && profileSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-[calc(var(--cvd-h,0px)+var(--pp-h,0px)+var(--liq-h,0px))] ${mobile?'top-0':'top-8'}`}><VolumeProfile chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={profileSettings} spec={priceFormat} mobile={mobile} minutes={minutes} theme={theme} revision={chartRevision}/></div>}
     {footprint && footprintSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-[calc(var(--cvd-h,0px)+var(--pp-h,0px)+var(--liq-h,0px))] ${mobile?'top-0':'top-8'}`}><Footprint chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={footprintSettings} spec={priceFormat} mobile={mobile} minutes={minutes} revision={chartRevision}/></div>}
@@ -199,7 +200,6 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     </div>
     {!mobile && <span role="status" className={`pointer-events-none absolute bottom-[calc(var(--pp-strip,0px)+8px)] left-3 text-[10px] ${status==='Live'?'text-t-up':'text-t-muted'}`}>● {status}</span>}
   </div>
-    {flowRadar&&<FlowRadar chartRef={profileChartRef} symbol={symbol} minutes={minutes} revision={chartRevision} mobile={mobile}/>}
     {showFlow&&<AttackBar chartRef={profileChartRef as any} minutes={minutes} symbol={symbol} settings={flowSettings} onChange={onFlowChange} mobile={mobile}/>}
   </div>;
 }

@@ -85,5 +85,4 @@ After every change, add any new feature to the list in section 1.
 - Themes are three presets defined only in `src/lib/themes.ts` (White & Royal Blue default, Black & White, Navy & Pink), picked in the profile menu, saved in localStorage, applied to <html> before paint and synced to /pressure; colors carry meaning only for buy/sell, POC, heatmap and status.
 - /pressure: candle pane 0 stays hidden (series invisible, no scale, ≤2px tall); only header, strip and two Price Pressure panes are visible.
 
-- Flow Radar (Order Flow menu): exact uploaded v2 core; active chart timeframe, Binance base-volume delta (Custom from 1m), Setup mode ≥3h and Watch-only context ≤2h, native anchored arrows/outline circles/outcomes; docked scoreboard/mobile sheet, saved q/high-volatility/R/max-bars/Watch settings, hidden in Heatmap, no sockets.
-- Flow Radar smoke: desktop/390x844 enable, context 1h then Setup 4h, Custom aggregation, gear persistence, Heatmap hiding, moving price and no console errors; unavailable Binance shows only the calm needs-data message.
+- Flow Radar (Order Flow menu): own Binance REST klines per radar timeframe (default 1h), Flow Momentum/Trapped Sweep setups, native markers (arrow → ✓/✗/–), stop/target lines for open setups, toast on new setup, scoreboard; rules in flow-radar.ts with tests. No sockets.

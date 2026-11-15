@@ -33,6 +33,4 @@
 
 - Whale detection/aggregation and IndexedDB history live in browser-safe whale-data/whale-store; LiveQuote forwards existing trades only, while whale-overlay derives coordinates per draw and WhaleTrades owns isolated feed updates, avoiding sockets and terminal rerenders.
 
-- Flow Radar detection/scoring lives exclusively in the unmodified uploaded flow-radar-core.ts; flow-radar.ts adapts Binance volume/delta and saved settings, while FlowRadar scans active-timeframe closed candles and uses native markers without sockets.
-
-- Keep strict TypeScript checks but disable noUncheckedIndexedAccess: the user-supplied exact Flow Radar core uses index-bounded arrays and must remain byte-identical.
+- Flow Radar rules live in browser-safe flow-radar.ts; FlowRadar.tsx polls Binance REST klines (taker buy volume) every 30s and marks only via native markers/price lines on existing chart candles, never opening sockets.
