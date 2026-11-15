@@ -101,5 +101,5 @@
 - [x] Fixed leftover Liquidations build error.
 
 ## Flow Radar v2
-- [ ] Exact uploaded core, active-timeframe Binance delta/Custom aggregation, Setup/Watch policy, docked scoreboard and saved settings.
-- [ ] Synthetic rule tests and no-screenshot desktop/phone browser checks.
+- [x] Exact uploaded core, active-timeframe Binance delta/Custom aggregation, Setup/Watch policy, docked scoreboard and saved settings; no backend or sockets added.
+- [x] 170 tests pass (12 v2 tests); desktop/390x844 real Binance BTC: 999 closed candles, 1m context 0 setups/11 watches, 4h q=.95/R=1.2 6 trades/83.3% target-hit/+0.90R. Custom 7m 214 candles/2 watches, settings restored, Heatmap hides Radar, live price changed 4 times, timer/tag probes 0px, normal console clean. Simulated Binance 503 shows needs-data only (expected browser resource errors); no live target/stop event or full unrelated-tool smoke matrix observed.

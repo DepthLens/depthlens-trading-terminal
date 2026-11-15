@@ -3,7 +3,7 @@ import { createSeriesMarkers, type SeriesMarker, type Time, type UTCTimestamp } 
 import { Settings2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { ProfileChart } from './VolumeProfile';
-import { scan } from '@/lib/flow-radar-core';
+import { scan, tfPolicy } from '@/lib/flow-radar-core';
 import { RADAR_DEFAULT, RADAR_KEY, aggregateRadar, parseKline, radarInterval, restoreRadarSettings, type RadarSettings } from '@/lib/flow-radar';
 
 type Result = ReturnType<typeof scan> & { candles: ReturnType<typeof parseKline>[] };
@@ -72,7 +72,7 @@ export function FlowRadar({ chartRef, symbol, minutes, revision, mobile }: { cha
   const fmt = (v: number, digits = 2) => Number.isFinite(v) ? v.toFixed(digits) : '—';
   const board = data?.board;
   return <section data-flow-radar="" data-mode={data?.policy.mode} data-candles={data?.candles.length ?? 0} data-setups={data?.setups.length ?? 0} data-watches={data?.watches.length ?? 0} aria-label="Flow Radar scoreboard" className={`shrink-0 border-t border-t-border bg-t-panel text-xs text-t-text ${mobile ? 'max-h-[40vh] overflow-y-auto' : ''}`}>
-    <header className="flex items-center gap-2 px-3 py-1"><span className="flex-1 font-semibold">Flow Radar · {minutes}m · {data?.policy.mode === 'context' ? 'Context' : 'Setup'}</span>
+    <header className="flex items-center gap-2 px-3 py-1"><span className="flex-1 font-semibold">Flow Radar · {minutes}m · {tfPolicy(minutes).mode === 'context' ? 'Context' : 'Setup'}</span>
       <Button variant="ghost" size="icon" className="size-7" aria-label="Flow Radar settings" title="Flow Radar settings" onClick={() => setOpen(v => !v)}><Settings2/></Button>
       <Button variant="ghost" size="icon" className="size-7" aria-label={collapsed ? 'Expand Flow Radar' : 'Minimize Flow Radar'} onClick={() => setCollapsed(v => !v)}>{collapsed ? <ChevronUp/> : <ChevronDown/>}</Button>
     </header>
