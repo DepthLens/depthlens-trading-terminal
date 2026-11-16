@@ -4,8 +4,8 @@ export type RadarSettings = { tf: string; r: number; fee: number; dr: number; vz
 export type SetupKind = 'momentum' | 'sweep';
 export type Outcome = 'open' | 'win' | 'loss' | 'expired';
 export type RadarSetup = { kind: SetupKind; side: 'buy' | 'sell'; time: number; entry: number; stop: number; target: number; outcome: Outcome; exitTime?: number; exitPrice?: number; resultR?: number };
-export const RADAR_TFS = ['5m', '15m', '30m', '1h', '2h', '4h', '1d'] as const;
-export const RADAR_MINUTES: Record<string, number> = { '5m': 5, '15m': 15, '30m': 30, '1h': 60, '2h': 120, '4h': 240, '1d': 1440 };
+export const RADAR_TFS = ['1m', '5m', '15m', '30m', '1h', '2h', '4h', '1d'] as const;
+export const RADAR_MINUTES: Record<string, number> = { '1m': 1, '5m': 5, '15m': 15, '30m': 30, '1h': 60, '2h': 120, '4h': 240, '1d': 1440 };
 export const RADAR_DEFAULT: RadarSettings = { tf: '1h', r: 2, fee: 0.04, dr: 0.2, vz: 1.5, hold: 24, momentum: true, sweep: false };
 export const RADAR_KEY = 'depthlens.flowRadar.v1';
 export const STOP_BUFFER = 0.0003, MIN_STOP = 0.0015, MAX_STOP = 0.02;
