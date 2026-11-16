@@ -53,7 +53,7 @@ export function FlowRadar({ chartRef, symbol, minutes, revision, mobile }: { cha
     const patterns = patternLayer(data.bars, s.tf, s, minutes, have, api.colors);
     const markers = [...byT.entries()].sort((a, b) => a[0] - b[0]).flatMap(e => e[1]);
     markers.push(...patterns.markers); markers.sort((a, b) => Number(a.time) - Number(b.time));
-    api.host.dataset.shortTfPatterns = String(patterns.markers.length);
+    api.host.dataset['shortTfPatterns'] = String(patterns.markers.length);
     const hover: Parameters<typeof api.chart.subscribeCrosshairMove>[0] = event => {
       const lines = typeof event.hoveredObjectId === 'string' ? patterns.details.get(event.hoveredObjectId) : undefined;
       if (tooltip.current) { tooltip.current.hidden = !lines; tooltip.current.textContent = lines?.join('\n') ?? ''; }
@@ -65,7 +65,7 @@ export function FlowRadar({ chartRef, symbol, minutes, revision, mobile }: { cha
       lines.push(api.series.createPriceLine({ price: x.stop, color: down, lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true, title: 'Stop' }));
       lines.push(api.series.createPriceLine({ price: x.target, color: up, lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true, title: 'Target' }));
     }
-    return () => { if (tooltip.current) tooltip.current.hidden = true; delete api.host.dataset.shortTfPatterns; if (api.disposed) return; try { api.chart.unsubscribeCrosshairMove(hover); plugin?.detach(); lines.forEach(l => api.series.removePriceLine(l)); } catch { /* disposed */ } };
+    return () => { if (tooltip.current) tooltip.current.hidden = true; delete api.host.dataset['shortTfPatterns']; if (api.disposed) return; try { api.chart.unsubscribeCrosshairMove(hover); plugin?.detach(); lines.forEach(l => api.series.removePriceLine(l)); } catch { /* disposed */ } };
   }, [chartRef, data, minutes, revision, s.patternsOn, s.patterns, s.tf]);
   const rows = data ? ([['Flow Momentum', 'momentum', s.momentum], ['Trapped Sweep', 'sweep', s.sweep]] as const).filter(r => r[2]).map(r => [r[0], scoreSetups(data.setups, r[1], s, data.span)] as const) : [];
   const n = (k: keyof RadarSettings, label: string, step: number) => <label className="flex items-center justify-between gap-2">{label}<input type="number" step={step} value={s[k] as number} onChange={e => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) save({ [k]: v } as Partial<RadarSettings>); }} className="w-16 rounded border border-t-border bg-t-bg px-1 text-t-text"/></label>;
