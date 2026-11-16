@@ -99,3 +99,5 @@
 
 - [x] Flow Radar tool with setups, outcome marks, scoreboard, settings and tests.
 - [x] Fixed leftover Liquidations build error.
+- [x] Short-TF Patterns section, saved switch/selection, separate unchanged atlas, shared-data circle markers and measured hover text.
+- [ ] Verify pattern regression tests, live 15m hover, 2h restriction, demo overlay stability and pane alignment without screenshots.

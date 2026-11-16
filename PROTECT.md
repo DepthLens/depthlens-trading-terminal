@@ -86,3 +86,5 @@ After every change, add any new feature to the list in section 1.
 - /pressure: candle pane 0 stays hidden (series invisible, no scale, ≤2px tall); only header, strip and two Price Pressure panes are visible.
 
 - Flow Radar (Order Flow menu): own Binance REST klines per radar timeframe (default 1h), Flow Momentum/Trapped Sweep setups, native markers (arrow → ✓/✗/–), stop/target lines for open setups, toast on new setup, scoreboard; rules in flow-radar.ts with tests. No sockets.
+- Short-TF Patterns: off-default section inside Flow Radar settings, saved selections, unchanged supplied atlas, price/time-anchored small Setup/Watch circles and describeEvent hover; shares radar candles/delta, no sockets.
+- Smoke: compare radar off-default 1h scoreboard/markers, enable patterns on 15m and hover measured monthly line, switch 2h (no patterns, restriction note), retain demo and overlay/pane alignment checks.
