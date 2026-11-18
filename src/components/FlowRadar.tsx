@@ -19,8 +19,8 @@ export function FlowRadar({ chartRef, symbol, minutes, revision, mobile }: { cha
     const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(RADAR_KEY);
     let extra: Record<string, unknown> = {}; try { extra = JSON.parse(raw ?? '{}') ?? {}; } catch { /* defaults */ }
     const base = restoreRadarSettings(raw);
-    return { ...base, tf: extra.tf === undefined || extra.tf === 'chart' ? 'chart' : base.tf, ...restorePatternSettings(extra),
-      mtfOn: extra.mtfOn !== false, mtfTfs: Array.isArray(extra.mtfTfs) ? MTF_TFS.map(x => x.tf).filter(t => (extra.mtfTfs as unknown[]).includes(t)) : ['1h', '4h'] };
+    return { ...base, tf: extra["tf"] === undefined || extra["tf"] === 'chart' ? 'chart' : base.tf, ...restorePatternSettings(extra),
+      mtfOn: extra["mtfOn"] !== false, mtfTfs: Array.isArray(extra["mtfTfs"]) ? MTF_TFS.map(x => x.tf).filter(t => (extra["mtfTfs"] as unknown[]).includes(t)) : ['1h', '4h'] };
   });
   // Chart timeframe as a Binance interval (null for custom); radar tf follows it when set to "Same as chart".
   const chartTf = Object.keys(RADAR_MINUTES).find(k => RADAR_MINUTES[k] === minutes) ?? null;
@@ -118,7 +118,7 @@ export function FlowRadar({ chartRef, symbol, minutes, revision, mobile }: { cha
       {notes.map(nt => <div key={nt!.tf} data-forming-note="" className="whitespace-pre-line rounded border border-t-border p-1 text-t-muted">{nt!.lines.join('\n')}</div>)}
       {radarTf && shortTfWarning(radarTf) && <div className="text-t-warning">Setups on short timeframes performed worse in testing.</div>}
       {err && <div className="text-t-down">{err}</div>}
-      {!data && !err && <div className="text-t-muted">{radarTf && <>Loading {radarTf} candles…</>}{false && <>…</div>}
+      {!data && !err && <div className="text-t-muted">{radarTf && <>Loading {radarTf} candles…</>}</div>}
       {rows.length > 0 && <table className="w-full tabular-nums"><thead className="text-t-muted"><tr><th className="text-left font-normal">Setup</th><th>N</th><th>/mo</th><th>W</th><th>L</th><th>Acc</th><th>BE</th><th>Avg R</th></tr></thead>
         <tbody>{rows.map(([name, c]) => <tr key={name} className="text-center"><td className="text-left">{name}</td><td>{c.setups}</td><td>{c.perMonth.toFixed(1)}</td><td>{c.wins}</td><td>{c.losses}</td>
           <td className={c.accuracy === null ? 'text-t-muted' : c.accuracy < c.breakeven ? 'text-t-down' : 'text-t-up'}>{c.accuracy === null ? '–' : c.accuracy.toFixed(0) + '%'}</td><td>{c.breakeven.toFixed(0)}%</td><td>{c.avgR === null ? '–' : c.avgR.toFixed(2)}</td></tr>)}</tbody></table>}
