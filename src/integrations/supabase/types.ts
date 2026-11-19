@@ -14,13 +14,99 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ob_recorder_requests: {
+        Row: {
+          created_at: string
+          request_id: number
+          source: string
+          ts: string
+        }
+        Insert: {
+          created_at?: string
+          request_id: number
+          source: string
+          ts: string
+        }
+        Update: {
+          created_at?: string
+          request_id?: number
+          source?: string
+          ts?: string
+        }
+        Relationships: []
+      }
+      ob_recorder_state: {
+        Row: {
+          binance_blocked_until: string | null
+          id: number
+          last_error: string | null
+          updated_at: string
+        }
+        Insert: {
+          binance_blocked_until?: string | null
+          id?: number
+          last_error?: string | null
+          updated_at?: string
+        }
+        Update: {
+          binance_blocked_until?: string | null
+          id?: number
+          last_error?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ob_snapshots: {
+        Row: {
+          asks: number[]
+          base: number
+          bids: number[]
+          created_at: string
+          id: number
+          mid: number
+          source: string
+          step: number
+          symbol: string
+          ts: string
+        }
+        Insert: {
+          asks: number[]
+          base: number
+          bids: number[]
+          created_at?: string
+          id?: never
+          mid: number
+          source: string
+          step: number
+          symbol?: string
+          ts: string
+        }
+        Update: {
+          asks?: number[]
+          base?: number
+          bids?: number[]
+          created_at?: string
+          id?: never
+          mid?: number
+          source?: string
+          step?: number
+          symbol?: string
+          ts?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      ob_fire: { Args: { p_source: string; p_ts: string }; Returns: undefined }
+      ob_recorder_status: { Args: never; Returns: Json }
+      ob_recorder_tick: { Args: never; Returns: undefined }
+      ob_store: {
+        Args: { p_asks: Json; p_bids: Json; p_source: string; p_ts: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
