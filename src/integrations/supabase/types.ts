@@ -101,6 +101,18 @@ export type Database = {
     }
     Functions: {
       ob_fire: { Args: { p_source: string; p_ts: string }; Returns: undefined }
+      ob_history: {
+        Args: { p_every: number; p_from: string; p_to: string }
+        Returns: {
+          asks: number[]
+          base: number
+          bids: number[]
+          mid: number
+          source: string
+          step: number
+          ts: string
+        }[]
+      }
       ob_recorder_status: { Args: never; Returns: Json }
       ob_recorder_tick: { Args: never; Returns: undefined }
       ob_store: {

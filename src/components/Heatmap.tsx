@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { Crosshair, Settings2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { colorFor, percentile, COLUMN_MS } from '@/lib/heatmap-data';
+import { colorFor, percentile, COLUMN_MS, type Column } from '@/lib/heatmap-data';
+import { LONG_WINDOWS, RECORDED_SYMBOL, loadRecorded, loadRecorderStatus, recordedEvery, snapshotToColumn, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
 import { calibrateHeatmap, getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
 import { orderBook } from '@/lib/order-book';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
@@ -13,6 +14,7 @@ const AXIS_W = 72, AXIS_H = 26;
 const WINDOWS = [5, 15, 30, 60] as const;
 const GROUPINGS = [1, 2, 5, 10] as const;
 const DEFAULT_ROWS = 200;
+const windowLabel = (w: number) => w >= 1440 ? `${w / 1440 === 7 ? '7d' : `${w / 60}h`}` : w >= 120 ? `${w / 60}h` : `${w}m`;
 
 function compact(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
@@ -33,6 +35,15 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
   const [collected, setCollected] = useState(0);
   const [priceOnlyFrom, setPriceOnlyFrom] = useState<number | null>(null);
   const labelRef = useRef<number | null>(null);
+  const [recordedAvail, setRecordedAvail] = useState(false);
+  const [recordedShown, setRecordedShown] = useState(false);
+  const [status, setStatus] = useState<RecorderStatus | null>(null);
+  const admin = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('admin') === '1';
+  useEffect(() => {
+    if (!admin) return;
+    const tick = () => { void loadRecorderStatus().then(setStatus); };
+    tick(); const t = setInterval(tick, 30000); return () => clearInterval(t);
+  }, [admin]);
   const [intensity, setIntensity] = useState(1);
   const [windowMin, setWindowMin] = useState<number>(15);
   const [grouping, setGrouping] = useState<number>(1);
@@ -67,6 +78,26 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
     let source = orderBook.debug().source;
     let stopped = false, hidden = document.hidden, frame = 0, dirty = true;
     view.current = { center: NaN, rows: DEFAULT_ROWS };
+    // Recorded history (Binance BTCUSDT only) for windows longer than the 60-minute live buffer.
+    let recRows: RecordedSnapshot[] = [], recFor = 0, recCols: Column[] = [], recColsKey = '', loading = false;
+    let longCols: Column[] = [], longKey = '', longAt = 0, longVersion = 0, shown = false, long = false;
+    const recordedOn = () => !demo && source === 'binance' && symbol === RECORDED_SYMBOL;
+    const windowColumns = (): readonly Column[] => {
+      const w = controls.current.windowMin;
+      long = w > 60 && recordedOn();
+      if (!long) { if (shown) { shown = false; setRecordedShown(false); } return buffer.columns.slice(-Math.min(w, 60) * 60); }
+      const k = `${w}:${buffer.bucket}`;
+      if (k === longKey && Date.now() - longAt < 5000) return longCols;
+      const firstLive = buffer.columns.find(c => !c.priceOnly && !c.gap)?.time ?? Date.now();
+      if (!loading) { loading = true; void loadRecorded(w, firstLive).then(rows => { if (rows !== recRows) { recRows = rows; recFor = w; longAt = 0; dirty = true; schedule(); } }).finally(() => { loading = false; }); }
+      if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = recRows.map(r => snapshotToColumn(r, buffer.bucket)); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
+      const rec = recFor === w ? recCols.filter(c => c.time < firstLive) : [];
+      longCols = [...rec, ...thinColumns(buffer.columns.filter(c => c.time >= firstLive), recordedEvery(w))];
+      longKey = k; longAt = Date.now(); longVersion++;
+      if (shown !== rec.length > 0) { shown = rec.length > 0; setRecordedShown(shown); }
+      return longCols;
+    };
+    const slotOf = (col: Column, ci: number) => long ? ci : Math.floor(col.time / 1000) % 3600;
 
     // Trades flow in through the bridge; every trade is aggregated immediately.
     const onTrade = (tick: { price: number; size?: number; side?: 'Buy' | 'Sell' }) => {
@@ -96,6 +127,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       }
       else return;
       setCollected(buffer.columns.length);
+      setRecordedAvail(recordedOn());
       // "Price and trades only" label: shown while backfilled columns are visible.
       const cols = buffer.columns;
       const hasPriceOnly = cols.some(c => c.priceOnly);
@@ -139,7 +171,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
 
       const c = controls.current;
       if(lastGrouping!==c.grouping){view.current.rows=Math.max(20,view.current.rows*lastGrouping/c.grouping);lastGrouping=c.grouping;}
-      const cols = buffer.columns.slice(-c.windowMin * 60);
+      const cols = windowColumns();
       const price = fixture ? demoPrice : bridge.current.latest?.price ?? NaN;
       if (!Number.isFinite(view.current.center)) { view.current.center = price; view.current.rows = heatFitRows(depthSpan || buffer.bucket * 150, buffer.bucket, c.grouping); }
       const center = view.current.center;
@@ -169,7 +201,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
         normValue = percentile(values, 98) || 1; normAt = Date.now();
       }
       const norm = normValue / Math.max(.05, c.intensity);
-      const key = `${top}:${rows}:${g}:${norm}:${c.windowMin}`;
+      const key = `${top}:${rows}:${g}:${norm}:${c.windowMin}:${long ? longVersion : 0}`;
       const rebuild = key !== cacheKey || scaleChanged || off.height !== rows;
       if (off.height !== rows) off.height = rows;
       const columnImage = offCtx.createImageData(1, rows);
@@ -177,7 +209,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       if (rebuild) { offCtx.clearRect(0, 0, off.width, off.height); paintedTime = 0; }
       for (let ci = 0; ci < N; ci++) {
         const col = cols[ci]; if (!col || col.time <= paintedTime) continue;
-        const slot = Math.floor(col.time / 1000) % 3600;
+        const slot = slotOf(col, ci);
         for (let r = 0; r < rows; r++) {
           const o = r * 4, value = buffer.groupedCell(col, Math.floor(top / buffer.bucket) - r * g, g);
           const [rr, gg, bb] = colorFor(Math.sqrt(value / norm));
@@ -190,7 +222,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       const colW = heatColumnWidth(W, N), x0 = W - N * colW;
       for (let ci = Math.max(0, Math.floor(-x0 / colW)); ci < N; ci++) {
         const col = cols[ci]; if (!col) continue;
-        const slot = Math.floor(col.time / 1000) % 3600;
+        const slot = slotOf(col, ci);
         ctx.drawImage(off, slot, 0, 1, rows, x0 + ci * colW, 0, colW, H);
       }
       Object.assign(canvas.dataset, { rows: String(rows), bucket: String(buffer.bucket), depthSpan: String(depthSpan), columnWidth: String(colW), demo: String(demo), normalizationAt: String(normAt) });
@@ -339,7 +371,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       const c = controls.current, g = c.grouping, bs = buffer.bucket * g;
       const rows = Math.max(20, Math.round(view.current.rows));
       const band = rows * bs, top = view.current.center + band / 2;
-      const cols = buffer.columns.slice(-c.windowMin * 60);
+      const cols = windowColumns();
       const colW = heatColumnWidth(W, cols.length);
       const ci = Math.floor((e.clientX - rect.left - (W - cols.length * colW)) / colW);
       const r = Math.floor(((e.clientY - rect.top) / H) * rows);
@@ -381,7 +413,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
   const control = 'text-t-muted hover:bg-t-border/50 hover:text-t-text';
   return <div className={`heatmap-surface relative flex h-full w-full flex-col ${mobile || floating ? 'min-h-0' : 'min-h-80'}`} data-testid="heatmap">
     {mobile ? <div className="flex h-11 shrink-0 items-center gap-2 border-b border-t-border px-2 text-xs">
-      <span className="min-w-0 flex-1 truncate font-semibold text-t-text">{symbol} · Heatmap · {windowMin}m</span>
+      <span className="min-w-0 flex-1 truncate font-semibold text-t-text">{symbol} · Heatmap · {windowLabel(windowMin)}</span>
       <Button variant="ghost" size="sm" onClick={center} className={`h-10 px-3 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-4" />Center</Button>
       <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)} className={`size-10 ${control}`} aria-label="Heatmap settings"><Settings2 /></Button>
     </div> : <>
@@ -391,7 +423,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
         <input type="range" min={0.2} max={3} step={0.1} value={intensity} onChange={e => setIntensity(Number(e.target.value))} aria-label="Intensity" className="h-1 w-24 accent-current" />
       </label>
       <span className="flex items-center gap-1" role="group" aria-label="Time window">
-        {WINDOWS.map(w => <Button key={w} variant="ghost" size="sm" aria-pressed={windowMin === w} onClick={() => setWindowMin(w)} className={`h-6 px-2 text-xs ${windowMin === w ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{w}m</Button>)}
+        {[...WINDOWS, ...(recordedAvail ? LONG_WINDOWS : [])].map(w => <Button key={w} variant="ghost" size="sm" aria-pressed={windowMin === w} onClick={() => setWindowMin(w)} className={`h-6 px-2 text-xs ${windowMin === w ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{windowLabel(w)}</Button>)}
       </span>
       <span className="flex items-center gap-1" role="group" aria-label="Grouping">
         {GROUPINGS.map(gr => <Button key={gr} variant="ghost" size="sm" aria-pressed={grouping === gr} onClick={() => setGrouping(gr)} className={`h-6 px-2 text-xs ${grouping === gr ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>x{gr}</Button>)}
@@ -410,6 +442,8 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       <canvas ref={canvasRef} className={`block size-full ${mobile ? 'touch-none' : ''}`} aria-label={`${symbol} order book heatmap`} />
       <div ref={tooltipRef} data-testid="heatmap-tooltip" className="pointer-events-none absolute z-10 hidden rounded border border-t-border bg-t-panel/95 px-2 py-1 text-[10px] tabular-nums text-t-text" />
       {!toolDemoEnabled() && collected < 60 && <span role="status" className="pointer-events-none absolute bottom-2 left-3 text-[10px] mobile:text-xs text-t-muted">● Collecting data… {(collected / 60).toFixed(1)} min</span>}
+      {recordedShown && <span data-testid="recorded-label" className="pointer-events-none absolute top-2 left-3 text-[10px] mobile:text-xs text-t-muted">Recorded history</span>}
+      {admin && <span data-testid="recorder-status" className="pointer-events-none absolute top-6 left-3 text-[10px] text-t-muted tabular-nums">{status ? `Recorder: last ${status.last ? new Date(status.last).toLocaleTimeString('en-US', { hour12: false }) : '—'} · ${status.lastHour}/h · gaps>15s ${status.gaps} (max ${Math.round(status.maxGapSec)}s) · ${status.lastSource ?? '—'}` : 'Recorder: …'}</span>}
       {priceOnlyFrom !== null && <span data-testid="price-only-label" className="pointer-events-none absolute bottom-2 right-3 text-[10px] mobile:text-xs text-t-muted">Price and trades only.{priceOnlyFrom > 0 ? ` Order book colors start at ${new Date(priceOnlyFrom).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}</span>}
     </div>
     {mobile && showSettings && <div className="fixed inset-0 z-50 flex flex-col justify-end bg-t-bg/70" onClick={() => setShowSettings(false)}>
@@ -419,7 +453,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
           <input type="range" min={0.2} max={3} step={0.1} value={intensity} onChange={e => setIntensity(Number(e.target.value))} aria-label="Intensity" className="h-10 flex-1 accent-current" />
         </label>
         <div className="space-y-1"><span className="text-t-muted">Time window</span><div className="grid grid-cols-4 gap-2" role="group" aria-label="Time window">
-          {WINDOWS.map(w => <Button key={w} variant="ghost" aria-pressed={windowMin === w} onClick={() => setWindowMin(w)} className={`h-10 text-sm ${windowMin === w ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{w}m</Button>)}
+          {[...WINDOWS, ...(recordedAvail ? LONG_WINDOWS : [])].map(w => <Button key={w} variant="ghost" aria-pressed={windowMin === w} onClick={() => setWindowMin(w)} className={`h-10 text-sm ${windowMin === w ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{windowLabel(w)}</Button>)}
         </div></div>
         <div className="space-y-1"><span className="text-t-muted">Grouping</span><div className="grid grid-cols-4 gap-2" role="group" aria-label="Grouping">
           {GROUPINGS.map(gr => <Button key={gr} variant="ghost" aria-pressed={grouping === gr} onClick={() => setGrouping(gr)} className={`h-10 text-sm ${grouping === gr ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>x{gr}</Button>)}
