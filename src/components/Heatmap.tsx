@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { Crosshair, Settings2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { colorFor, percentile, COLUMN_MS, type Column } from '@/lib/heatmap-data';
-import { LONG_WINDOWS, RECORDED_SYMBOL, loadRecorded, loadRecorderStatus, recordedEvery, snapshotToColumn, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
+import { LONG_WINDOWS, RECORDED_SYMBOL, fillGaps, loadRecorded, loadRecorderStatus, recordedEvery, snapshotToColumn, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
 import { calibrateHeatmap, getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
 import { orderBook } from '@/lib/order-book';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
@@ -73,19 +73,29 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
     let buffer = fixture?.buffer ?? entry.buffer;
     let depthSpan = fixture?.span ?? entry.depthSpan;
     let fitted = Boolean(fixture), lastGrouping = controls.current.grouping;
-    let normValue = 1, normLow = 0, normAt = 0, cacheKey = "", paintedTime = 0;
+    let normValue = 1, normAt = 0, cacheKey = "", paintedTime = 0;
     off.width = 3600;
     let source = orderBook.debug().source;
     let stopped = false, hidden = document.hidden, frame = 0, dirty = true;
     view.current = { center: NaN, rows: DEFAULT_ROWS };
     // Recorded history (Binance BTCUSDT only) for windows longer than the 60-minute live buffer.
-    let recRows: RecordedSnapshot[] = [], recFor = 0, recCols: Column[] = [], recColsKey = '', loading = false;
+    let recRows: RecordedSnapshot[] = [], recFor = 0, recCols: Column[] = [], recColsKey = '', loading = false, recCheckedAt = 0;
     let longCols: Column[] = [], longKey = '', longAt = 0, longVersion = 0, shown = false, long = false;
     const recordedOn = () => !demo && source === 'binance' && symbol === RECORDED_SYMBOL;
     const windowColumns = (): readonly Column[] => {
       const w = controls.current.windowMin;
       long = w > 60 && recordedOn();
-      if (!long) { if (shown) { shown = false; setRecordedShown(false); } return buffer.columns.slice(-Math.min(w, 60) * 60); }
+      if (!long) {
+        const liveCols = buffer.columns.slice(-Math.min(w, 60) * 60);
+        // Binance BTCUSDT: fill holes (tab hidden, chart view, other pair) with the Supabase recording.
+        if (!recordedOn()) { if (shown) { shown = false; setRecordedShown(false); } return liveCols; }
+        if (!loading && (recFor !== w || Date.now() - recCheckedAt > 10000)) { loading = true; recCheckedAt = Date.now(); void loadRecorded(w, Date.now()).then(rows => { if (rows !== recRows || recFor !== w) { recRows = rows; recFor = w; longVersion++; dirty = true; schedule(); } }).finally(() => { loading = false; }); }
+        if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = recRows.map(r => snapshotToColumn(r, buffer.bucket)); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
+        const now = Date.now();
+        const { cols, filled } = recFor === w ? fillGaps(liveCols, recCols, now - w * 60000, now) : { cols: [...liveCols], filled: 0 };
+        if (shown !== filled > 0) { shown = filled > 0; setRecordedShown(shown); }
+        return cols;
+      }
       const k = `${w}:${buffer.bucket}`;
       if (k === longKey && Date.now() - longAt < 5000) return longCols;
       const firstLive = buffer.columns.find(c => !c.priceOnly && !c.gap)?.time ?? Date.now();
@@ -112,8 +122,8 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       if (dbg.source !== source) { source = dbg.source; entry = getHeatmapEntry(source as HeatSource, symbol, bridge.current.latest?.price ?? NaN); buffer = entry.buffer;depthSpan=entry.depthSpan;fitted=false;view.current.center = NaN; }
       const price = bridge.current.latest?.price ?? dbg.bestBid ?? NaN;
       if (!Number.isFinite(price)) return;
-      if (hidden) buffer.markGap(Date.now(), price);
-      else if (dbg.enabled && dbg.state === 'Synced') {
+      // Keep recording the book while the tab is hidden; only drawing pauses. Mark a gap only when the book is not synced.
+      if (dbg.enabled && dbg.state === 'Synced') {
         const bids = orderBook.bids.levels, asks = orderBook.asks.levels;
         let low = Infinity, high = -Infinity;
         for (const p of bids.keys()) low = Math.min(low, p);
@@ -125,6 +135,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
         if(!fitted||!wasCalibrated){view.current.center=price;view.current.rows=heatFitRows(depthSpan,buffer.bucket,controls.current.grouping);fitted=true;}
         buffer.sample(Date.now(), bids, asks, price);
       }
+      else if (hidden) buffer.markGap(Date.now(), price);
       else return;
       setCollected(buffer.columns.length);
       setRecordedAvail(recordedOn());
@@ -198,10 +209,10 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
             if (value > 0) values.push(value);
           }
         }
-        normValue = percentile(values, 99.5) || 1; normLow = percentile(values, 60); normAt = Date.now();
+        normValue = percentile(values, 98) || 1; normAt = Date.now();
       }
       const norm = normValue / Math.max(.05, c.intensity);
-      const key = `${top}:${rows}:${g}:${norm}:${c.windowMin}:${long ? longVersion : 0}`;
+      const key = `${top}:${rows}:${g}:${norm}:${c.windowMin}:${longVersion}`;
       const rebuild = key !== cacheKey || scaleChanged || off.height !== rows;
       if (off.height !== rows) off.height = rows;
       const columnImage = offCtx.createImageData(1, rows);
@@ -212,9 +223,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
         const slot = slotOf(col, ci);
         for (let r = 0; r < rows; r++) {
           const o = r * 4, value = buffer.groupedCell(col, Math.floor(top / buffer.bucket) - r * g, g);
-          // Bookmap-style log scale: below the 60th percentile stays near black, only the biggest walls turn yellow/orange.
-          const lo = Math.max(1e-9, Math.min(normLow, norm * 0.5)), t = value > lo ? Math.log(value / lo) / Math.log(norm / lo) : 0;
-          const [rr, gg, bb] = colorFor(t);
+          const [rr, gg, bb] = colorFor(Math.sqrt(value / norm));
           columnImage.data[o] = rr; columnImage.data[o + 1] = gg; columnImage.data[o + 2] = bb; columnImage.data[o + 3] = col.priceOnly ? 0 : col.gap ? 70 : value > 0 ? 255 : 0;
         }
         offCtx.putImageData(columnImage, slot, 0);
