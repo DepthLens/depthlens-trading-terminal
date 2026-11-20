@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { recordedEvery, snapshotToColumn, thinColumns } from '@/lib/heatmap-recorded';
+import { fillGaps, recordedEvery, snapshotToColumn, thinColumns } from '@/lib/heatmap-recorded';
+import type { Column } from '@/lib/heatmap-data';
 import { ROWS } from '@/lib/heatmap-data';
 
 describe('recorded heatmap history', () => {
@@ -19,5 +20,26 @@ describe('recorded heatmap history', () => {
   it('keeps one column per slot', () => {
     const cols = [0, 1000, 5000, 6000, 10000].map(time => ({ time, origin: 0, data: new Float32Array(0), trades: new Map(), price: 1, gap: false }));
     expect(thinColumns(cols, 5).map(c => c.time)).toEqual([0, 5000, 10000]);
+  });
+});
+
+describe('fillGaps', () => {
+  const col = (time: number, extra: Partial<Column> = {}): Column => ({ time, origin: 0, data: new Float32Array(1), trades: new Map(), price: 100, gap: false, ...extra });
+  it('keeps live book columns and fills only holes, gaps and price-only seconds', () => {
+    const live = [col(0), col(1000), col(5000, { gap: true }), col(6000, { priceOnly: true, price: 101 }), col(20000)];
+    const rec = [col(4000, { price: 99 })];
+    const { cols, filled } = fillGaps(live, rec, 0, 20000);
+    expect(cols.find(c => c.time === 0)).toBe(live[0]);
+    expect(cols.find(c => c.time === 5000)?.gap).toBe(false);
+    expect(cols.find(c => c.time === 6000)?.price).toBe(101);
+    expect(cols.find(c => c.time === 6000)?.priceOnly).toBe(false);
+    expect(cols.some(c => c.time === 15000)).toBe(false); // recorded snapshot older than 10 s is not stretched
+    expect(filled).toBeGreaterThan(0);
+  });
+  it('does not insert recorded columns next to live book columns (1 s timer jitter)', () => {
+    const live = [col(0), col(2000)];
+    const { cols, filled } = fillGaps(live, [col(0)], 0, 2000);
+    expect(filled).toBe(0);
+    expect(cols.map(c => c.time)).toEqual([0, 2000]);
   });
 });
