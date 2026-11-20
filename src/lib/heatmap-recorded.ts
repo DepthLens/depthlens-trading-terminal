@@ -59,3 +59,30 @@ export async function loadRecorderStatus(): Promise<RecorderStatus | null> {
   const { data, error } = await supabase.rpc('ob_recorder_status');
   return error ? null : (data as RecorderStatus);
 }
+
+// Fill the holes of a short (≤60 min) live window with recorded snapshots, one column per second.
+// Live order book columns always win; a recorded snapshot only covers seconds where the live buffer has
+// a gap, price-only backfill, or nothing at all (no live book column within 2 s). Trades and price from
+// the live column are kept so bubbles and the price line stay real.
+export function fillGaps(live: readonly Column[], recorded: readonly Column[], fromMs: number, toMs: number): { cols: Column[]; filled: number } {
+  const bySec = new Map<number, Column>();
+  for (const c of live) if (c.time >= fromMs && c.time <= toMs) bySec.set(Math.floor(c.time / 1000), c);
+  const isBook = (c: Column | undefined) => !!c && !c.gap && !c.priceOnly;
+  const rec = recorded.filter(c => Number.isFinite(c.time)).sort((a, b) => a.time - b.time);
+  const out: Column[] = [];
+  let j = -1, filled = 0;
+  for (let s = Math.floor(fromMs / 1000); s <= Math.floor(toMs / 1000); s++) {
+    const own = bySec.get(s);
+    if (isBook(own)) { out.push(own!); continue; }
+    if (!own && (isBook(bySec.get(s - 1)) || isBook(bySec.get(s + 1)) || isBook(bySec.get(s - 2)) || isBook(bySec.get(s + 2)))) continue;
+    while (j + 1 < rec.length && rec[j + 1]!.time <= s * 1000) j++;
+    const hit = j >= 0 ? rec[j] : undefined;
+    if (hit && s * 1000 - hit.time < 10000) {
+      out.push({ ...hit, time: s * 1000, trades: own?.trades ?? new Map(), price: own && Number.isFinite(own.price) ? own.price : hit.price, gap: false, priceOnly: false });
+      filled++;
+      continue;
+    }
+    if (own) out.push(own);
+  }
+  return { cols: out, filled };
+}
