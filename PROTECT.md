@@ -89,3 +89,6 @@ After every change, add any new feature to the list in section 1.
 - Short-TF Patterns: off-default section inside Flow Radar settings, saved selections, unchanged supplied atlas, price/time-anchored small Setup/Watch circles and describeEvent hover; shares radar candles/delta, no sockets.
 - Smoke: compare radar off-default 1h scoreboard/markers, enable patterns on 15m and hover measured monthly line, switch 2h (no patterns, restriction note), retain demo and overlay/pane alignment checks.
 - Flow Radar higher-timeframe marks: radar tf defaults to Same as chart; fixed tf differing from chart hides radar marks (note shown); patterns use chart tf; 1h/4h marks via unchanged flow-radar-mtf.ts on last small candle; forming note is panel text only.
+
+- Heatmap recorded history: Binance BTCUSDT shows 4h/24h/7d windows with a "Recorded history" label; other pairs and ≤60m windows unchanged. ?admin=1 shows recorder status.
+- Smoke: on Binance BTCUSDT Heatmap pick 4h, confirm the label and no console errors.

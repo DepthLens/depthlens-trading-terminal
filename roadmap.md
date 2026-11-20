@@ -102,3 +102,5 @@
 - [x] Short-TF Patterns section, saved switch/selection, separate unchanged atlas, shared-data circle markers and measured hover text.
 - [x] Verified: 169 tests pass; BTC 1h scoreboard unchanged (20 setups, 6 wins, 11 losses); 15m has 33 circles and real measured hover, 2h has zero and restriction note; demo profile/Footprint stability ≤0.80px, pane alignment 0px, desktop/phone render with no errors; atlas byte-for-byte unchanged.
 - [x] Flow Radar: Same as chart, higher timeframe marks (1h/4h), forming note.
+
+- [x] 7-day BTCUSDT order book recorder in Supabase + Heatmap long windows
