@@ -73,7 +73,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
     let buffer = fixture?.buffer ?? entry.buffer;
     let depthSpan = fixture?.span ?? entry.depthSpan;
     let fitted = Boolean(fixture), lastGrouping = controls.current.grouping;
-    let normValue = 1, normAt = 0, cacheKey = "", paintedTime = 0;
+    let normValue = 1, normLow = 0, normAt = 0, cacheKey = "", paintedTime = 0;
     off.width = 3600;
     let source = orderBook.debug().source;
     let stopped = false, hidden = document.hidden, frame = 0, dirty = true;
@@ -198,7 +198,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
             if (value > 0) values.push(value);
           }
         }
-        normValue = percentile(values, 98) || 1; normAt = Date.now();
+        normValue = percentile(values, 99.5) || 1; normLow = percentile(values, 60); normAt = Date.now();
       }
       const norm = normValue / Math.max(.05, c.intensity);
       const key = `${top}:${rows}:${g}:${norm}:${c.windowMin}:${long ? longVersion : 0}`;
@@ -212,7 +212,9 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
         const slot = slotOf(col, ci);
         for (let r = 0; r < rows; r++) {
           const o = r * 4, value = buffer.groupedCell(col, Math.floor(top / buffer.bucket) - r * g, g);
-          const [rr, gg, bb] = colorFor(Math.sqrt(value / norm));
+          // Bookmap-style log scale: below the 60th percentile stays near black, only the biggest walls turn yellow/orange.
+          const lo = Math.max(1e-9, Math.min(normLow, norm * 0.5)), t = value > lo ? Math.log(value / lo) / Math.log(norm / lo) : 0;
+          const [rr, gg, bb] = colorFor(t);
           columnImage.data[o] = rr; columnImage.data[o + 1] = gg; columnImage.data[o + 2] = bb; columnImage.data[o + 3] = col.priceOnly ? 0 : col.gap ? 70 : value > 0 ? 255 : 0;
         }
         offCtx.putImageData(columnImage, slot, 0);
