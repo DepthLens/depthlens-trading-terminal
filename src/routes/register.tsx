@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import logo from "@/assets/depthlens-logo.png.asset.json";
+import { AuthShell, invalidHandler } from "@/components/site/AuthShell";
+import { PasswordInput, SubmitButton } from "@/components/site/SiteField";
 
 export const Route = createFileRoute("/register")({
   head: () => ({
@@ -22,33 +23,27 @@ function Register() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirm) { setError("Passwords do not match."); return; }
-    setError("");
-    void navigate({ to: "/terminal" });
+    setError(""); setBusy(true);
+    setTimeout(() => void navigate({ to: "/terminal" }), 350);
   };
-  const field = "mb-4 h-10 w-full rounded-md border border-t-border bg-t-bg px-3 text-sm outline-none focus:border-t-accent";
-  const label = "mb-1 block text-xs font-medium text-t-muted";
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-t-bg px-4 text-t-text">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-xl border border-t-border bg-t-panel p-8">
-        <div className="mb-6 flex flex-col items-center">
-          <img src={logo.url} alt="DepthLens logo" className="size-14 rounded-lg" />
-          <h1 className="mt-3 text-xl font-bold">Create your account</h1>
-          <p className="mt-1 text-sm text-t-muted">Start watching the order flow</p>
-        </div>
-        <label className={label} htmlFor="email">Email</label>
-        <input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className={field} placeholder="you@example.com" />
-        <label className={label} htmlFor="password">Password</label>
-        <input id="password" type="password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} className={field} placeholder="At least 8 characters" />
-        <label className={label} htmlFor="confirm">Confirm password</label>
-        <input id="confirm" type="password" required value={confirm} onChange={e => setConfirm(e.target.value)} className={field} placeholder="Repeat your password" />
-        {error && <p role="alert" className="mb-3 text-xs text-t-down">{error}</p>}
-        <button type="submit" className="mt-2 h-10 w-full rounded-md bg-t-accent hover:bg-t-accent-hover active:bg-t-accent-press text-sm font-semibold text-t-accent-fg">Register</button>
-        <p className="mt-4 text-center text-xs text-t-muted">Already have an account? <Link to="/login" className="font-medium text-t-accent hover:underline">Log in</Link></p>
-        <p className="mt-2 text-center text-xs"><Link to="/" className="text-t-muted hover:underline">← Back to home</Link></p>
+    <AuthShell title="Create your account" subtitle="Start watching the order flow">
+      <form onSubmit={submit} onInvalidCapture={invalidHandler(setError)}>
+        <label className="s-label" htmlFor="email">Email</label>
+        <input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className="s-input mb-4" placeholder="you@example.com" />
+        <label className="s-label" htmlFor="password">Password</label>
+        <PasswordInput id="password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 8 characters" />
+        <label className="s-label mt-4" htmlFor="confirm">Confirm password</label>
+        <PasswordInput id="confirm" required value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Repeat your password" aria-invalid={error === "Passwords do not match."} />
+        <p role="alert" className="s-down mt-2 min-h-5 text-xs">{error}</p>
+        <div className="mt-2"><SubmitButton busy={busy}>Register</SubmitButton></div>
+        <p className="s-muted mt-5 text-center text-xs">Already have an account? <Link to="/login" className="s-link">Log in</Link></p>
+        <p className="mt-2 text-center text-xs"><Link to="/" className="s-muted hover:underline">← Back to home</Link></p>
       </form>
-    </div>
+    </AuthShell>
   );
 }
