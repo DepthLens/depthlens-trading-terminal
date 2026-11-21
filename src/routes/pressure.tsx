@@ -19,7 +19,7 @@ function PressurePage() {
   const [symbol, setSymbol] = useState(params.symbol);
   const [minutes, setMinutes] = useState(params.tf);
   const [source, setSource] = useState<TradeSource>(params.source);
-  const [theme, setTheme] = useState(() => typeof document === 'undefined' ? 'royal' : document.documentElement.getAttribute('data-theme') ?? 'royal');
+  const [theme, setTheme] = useState(() => typeof document === 'undefined' ? 'gold' : document.documentElement.getAttribute('data-theme') ?? 'gold');
   useEffect(() => { setTheme(readSavedTheme(STORAGE_KEY)); }, []);
   useEffect(() => { applyTheme(theme); }, [theme]);
   const [follow, setFollow] = useState(params.follow);

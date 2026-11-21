@@ -5,6 +5,12 @@
 export type ThemePreset = { id: string; label: string; swatch: [string, string]; tokens: Record<string, string> };
 
 export const THEME_PRESETS: ThemePreset[] = [
+  { id: 'gold', label: 'Black & Gold', swatch: ['#0B0F14', '#F5B83D'], tokens: {
+    '--t-bg': '#0B0F14', '--t-panel': '#121821', '--t-raised': '#18212D', '--t-border': '#1F2A37', '--t-control-border': '#2B3848', '--t-disabled': '#5B6778',
+    '--t-text': '#E6EDF3', '--t-muted': '#8B98A9', '--t-accent': '#F5B83D', '--t-accent-hover': '#FFC94D', '--t-accent-press': '#E0A42C',
+    '--t-ring': '#F5B83D', '--t-accent-fg': '#0B0F14', '--t-accent-fg-sm': '#0B0F14', '--t-grid': 'rgba(230,237,243,0.05)', '--t-crosshair': 'rgba(139,152,169,0.7)',
+    '--t-up': '#22C55E', '--t-down': '#EF4444',
+  } },
   { id: 'royal', label: 'White & Royal Blue', swatch: ['#FFFFFF', '#2563EB'], tokens: {
     '--t-bg': '#FFFFFF', '--t-panel': '#F4F6FA', '--t-raised': '#E9EDF4', '--t-border': '#E2E8F0', '--t-control-border': '#CBD5E1', '--t-disabled': '#9CA3AF',
     '--t-text': '#1F2937', '--t-muted': '#6B7280', '--t-accent': '#2563EB', '--t-accent-hover': '#1D4ED8', '--t-accent-press': '#1E40AF',
@@ -22,7 +28,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     '--t-ring': '#FF3D8B', '--t-accent-fg': '#FFFFFF', '--t-accent-fg-sm': '#FFFFFF', '--t-grid': 'rgba(255,255,255,0.06)', '--t-crosshair': 'rgba(255,255,255,0.6)',
   } },
 ];
-export const DEFAULT_THEME = 'royal';
+export const DEFAULT_THEME = 'gold';
 export const PICKER_THEMES = THEME_PRESETS.map(t => t.id);
 export const isPreset = (id: string | null | undefined) => !!id && PICKER_THEMES.includes(id);
 
@@ -38,6 +44,6 @@ ${sel('[role="switch"][data-state="checked"]')}{background:var(--t-accent)}
 }
 
 /** Inline pre-paint script: applies the saved preset to <html> before the first frame. */
-export const themeBootScript = (key: string) => `try{var s=JSON.parse(localStorage.getItem(${JSON.stringify(key)})||'null'),t=s&&s.theme;document.documentElement.setAttribute('data-theme',${JSON.stringify(PICKER_THEMES)}.indexOf(t)>=0?t:${JSON.stringify(DEFAULT_THEME)})}catch(e){}`;
+export const themeBootScript = (key: string) => `try{if(!localStorage.getItem('dl-gold-default')){localStorage.setItem('dl-gold-default','1');var o=JSON.parse(localStorage.getItem(${JSON.stringify(key)})||'null');if(o&&typeof o==='object'){o.theme=${JSON.stringify(DEFAULT_THEME)};localStorage.setItem(${JSON.stringify(key)},JSON.stringify(o))}}var s=JSON.parse(localStorage.getItem(${JSON.stringify(key)})||'null'),t=s&&s.theme;document.documentElement.setAttribute('data-theme',${JSON.stringify(PICKER_THEMES)}.indexOf(t)>=0?t:${JSON.stringify(DEFAULT_THEME)})}catch(e){}`;
 export const readSavedTheme = (key: string) => { try { const t = JSON.parse(localStorage.getItem(key) ?? 'null')?.theme; return isPreset(t) ? t : DEFAULT_THEME; } catch { return DEFAULT_THEME; } };
 export const applyTheme = (id: string) => { if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', isPreset(id) ? id : DEFAULT_THEME); };
