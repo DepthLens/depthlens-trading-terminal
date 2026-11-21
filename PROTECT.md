@@ -92,3 +92,7 @@ After every change, add any new feature to the list in section 1.
 
 - Heatmap recorded history: Binance BTCUSDT shows 4h/24h/7d windows with a "Recorded history" label; other pairs and ≤60m windows unchanged. ?admin=1 shows recorder status.
 - Smoke: on Binance BTCUSDT Heatmap pick 4h, confirm the label and no console errors.
+
+## Forex (/forex)
+- Forex candles are read only from the shared Supabase `forex_candles` table (seeded from public/forex-candles.json); browsers never call Twelve Data. 4h/1D/1W/1M are rebuilt from newer 1h candles. Smoke: EUR/USD 1D starts 21 Oct 2026, last close 1.09662; XAU/USD 4H loads with 0 Twelve Data requests.
+- Futures terminal and all crypto tools are untouched by Forex; Heatmap/Footprint/DOM/CVD show "Not available for spot forex" there.

@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      forex_candles: {
+        Row: {
+          close: number
+          high: number
+          low: number
+          open: number
+          pair: string
+          tf: string
+          time: number
+        }
+        Insert: {
+          close: number
+          high: number
+          low: number
+          open: number
+          pair: string
+          tf: string
+          time: number
+        }
+        Update: {
+          close?: number
+          high?: number
+          low?: number
+          open?: number
+          pair?: string
+          tf?: string
+          time?: number
+        }
+        Relationships: []
+      }
+      forex_sync_state: {
+        Row: {
+          id: number
+          last_run: string
+        }
+        Insert: {
+          id?: number
+          last_run?: string
+        }
+        Update: {
+          id?: number
+          last_run?: string
+        }
+        Relationships: []
+      }
       ob_recorder_requests: {
         Row: {
           created_at: string

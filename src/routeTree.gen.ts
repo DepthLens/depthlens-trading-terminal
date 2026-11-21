@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ForexRouteImport } from './routes/forex'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PressureRouteImport } from './routes/pressure'
 import { Route as RegisterRouteImport } from './routes/register'
@@ -20,6 +21,11 @@ import { Route as PopoutPricePressureRouteImport } from './routes/popout/price-p
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForexRoute = ForexRouteImport.update({
+  id: '/forex',
+  path: '/forex',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -55,6 +61,7 @@ const PopoutPricePressureRoute = PopoutPricePressureRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/forex': typeof ForexRoute
   '/login': typeof LoginRoute
   '/pressure': typeof PressureRoute
   '/register': typeof RegisterRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/forex': typeof ForexRoute
   '/login': typeof LoginRoute
   '/pressure': typeof PressureRoute
   '/register': typeof RegisterRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/forex': typeof ForexRoute
   '/login': typeof LoginRoute
   '/pressure': typeof PressureRoute
   '/register': typeof RegisterRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/forex'
     | '/login'
     | '/pressure'
     | '/register'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/forex'
     | '/login'
     | '/pressure'
     | '/register'
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/forex'
     | '/login'
     | '/pressure'
     | '/register'
@@ -113,6 +125,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ForexRoute: typeof ForexRoute
   LoginRoute: typeof LoginRoute
   PressureRoute: typeof PressureRoute
   RegisterRoute: typeof RegisterRoute
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forex': {
+      id: '/forex'
+      path: '/forex'
+      fullPath: '/forex'
+      preLoaderRoute: typeof ForexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -177,6 +197,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ForexRoute: ForexRoute,
   LoginRoute: LoginRoute,
   PressureRoute: PressureRoute,
   RegisterRoute: RegisterRoute,

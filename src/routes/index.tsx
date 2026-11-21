@@ -39,6 +39,7 @@ function Landing() {
         <h1 className="max-w-2xl text-4xl font-bold leading-tight sm:text-5xl">See the order flow behind every candle</h1>
         <p className="mt-4 max-w-xl text-base text-t-muted">A live order flow terminal for Binance USDT futures. Real-time charts, multi-pair tabs, and any timeframe you want — free, in your browser.</p>
         <Link to="/terminal" className="mt-8 rounded-md bg-t-accent hover:bg-t-accent-hover active:bg-t-accent-press px-8 py-3 text-base font-semibold text-t-accent-fg">Open Terminal</Link>
+        <Link to="/forex" className="mt-3 text-sm text-t-muted underline hover:text-t-text">Open Forex charts</Link>
         <div className="mt-16 grid w-full max-w-4xl gap-4 sm:grid-cols-2">
           {FEATURES.map(f => (
             <div key={f.title} className="rounded-xl border border-t-border bg-t-panel p-6 text-left">
