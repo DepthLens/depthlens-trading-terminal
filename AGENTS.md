@@ -36,5 +36,5 @@
 - Flow Radar rules live in browser-safe flow-radar.ts; FlowRadar.tsx polls Binance REST klines (taker buy volume) every 30s and marks only via native markers/price lines on existing chart candles, never opening sockets.
 - Short-TF Patterns keeps the supplied atlas unchanged in flow-radar-patterns.ts; flow-radar-pattern-layer.ts adapts existing radar candles/settings into price-anchored native markers without changing setup scoring or adding network traffic.
 - flow-radar-mtf.ts is the supplied file kept unchanged; FlowRadar fetches one REST kline set per needed interval (radar, chart, higher tfs) on the existing 30s poll so higher-timeframe results are placed only where they were known.
-- BTCUSDT book history is recorded by a SQL-only pg_cron job in Supabase; heatmap-recorded.ts reads it only for >60m Binance BTCUSDT windows, keeping live buffers unchanged.
-- Forex: only throttled `syncForex` calls Twelve Data (server key); browsers read shared `forex_candles`, so the API limit is shared.
+- BTCUSDT book history: SQL-only pg_cron in Supabase; heatmap-recorded.ts reads it only for >60m Binance BTCUSDT windows.
+- Forex: only throttled `syncForex` calls Twelve Data; browsers read shared `forex_candles`.
