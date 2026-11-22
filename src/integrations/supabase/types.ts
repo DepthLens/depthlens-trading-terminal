@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      beta_codes: {
+        Row: {
+          active: boolean
+          code: string
+          created_at: string
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          created_at?: string
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       forex_api_calls: {
         Row: {
           at: string
@@ -182,17 +200,81 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          beta_access: boolean
+          created_at: string
+          display_name: string | null
+          email: string
+          id: string
+        }
+        Insert: {
+          beta_access?: boolean
+          created_at?: string
+          display_name?: string | null
+          email: string
+          id: string
+        }
+        Update: {
+          beta_access?: boolean
+          created_at?: string
+          display_name?: string | null
+          email?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      admin_list_users: {
+        Args: never
+        Returns: {
+          beta_access: boolean
+          created_at: string
+          email: string
+          id: string
+          is_admin: boolean
+          verified: boolean
+        }[]
+      }
+      admin_set_beta: {
+        Args: { _on: boolean; _user: string }
+        Returns: undefined
+      }
       fx_take_call: {
         Args: {
           _day_cap?: number
           _min_cap?: number
           _pair: string
           _purpose: string
+        }
+        Returns: boolean
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
         }
         Returns: boolean
       }
@@ -215,9 +297,10 @@ export type Database = {
         Args: { p_asks: Json; p_bids: Json; p_source: string; p_ts: string }
         Returns: undefined
       }
+      redeem_beta_code: { Args: { _code: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -344,6 +427,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
