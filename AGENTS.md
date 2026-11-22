@@ -31,11 +31,6 @@
 - DOM ladder grouping/auto-size/wall rules live in browser-safe `dom-ladder.ts`; `DomLadder.tsx` only reads the existing order-book engine on a ≤10 fps canvas loop and never stores the ladder in React state or opens sockets.
 - CVD exact deltas and cached exchange history live in browser-safe cvd-data/cvd-store; Cvd uses a native lightweight-charts pane sharing the existing time scale, native resize separator, price-axis width and crosshair, with existing LiveQuote feed only. Execution IDs deduplicate recent Bybit trades against live trades; Binance kline totals replace rather than accumulate.
 
-- Whale detection/aggregation and IndexedDB history live in browser-safe whale-data/whale-store; LiveQuote forwards existing trades only, while whale-overlay derives coordinates per draw and WhaleTrades owns isolated feed updates, avoiding sockets and terminal rerenders.
-
-- Flow Radar rules live in browser-safe flow-radar.ts; FlowRadar.tsx polls Binance REST klines (taker buy volume) every 30s and marks only via native markers/price lines on existing chart candles, never opening sockets.
-- Short-TF Patterns: supplied atlas flow-radar-patterns.ts stays unchanged; flow-radar-pattern-layer.ts maps radar candles to native markers, no new traffic.
-- flow-radar-mtf.ts is the supplied file kept unchanged; FlowRadar fetches one REST kline set per needed interval (radar, chart, higher tfs) on the existing 30s poll so higher-timeframe results are placed only where they were known.
 - BTCUSDT book history: SQL pg_cron; heatmap-recorded.ts reads it only for >60m Binance BTC windows.
 - Forex: only server fns call Twelve Data, each via `fx_take_call` (shared free limit); browsers read `forex_candles`.
 - Auth gate: `src/routes/_authenticated/`; beta/admin changes only via SQL functions so users can't self-escalate.
