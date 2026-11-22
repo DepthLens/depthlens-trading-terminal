@@ -7,3 +7,9 @@ describe('landing clips', () => {
   it('Try it link switches the tool on', () => { expect(withToolParam(initialState(), 'Flow Radar').tools['Flow Radar']).toBe(true); });
   it('ignores unknown tool names', () => { expect(withToolParam(initialState(), 'Nope').tools['Nope']).toBeUndefined(); });
 });
+import { makeSeries, barAt, radarMarks, L } from '@/lib/landing-clips';
+describe('landing clip data', () => {
+  it('series loops seamlessly (last close equals first open)', () => { const s = makeSeries(); expect(Math.abs(s[s.length - 1]!.close - s[0]!.open)).toBeLessThan(0.01); });
+  it('bars repeat every loop', () => { expect(barAt(5).close).toBe(barAt(5 + L).close); });
+  it('Flow Radar marks come from the real engine, not every turn', () => { const m = radarMarks(); expect(m.setups.size + m.pats.size).toBeGreaterThan(0); expect(m.setups.size + m.pats.size).toBeLessThan(L / 2); });
+});

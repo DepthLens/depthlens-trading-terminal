@@ -1,11 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Activity, BarChart3, Layers, Timer, Flame, Grid3x3, ListOrdered, TrendingUp, Fish, Zap, Gauge, Radar } from "lucide-react";
+import { BarChart3, Flame, Grid3x3, ListOrdered, TrendingUp, Fish, Zap, Gauge, Radar } from "lucide-react";
 import { ToolSection, type ToolInfo } from "@/components/site/ToolSection";
 import { TerminalChooser } from "@/components/site/TerminalChooser";
 import logo from "@/assets/depthlens-logo.png.asset.json";
 import { CandleBackdrop } from "@/components/site/CandleBackdrop";
-import { PriceTicker } from "@/components/site/PriceTicker";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,13 +19,6 @@ export const Route = createFileRoute("/")({
   }),
   component: Landing,
 });
-
-const FEATURES = [
-  { icon: Activity, title: "Live Heatmap", text: "Resting liquidity painted over price in real time." },
-  { icon: BarChart3, title: "Volume Profile", text: "See where volume actually traded at each price." },
-  { icon: Layers, title: "Multi-pair Tabs", text: "Watch up to ten pairs at once, each with its own timeframe." },
-  { icon: Timer, title: "Custom Timeframes", text: "Any interval from 1 to 1440 minutes, built from live trades." },
-];
 
 const TOOL_SECTIONS: ToolInfo[] = [
   { kind: "heatmap", tool: "Heatmap", name: "Heatmap", icon: Flame, title: "See where liquidity is resting", text: "Order book depth painted over time, so walls and pulled orders stand out.", bullets: ["Live order book from Binance or Bybit", "Up to 60 minutes of saved history", "Bright bands mark big resting orders", "Price line drawn over the depth"] },
@@ -52,29 +44,18 @@ function Landing() {
           <Link to="/register" className="s-btn s-btn-primary px-3 py-2 sm:px-4">Register</Link>
         </nav>
       </header>
-      <PriceTicker />
       <main className="relative z-10 flex flex-1 flex-col">
-        <section className="relative flex min-h-[560px] items-center justify-center overflow-hidden px-6 py-20 text-center sm:min-h-[600px]">
-          <CandleBackdrop />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,color-mix(in_oklab,var(--s-bg)_70%,transparent)_0%,transparent_70%)]" />
+        <section className="relative flex min-h-[calc(100dvh-61px)] items-center justify-center overflow-hidden px-5 py-10 text-center sm:min-h-[600px] sm:px-6 sm:py-20">
+          <div className="pointer-events-none absolute inset-0 opacity-25" aria-hidden><CandleBackdrop /></div>
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,color-mix(in_oklab,var(--s-bg)_88%,transparent)_0%,color-mix(in_oklab,var(--s-bg)_40%,transparent)_75%)]" />
           <div className="relative max-w-3xl">
             <p className="s-rise s-gold mb-4 text-xs font-semibold uppercase tracking-[.25em]">Order flow terminal</p>
-            <h1 className="s-rise text-4xl font-bold leading-tight sm:text-6xl" style={{ animationDelay: ".1s" }}>See the order flow behind every candle</h1>
-            <p className="s-rise s-muted mx-auto mt-5 max-w-xl text-base sm:text-lg" style={{ animationDelay: ".25s" }}>A live order flow terminal for Binance USDT futures. Real-time charts, multi-pair tabs, and any timeframe you want — free, in your browser.</p>
-            <div className="s-rise mt-9 flex flex-wrap items-center justify-center gap-3" style={{ animationDelay: ".4s" }}>
+            <h1 className="s-rise text-[34px] font-bold leading-tight sm:text-6xl" style={{ animationDelay: ".1s" }}>See the order flow behind every candle</h1>
+            <p className="s-rise s-muted mx-auto mt-5 max-w-xl text-[15px] sm:text-lg" style={{ animationDelay: ".25s" }}>A live order flow terminal for Binance USDT futures. Real-time charts, multi-pair tabs, and any timeframe you want — free, in your browser.</p>
+            <div className="s-rise mt-8 flex flex-wrap items-center justify-center gap-3" style={{ animationDelay: ".4s" }}>
               <button type="button" onClick={() => setChoose(true)} className="s-btn s-btn-primary px-7 py-3 text-base">Open Terminal</button>
-              <Link to="/forex" className="s-btn s-btn-secondary px-7 py-3 text-base">Open Forex charts</Link>
             </div>
           </div>
-        </section>
-        <section className="mx-auto grid w-full max-w-5xl gap-4 px-6 pb-20 sm:grid-cols-2">
-          {FEATURES.map((f, i) => (
-            <div key={f.title} className="s-card s-rise p-6 transition-colors hover:border-[color-mix(in_oklab,var(--s-gold)_45%,var(--s-border))]" style={{ animationDelay: `${.5 + i * .08}s` }}>
-              <f.icon className="s-gold size-6" />
-              <h2 className="mt-3 text-base font-semibold">{f.title}</h2>
-              <p className="s-muted mt-1 text-sm">{f.text}</p>
-            </div>
-          ))}
         </section>
         <div className="border-t border-[var(--s-border)] py-6">
           {TOOL_SECTIONS.map((t, i) => <ToolSection key={t.tool} info={t} flip={i % 2 === 1} />)}

@@ -1,1 +1,1 @@
-- Landing mini clips draw from browser-safe src/lib/landing-clips.ts (demo data, ≤30fps, one active clip via pickActive) so the home page never opens sockets or mounts live tool engines.
+- Landing mini clips draw from browser-safe src/lib/landing-clips.ts: one seeded periodic market fixture (seamless loop, ≤30fps, one active clip via pickActive); Flow Radar marks come from the real findSetups/detectPatterns engines. The home page never opens sockets or mounts live tool engines.
