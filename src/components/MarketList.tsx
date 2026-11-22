@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { formatPrice, sortMarkets, type PriceSpec, type Quote } from '@/lib/market-data';
 import { visibleMarketRange, MARKET_ROW_HEIGHT } from '@/lib/market-list';
@@ -17,7 +17,7 @@ export function QuoteChange({ symbol, quotes }: { symbol: string; quotes: Mutabl
   return <span ref={ref} className="text-xs text-t-muted"/>;
 }
 
-export function MarketList({ pairs, quotes, specs, query, active, status, select }: { pairs: string[]; quotes: MutableRefObject<Record<string, Quote>>; specs: Record<string, PriceSpec>; query: string; active: string; status: string; select: (symbol: string) => void }) {
+export const MarketList = memo(function MarketList({ pairs, quotes, specs, query, active, status, select }: { pairs: string[]; quotes: MutableRefObject<Record<string, Quote>>; specs: Record<string, PriceSpec>; query: string; active: string; status: string; select: (symbol: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [revision, setRevision] = useState(0);
   const [viewport, setViewport] = useState({ top: 0, height: 600 });
@@ -32,4 +32,4 @@ export function MarketList({ pairs, quotes, specs, query, active, status, select
     <div style={{ height: (filtered.length - range.end) * MARKET_ROW_HEIGHT }} aria-hidden="true"/>
     {!filtered.length && <p role="status" className="px-3 py-4 text-xs text-t-muted">{status || 'No matching pairs'}</p>}
   </div>;
-}
+});

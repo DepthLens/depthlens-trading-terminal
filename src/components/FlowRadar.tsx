@@ -30,6 +30,7 @@ export function FlowRadar({ chartRef, symbol, minutes, revision, mobile }: { cha
   const [data, setData] = useState<{ setups: RadarSetup[]; span: number; bars: RadarBar[]; all: Record<string, RadarBar[]>; now: number } | null>(null), [err, setErr] = useState(''), [open, setOpen] = useState(false), [min, setMin] = useState(false);
   const tooltip = useRef<HTMLDivElement>(null);
   const seen = useRef<string>('');
+  useEffect(() => { const on = () => { (window as {__radarOpen?:boolean}).__radarOpen = false; setOpen(true); setMin(false); }; window.addEventListener('flow-radar-settings', on); if ((window as {__radarOpen?:boolean}).__radarOpen) { (window as {__radarOpen?:boolean}).__radarOpen = false; on(); } return () => window.removeEventListener('flow-radar-settings', on); }, []);
   const save = (p: Partial<RadarSettings & PatternSettings & Mtf>) => setS(o => { const n = { ...o, ...p }; localStorage.setItem(RADAR_KEY, JSON.stringify(n)); return n; });
   useEffect(() => {
     let dead = false; const ab = new AbortController(); seen.current = '';
