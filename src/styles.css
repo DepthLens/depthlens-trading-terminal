@@ -283,3 +283,28 @@
   .s-btn, .s-btn:hover, .s-btn:active { transform: none !important; }
 }
 @keyframes s-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ===== Login page only ===== */
+.lg-glow { position: fixed; pointer-events: none; z-index: 0; border-radius: 9999px; filter: blur(90px); mix-blend-mode: screen; will-change: transform; }
+.lg-glow-a { width: 52vmax; height: 52vmax; top: -18vmax; right: -12vmax; background: var(--s-gold); opacity: .13; animation: lg-drift-a 26s ease-in-out infinite alternate; }
+.lg-glow-b { width: 46vmax; height: 46vmax; bottom: -20vmax; left: -14vmax; background: var(--s-up); opacity: .08; animation: lg-drift-b 32s ease-in-out infinite alternate; }
+.lg-glow-c { width: 40vmax; height: 40vmax; top: 30%; left: 30%; background: var(--s-info); opacity: .07; animation: lg-drift-c 38s ease-in-out infinite alternate; }
+@keyframes lg-drift-a { to { transform: translate(-14vmax, 10vmax) scale(1.1); } }
+@keyframes lg-drift-b { to { transform: translate(16vmax, -8vmax) scale(1.15); } }
+@keyframes lg-drift-c { to { transform: translate(-12vmax, -10vmax) scale(.9); } }
+.lg-grain { position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: .06; mix-blend-mode: overlay; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.lg-spot { position: fixed; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(420px circle at var(--mx, -999px) var(--my, -999px), color-mix(in oklab, var(--s-gold) 9%, transparent), transparent 70%); }
+@property --lg-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.lg-card { position: relative; background: color-mix(in oklab, var(--s-surface) 66%, transparent); border-radius: 18px; backdrop-filter: blur(18px) saturate(140%); box-shadow: 0 30px 80px -24px rgb(0 0 0 / .75), 0 0 0 1px var(--s-border); }
+.lg-card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; background: conic-gradient(from var(--lg-angle), transparent 0deg, color-mix(in oklab, var(--s-gold) 85%, transparent) 40deg, transparent 90deg, transparent 360deg); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); -webkit-mask-composite: xor; animation: lg-spin 8s linear infinite; }
+@keyframes lg-spin { to { --lg-angle: 360deg; } }
+.lg-step { animation: s-rise .6s cubic-bezier(.2,.7,.2,1) both; }
+.lg-check { width: 1rem; height: 1rem; accent-color: var(--s-gold); }
+.lg-check:focus-visible, .lg-textbtn:focus-visible, .dl-site a:focus-visible, .dl-site .s-input:focus-visible, .dl-site [aria-label$="password"]:focus-visible { outline: 2px solid var(--s-gold); outline-offset: 2px; border-radius: 6px; }
+.lg-tool { background: color-mix(in oklab, var(--s-surface) 55%, transparent); border: 1px solid var(--s-border); border-radius: 12px; backdrop-filter: blur(10px); transition: border-color .2s, transform .2s; }
+.lg-tool:hover { border-color: color-mix(in oklab, var(--s-gold) 45%, var(--s-border)); transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) {
+  .lg-glow, .lg-card::before { animation: none; }
+  .lg-step { animation: s-fade .4s ease both; }
+  .lg-tool:hover { transform: none; }
+}
