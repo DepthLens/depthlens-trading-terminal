@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { loadProfile, type Profile } from "@/lib/session";
 import { sessionShouldEnd } from "@/lib/auth";
-import { PrivateBeta } from "@/components/site/PrivateBeta";
 import { ProfileContext } from "@/hooks/use-profile";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -33,6 +32,6 @@ function Gate() {
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
   useEffect(() => { let on = true; void loadProfile(user.id).then(p => { if (on) setProfile(p); }); return () => { on = false; }; }, [user.id]);
   if (profile === undefined) return <div className="dl-site flex min-h-dvh items-center justify-center"><span className="s-muted text-sm">Loading your account…</span></div>;
-  if (!profile || !profile.beta_access) return <PrivateBeta email={user.email ?? ""} onUnlocked={() => setProfile(p => p ? { ...p, beta_access: true } : p)} />;
-  return <ProfileContext.Provider value={profile}><Outlet /></ProfileContext.Provider>;
+  const value: Profile = profile ?? { id: user.id, email: user.email ?? "", display_name: null, beta_access: true, is_admin: false };
+  return <ProfileContext.Provider value={value}><Outlet /></ProfileContext.Provider>;
 }

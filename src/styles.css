@@ -317,3 +317,12 @@
 .lp-reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.2,1); }
 .lp-reveal.lp-in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .lp-reveal { transform: none; transition: opacity .3s; } }
+
+/* Mobile/touch: drop GPU-heavy login effects to remove typing/scroll lag */
+@media (max-width: 1023px), (pointer: coarse) {
+  .lg-glow { animation: none; filter: blur(40px); mix-blend-mode: normal; will-change: auto; }
+  .lg-grain, .lg-spot { display: none; }
+  .lg-card { backdrop-filter: none; background: var(--s-surface); }
+  .lg-card::before { animation: none; }
+  .lg-tool { backdrop-filter: none; }
+}

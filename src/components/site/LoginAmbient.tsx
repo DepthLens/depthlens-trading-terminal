@@ -7,10 +7,10 @@ export function LoginAmbient() {
   const ref = useRef<HTMLCanvasElement>(null), spot = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const cv = ref.current!, ctx = cv.getContext("2d")!;
-    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce), (max-width: 1023px), (pointer: coarse)").matches;
     let w = 0, h = 0, raf = 0, last = performance.now(), t = 0;
     const resize = () => { const d = Math.min(devicePixelRatio || 1, 2); w = innerWidth; h = innerHeight; cv.width = w * d; cv.height = h * d; ctx.setTransform(d, 0, 0, d, 0, 0); };
-    resize(); addEventListener("resize", resize);
+    resize(); const onResize = () => { resize(); if (reduce) draw(); }; addEventListener("resize", onResize);
     const lines = [0, 1, 2].map(i => ({ seed: i * 17.3 + 3, y: 0.3 + i * 0.2, color: [GOLD, UP, GRID][i]!, speed: 0.035 + i * 0.012 }));
     const candles = Array.from({ length: 14 }, (_, i) => ({ x: Math.random(), y: 0.2 + Math.random() * 0.6, up: Math.random() > 0.45, s: 0.6 + Math.random(), ph: (i / 14) * Math.PI * 2, rate: 0.15 + Math.random() * 0.2 }));
     const yAt = (seed: number, x: number) => Math.sin(x * 7 + seed) * 0.05 + Math.sin(x * 19 + seed * 2) * 0.02 + Math.sin(x * 41 + seed * 3) * 0.008;
@@ -40,7 +40,7 @@ export function LoginAmbient() {
     const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
     const move = (e: PointerEvent) => { const s = spot.current; if (s) { s.style.setProperty("--mx", `${e.clientX}px`); s.style.setProperty("--my", `${e.clientY}px`); } };
     if (fine && !reduce) addEventListener("pointermove", move);
-    return () => { cancelAnimationFrame(raf); removeEventListener("resize", resize); document.removeEventListener("visibilitychange", vis); removeEventListener("pointermove", move); };
+    return () => { cancelAnimationFrame(raf); removeEventListener("resize", onResize); document.removeEventListener("visibilitychange", vis); removeEventListener("pointermove", move); };
   }, []);
   return (
     <div aria-hidden="true">
