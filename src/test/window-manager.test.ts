@@ -35,9 +35,14 @@ describe('window manager', () => {
     expect(closeTool({ DOM: true, Heatmap: true }, 'DOM')).toEqual({ DOM: false, Heatmap: true });
   });
   it('persists and restores positions, sizes and minimized state', () => {
-    const s = minimizeWin(openWin(wmInitial(), 'Heatmap', 1000, 600), 'Heatmap');
+    const s = minimizeWin(openWin(wmInitial(), 'Price Pressure', 1000, 600), 'Price Pressure');
     const r = restoreWm(JSON.stringify(s), 1000, 600);
-    expect(r.wins.Heatmap).toEqual(s.wins.Heatmap);
+    expect(r.wins['Price Pressure']).toEqual(s.wins['Price Pressure']);
+  });
+  it('drops old saved windows for every tool except Price Pressure', () => {
+    const old = openWin(openWin(openWin(wmInitial(), 'Heatmap', 1000, 600), 'DOM', 1000, 600), 'Price Pressure', 1000, 600);
+    const r = restoreWm(JSON.stringify(old), 1000, 600);
+    expect(Object.keys(r.wins)).toEqual(['Price Pressure']);
     expect(restoreWm('garbage', 1000, 600)).toEqual(wmInitial());
   });
   it('reset clears all windows', () => {

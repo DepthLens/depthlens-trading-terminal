@@ -56,7 +56,8 @@ export function restoreWm(raw: string | null, vw: number, vh: number): WmState {
     const d = raw ? JSON.parse(raw) : null; if (!d || typeof d !== 'object') return base;
     const mode = d.mode === 'docked' ? 'docked' : d.mode === 'popout' ? 'popout' : 'floating';
     const docked: WmState['docked'] = {}, wins: WmState['wins'] = {}; let z = 1;
-    for (const id of WIN_IDS) {
+    // Old saved layouts may hold other tools; only Price Pressure may open separately now.
+    for (const id of ['Price Pressure'] as const) {
       if (typeof d.docked?.[id] === 'boolean') docked[id] = d.docked[id];
       const w = d.wins?.[id];
       if (w && [w.x, w.y, w.w, w.h].every(v => typeof v === 'number' && Number.isFinite(v))) { const zz = Number(w.z) || 1; z = Math.max(z, zz); wins[id] = clampWin({ x: w.x, y: w.y, w: w.w, h: w.h, min: Boolean(w.min), max: Boolean(w.max), z: zz }, vw, vh); }
