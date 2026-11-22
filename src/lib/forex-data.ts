@@ -41,3 +41,21 @@ export function marketClosed(nowSec: number): boolean {
   const d = new Date(nowSec * 1000), day = d.getUTCDay(), h = d.getUTCHours();
   return (day === 5 && h >= 22) || day === 6 || (day === 0 && h < 21);
 }
+
+/** Extra pairs offered in the search "Popular" list (fetched on demand from the backend). */
+export const POPULAR_FX = ['EUR/AUD', 'EUR/CHF', 'EUR/CAD', 'AUD/JPY', 'CAD/JPY', 'CHF/JPY', 'NZD/JPY', 'GBP/AUD', 'GBP/CAD', 'GBP/CHF', 'AUD/CAD', 'AUD/NZD', 'XAG/USD'] as const;
+/** Twelve Data free limits; every call (hourly job and extra pairs) shares these. */
+export const FX_MIN_CAP = 8, FX_DAY_CAP = 800;
+
+/** "eurAud", "EUR AUD", "eur-aud" -> "EUR/AUD"; null when it is not two 3-letter codes. */
+export function normalizePair(input: string): string | null {
+  const s = input.toUpperCase().replace(/[^A-Z]/g, '');
+  return /^[A-Z]{6}$/.test(s) ? `${s.slice(0, 3)}/${s.slice(3)}` : null;
+}
+export const isBasePair = (p: string) => (FOREX_PAIRS as readonly string[]).includes(p);
+export const priceDigits = (p: string) => (p.includes('JPY') || p.startsWith('XAU') || p.startsWith('XAG') ? 3 : 5);
+/** Extra pairs fetch newer candles at most once per hour, and only when the last saved candle is older than 1 hour. */
+export function extraPairDue(lastFetchSec: number, lastCandleSec: number, nowSec: number): boolean {
+  const lastDone = nowSec - (nowSec % 3600) - 3600;
+  return nowSec - lastFetchSec >= 3600 && lastCandleSec < lastDone;
+}

@@ -22,3 +22,16 @@ describe('forex rules', () => {
     expect(marketClosed(Date.parse('2026-11-23T13:00:00Z') / 1000)).toBe(false);
   });
 });
+
+import { normalizePair, extraPairDue, POPULAR_FX, isBasePair, FX_MIN_CAP, FX_DAY_CAP } from '@/lib/forex-data';
+describe('extra forex pairs', () => {
+  it('normalizes typed pairs', () => { expect(normalizePair('eur aud')).toBe('EUR/AUD'); expect(normalizePair('xag/usd')).toBe('XAG/USD'); expect(normalizePair('EURO')).toBeNull(); });
+  it('popular list has the 13 requested pairs and none of the original 11', () => { expect(POPULAR_FX).toHaveLength(13); expect(POPULAR_FX.some(isBasePair)).toBe(false); });
+  it('stays inside the free limit: 8 per minute, 800 per day', () => { expect(FX_MIN_CAP).toBe(8); expect(FX_DAY_CAP).toBe(800); });
+  it('refetches at most once an hour and only when the last candle is older than an hour', () => {
+    const now = Date.parse('2026-11-23T10:30:00Z') / 1000;
+    expect(extraPairDue(now - 1800, now - 7200 * 3, now)).toBe(false); // fetched 30 min ago
+    expect(extraPairDue(now - 4000, Date.parse('2026-11-23T09:00:00Z') / 1000, now)).toBe(false); // already have last completed hour
+    expect(extraPairDue(now - 4000, Date.parse('2026-11-23T07:00:00Z') / 1000, now)).toBe(true);
+  });
+});

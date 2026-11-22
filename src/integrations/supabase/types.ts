@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      forex_api_calls: {
+        Row: {
+          at: string
+          id: number
+          pair: string | null
+          purpose: string
+        }
+        Insert: {
+          at?: string
+          id?: number
+          pair?: string | null
+          purpose: string
+        }
+        Update: {
+          at?: string
+          id?: number
+          pair?: string | null
+          purpose?: string
+        }
+        Relationships: []
+      }
       forex_candles: {
         Row: {
           close: number
@@ -41,6 +62,27 @@ export type Database = {
           pair?: string
           tf?: string
           time?: number
+        }
+        Relationships: []
+      }
+      forex_pair_sync: {
+        Row: {
+          created_at: string
+          history_loaded: boolean
+          last_fetch: string
+          pair: string
+        }
+        Insert: {
+          created_at?: string
+          history_loaded?: boolean
+          last_fetch?: string
+          pair: string
+        }
+        Update: {
+          created_at?: string
+          history_loaded?: boolean
+          last_fetch?: string
+          pair?: string
         }
         Relationships: []
       }
@@ -145,6 +187,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      fx_take_call: {
+        Args: {
+          _day_cap?: number
+          _min_cap?: number
+          _pair: string
+          _purpose: string
+        }
+        Returns: boolean
+      }
       ob_fire: { Args: { p_source: string; p_ts: string }; Returns: undefined }
       ob_history: {
         Args: { p_every: number; p_from: string; p_to: string }

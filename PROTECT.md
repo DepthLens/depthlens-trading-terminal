@@ -95,4 +95,5 @@ After every change, add any new feature to the list in section 1.
 
 ## Forex (/forex)
 - Forex candles are read only from the shared Supabase `forex_candles` table (seeded from public/forex-candles.json); browsers never call Twelve Data. 4h/1D/1W/1M are rebuilt from newer 1h candles. Smoke: EUR/USD 1D starts 21 Oct 2026, last close 1.09662; XAU/USD 4H loads with 0 Twelve Data requests.
+- Extra forex pairs (search + Popular list) load through `openForexPair`: one 5000-candle 1h download on first open (4h/1D/1W/1M built and saved), then at most one top-up per pair per hour. Every Twelve Data call (hourly job included) goes through `fx_take_call` (8/min, 800/day, logged in forex_api_calls); over the limit shows "Update paused (data limit)". Smoke: reopening EUR/AUD adds no row to forex_api_calls.
 - Futures terminal and all crypto tools are untouched by Forex; Heatmap/Footprint/DOM/CVD show "Not available for spot forex" there.

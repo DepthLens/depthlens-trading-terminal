@@ -105,4 +105,5 @@
 
 - [x] 7-day BTCUSDT order book recorder in Supabase + Heatmap long windows
 - [x] Forex page: 11 pairs, 1H–1M, shared Supabase candles, server-side Twelve Data top-up (≤7 pairs per 30 min, skips weekends).
+- [x] Extra forex pairs: search + Popular list, one-time history download, hourly-at-most top-up, shared 8/min 800/day limit.
 - [ ] Forex top-up only runs while someone has the Forex page open; a true background schedule needs an external scheduler.
