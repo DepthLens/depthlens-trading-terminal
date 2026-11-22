@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { StrengthHint } from "@/components/site/StrengthHint";
 import { authMessage, MIN_PASSWORD } from "@/lib/auth";
@@ -21,6 +21,7 @@ export const Route = createFileRoute("/register")({
 });
 
 function Register() {
+  const navigate = useNavigate();
   const [sent, setSent] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,7 +37,8 @@ function Register() {
     if (err) { setError(authMessage(err)); return; }
     // Supabase returns a user with no identities when the email is already registered.
     if (data.user && data.user.identities?.length === 0) { setError(authMessage({ message: "already registered" })); return; }
-    if (data.session) await supabase.auth.signOut();
+    // Email confirmation off: a session comes back immediately — go straight in.
+    if (data.session) { navigate({ to: "/terminal" }); return; }
     setSent(true);
   };
   if (sent) return (
