@@ -46,7 +46,7 @@ function Landing() {
       </header>
       <main className="relative z-10 flex flex-1 flex-col">
         <section className="relative flex min-h-[calc(100dvh-61px)] items-center justify-center overflow-hidden px-5 py-10 text-center sm:min-h-[600px] sm:px-6 sm:py-20">
-          <div className="pointer-events-none absolute inset-0 opacity-25" aria-hidden><CandleBackdrop /></div>
+          <div className="pointer-events-none absolute inset-0 opacity-40" aria-hidden><CandleBackdrop speed={0.35} /></div>
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,color-mix(in_oklab,var(--s-bg)_88%,transparent)_0%,color-mix(in_oklab,var(--s-bg)_40%,transparent)_75%)]" />
           <div className="relative max-w-3xl">
             <p className="s-rise s-gold mb-4 text-xs font-semibold uppercase tracking-[.25em]">Order flow terminal</p>

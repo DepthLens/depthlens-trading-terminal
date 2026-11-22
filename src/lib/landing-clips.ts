@@ -9,7 +9,7 @@ type C = CanvasRenderingContext2D;
 export type MBar = { time: number; open: number; high: number; low: number; close: number; volume: number; takerBuy: number };
 
 export const L = 64;            // bars in one loop (series is periodic so the loop is seamless)
-export const STEP = 0.55;       // seconds per bar
+export const STEP = 1.9;        // seconds per bar (calm, readable pace)
 export const LOOP = L * STEP;   // ~35 s
 const N = 44;                   // visible bars
 const T0 = Date.UTC(2026, 10, 22, 14, 0);

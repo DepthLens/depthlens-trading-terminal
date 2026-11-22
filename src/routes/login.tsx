@@ -1,5 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { authMessage, safeReturnTo, setRemember } from "@/lib/auth";
 import logo from "@/assets/depthlens-logo.png.asset.json";
 import { invalidHandler } from "@/components/site/AuthShell";
 import { PasswordInput, SubmitButton } from "@/components/site/SiteField";
@@ -17,8 +19,14 @@ export const Route = createFileRoute("/login")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>): { returnTo?: string; reason?: "expired" | "unverified" | "reset" | "verified" } => ({
+    ...(typeof s["returnTo"] === "string" ? { returnTo: s["returnTo"] } : {}),
+    ...(s["reason"] === "expired" || s["reason"] === "unverified" || s["reason"] === "reset" || s["reason"] === "verified" ? { reason: s["reason"] } : {}),
+  }),
   component: Login,
 });
+
+const REASONS = { expired: "Your session expired. Please log in again.", unverified: "Please verify your email first. Check your inbox for the link.", reset: "Password updated. Log in with your new password.", verified: "Email verified. You can log in now." } as const;
 
 const TOOLS: { kind: PreviewKind; name: string; text: string }[] = [
   { kind: "heatmap", name: "Heatmap", text: "Where large resting orders sit and when they are pulled or absorbed." },
@@ -31,13 +39,33 @@ const step = (i: number) => ({ animationDelay: `${0.25 + i * 0.08}s` });
 
 function Login() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
+  const dest = safeReturnTo(search.returnTo);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
+  const [info, setInfo] = useState<string>(search.reason ? REASONS[search.reason] : "");
   const [busy, setBusy] = useState(false);
   const onInvalid = invalidHandler(setError);
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => { if (data.user?.email_confirmed_at) window.location.replace(dest); });
+  }, [dest]);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(""); setInfo(""); setBusy(true);
+    setRemember(remember);
+    const { data, error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (err || !data.user) { setBusy(false); setError(authMessage(err ?? { message: "" })); return; }
+    if (!data.user.email_confirmed_at) { await supabase.auth.signOut(); setBusy(false); setError(REASONS.unverified); return; }
+    window.location.assign(dest);
+  };
+  const forgot = async () => {
+    setError(""); setInfo("");
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setError("Enter your email above, then tap Forgot password."); return; }
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/reset-password` });
+    if (err) setError(authMessage(err)); else setInfo("If an account exists for this email, a reset link is on its way.");
+  };
+  void navigate;
   return (
     <div className="dl-site min-h-dvh">
       <LoginAmbient />
@@ -62,7 +90,7 @@ function Login() {
           </Link>
           <h1 className="text-center text-xl font-bold">Welcome back</h1>
           <p className="s-muted mt-1 mb-6 text-center text-sm">Sign in to your order-flow terminal</p>
-          <form onInvalidCapture={onInvalid} onSubmit={e => { e.preventDefault(); setError(""); setBusy(true); setTimeout(() => void navigate({ to: "/terminal" }), 350); }}>
+          <form onInvalidCapture={onInvalid} onSubmit={e => void submit(e)}>
             <div className="lg-step" style={step(0)}>
               <label className="s-label" htmlFor="email">Email</label>
               <input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className="s-input mb-4" placeholder="you@example.com" />
@@ -73,7 +101,7 @@ function Login() {
             </div>
             <div className="lg-step mt-3 flex items-center justify-between text-xs" style={step(2)}>
               <label className="s-muted flex cursor-pointer items-center gap-2"><input type="checkbox" className="lg-check" checked={remember} onChange={e => setRemember(e.target.checked)} />Remember me</label>
-              <button type="button" className="lg-textbtn s-link" onClick={() => setInfo("Password reset isn't available yet.")}>Forgot password?</button>
+              <button type="button" className="lg-textbtn s-link" onClick={() => void forgot()}>Forgot password?</button>
             </div>
             <p role="alert" className="s-down mt-2 min-h-5 text-xs">{error || <span className="s-muted">{info}</span>}</p>
             <div className="lg-step mt-1 grid gap-2.5" style={step(3)}>

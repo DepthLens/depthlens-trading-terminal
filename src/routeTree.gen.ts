@@ -10,11 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ForexRouteImport } from './routes/forex'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PressureRouteImport } from './routes/pressure'
 import { Route as RegisterRouteImport } from './routes/register'
-import { Route as TerminalRouteImport } from './routes/terminal'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedForexRouteImport } from './routes/_authenticated/forex'
+import { Route as AuthenticatedTerminalRouteImport } from './routes/_authenticated/terminal'
 import { Route as PopoutPressureRouteImport } from './routes/popout/pressure'
 import { Route as PopoutPricePressureRouteImport } from './routes/popout/price-pressure'
 
@@ -23,9 +26,8 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ForexRoute = ForexRouteImport.update({
-  id: '/forex',
-  path: '/forex',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -43,10 +45,25 @@ const RegisterRoute = RegisterRouteImport.update({
   path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TerminalRoute = TerminalRouteImport.update({
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedForexRoute = AuthenticatedForexRouteImport.update({
+  id: '/forex',
+  path: '/forex',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTerminalRoute = AuthenticatedTerminalRouteImport.update({
   id: '/terminal',
   path: '/terminal',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const PopoutPressureRoute = PopoutPressureRouteImport.update({
   id: '/popout/pressure',
@@ -61,32 +78,39 @@ const PopoutPricePressureRoute = PopoutPricePressureRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/forex': typeof ForexRoute
   '/login': typeof LoginRoute
   '/pressure': typeof PressureRoute
   '/register': typeof RegisterRoute
-  '/terminal': typeof TerminalRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/admin': typeof AuthenticatedAdminRoute
+  '/forex': typeof AuthenticatedForexRoute
+  '/terminal': typeof AuthenticatedTerminalRoute
   '/popout/pressure': typeof PopoutPressureRoute
   '/popout/price-pressure': typeof PopoutPricePressureRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/forex': typeof ForexRoute
   '/login': typeof LoginRoute
   '/pressure': typeof PressureRoute
   '/register': typeof RegisterRoute
-  '/terminal': typeof TerminalRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/admin': typeof AuthenticatedAdminRoute
+  '/forex': typeof AuthenticatedForexRoute
+  '/terminal': typeof AuthenticatedTerminalRoute
   '/popout/pressure': typeof PopoutPressureRoute
   '/popout/price-pressure': typeof PopoutPricePressureRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/forex': typeof ForexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/pressure': typeof PressureRoute
   '/register': typeof RegisterRoute
-  '/terminal': typeof TerminalRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/forex': typeof AuthenticatedForexRoute
+  '/_authenticated/terminal': typeof AuthenticatedTerminalRoute
   '/popout/pressure': typeof PopoutPressureRoute
   '/popout/price-pressure': typeof PopoutPricePressureRoute
 }
@@ -94,42 +118,49 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/forex'
     | '/login'
     | '/pressure'
     | '/register'
+    | '/reset-password'
+    | '/admin'
+    | '/forex'
     | '/terminal'
     | '/popout/pressure'
     | '/popout/price-pressure'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/forex'
     | '/login'
     | '/pressure'
     | '/register'
+    | '/reset-password'
+    | '/admin'
+    | '/forex'
     | '/terminal'
     | '/popout/pressure'
     | '/popout/price-pressure'
   id:
     | '__root__'
     | '/'
-    | '/forex'
+    | '/_authenticated'
     | '/login'
     | '/pressure'
     | '/register'
-    | '/terminal'
+    | '/reset-password'
+    | '/_authenticated/admin'
+    | '/_authenticated/forex'
+    | '/_authenticated/terminal'
     | '/popout/pressure'
     | '/popout/price-pressure'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ForexRoute: typeof ForexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
   PressureRoute: typeof PressureRoute
   RegisterRoute: typeof RegisterRoute
-  TerminalRoute: typeof TerminalRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   PopoutPressureRoute: typeof PopoutPressureRoute
   PopoutPricePressureRoute: typeof PopoutPricePressureRoute
 }
@@ -143,11 +174,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/forex': {
-      id: '/forex'
-      path: '/forex'
-      fullPath: '/forex'
-      preLoaderRoute: typeof ForexRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -171,12 +202,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/terminal': {
-      id: '/terminal'
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/forex': {
+      id: '/_authenticated/forex'
+      path: '/forex'
+      fullPath: '/forex'
+      preLoaderRoute: typeof AuthenticatedForexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/terminal': {
+      id: '/_authenticated/terminal'
       path: '/terminal'
       fullPath: '/terminal'
-      preLoaderRoute: typeof TerminalRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedTerminalRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/popout/pressure': {
       id: '/popout/pressure'
@@ -195,13 +247,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedForexRoute: typeof AuthenticatedForexRoute
+  AuthenticatedTerminalRoute: typeof AuthenticatedTerminalRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedForexRoute: AuthenticatedForexRoute,
+  AuthenticatedTerminalRoute: AuthenticatedTerminalRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ForexRoute: ForexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   LoginRoute: LoginRoute,
   PressureRoute: PressureRoute,
   RegisterRoute: RegisterRoute,
-  TerminalRoute: TerminalRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   PopoutPressureRoute: PopoutPressureRoute,
   PopoutPricePressureRoute: PopoutPricePressureRoute,
 }

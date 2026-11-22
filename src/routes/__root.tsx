@@ -15,6 +15,8 @@ import appCss from "../styles.css?url";
 import { themeCss, themeBootScript, DEFAULT_THEME } from "../lib/themes";
 import { STORAGE_KEY } from "../lib/terminal-state";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { supabase } from "@/integrations/supabase/client";
+import { wasManualSignOut } from "@/lib/session";
 
 function NotFoundComponent() {
   return (
@@ -122,6 +124,21 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+      if (event === "SIGNED_OUT") {
+        const path = window.location.pathname;
+        if (!wasManualSignOut() && /^\/(terminal|forex|admin)(\/|$)/.test(path)) {
+          void router.navigate({ to: "/login", search: { reason: "expired", returnTo: path + window.location.search }, replace: true });
+        }
+        return;
+      }
+      void router.invalidate();
+    });
+    return () => data.subscription.unsubscribe();
+  }, [router]);
 
   return (
     <QueryClientProvider client={queryClient}>

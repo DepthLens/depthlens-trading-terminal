@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { signOutApp } from '@/lib/session';
 import { useEffect, useRef, useState } from 'react';
 import { createChart, CandlestickSeries, CrosshairMode, LineStyle, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,7 +8,7 @@ import { openForexPair, syncForex } from '@/lib/forex.functions';
 import { useServerFn } from '@tanstack/react-start';
 import { toColor } from '@/components/PopoutChart';
 
-export const Route = createFileRoute('/forex')({
+export const Route = createFileRoute('/_authenticated/forex')({
   head: () => ({ meta: [{ title: 'Forex — DepthLens' }, { name: 'description', content: 'Forex candles for major and cross pairs, gold and silver on 1H to 1M timeframes in DepthLens.' }, { property: 'og:title', content: 'Forex — DepthLens' }, { property: 'og:description', content: 'Shared, delayed forex candles for 11 pairs in the DepthLens terminal.' }, { property: 'og:type', content: 'website' }, { name: 'twitter:card', content: 'summary' }] }),
   component: ForexPage,
 });
@@ -93,6 +94,7 @@ function ForexPage() {
           <Link to="/terminal" className="rounded px-2 py-1 text-t-muted hover:bg-t-raised">Futures</Link>
           <span className="rounded bg-t-accent px-2 py-1 font-semibold text-t-accent-fg">Forex</span>
         </div>
+        <button type="button" onClick={() => void signOutApp()} className="order-last ml-auto rounded-md border border-t-control-border px-2 py-1 text-xs text-t-muted hover:bg-t-raised">Logout</button>
         <select aria-label="Pair" value={pair} onChange={e => setPair(e.target.value)} className="rounded-md border border-t-control-border bg-t-bg px-2 py-1 text-sm">
           {FOREX_PAIRS.map(p => <option key={p} value={p}>{p}</option>)}
           {extras.length > 0 && <optgroup label="More pairs">{extras.map(p => <option key={p} value={p}>{p}</option>)}</optgroup>}
