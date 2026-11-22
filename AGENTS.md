@@ -38,4 +38,3 @@
 - flow-radar-mtf.ts is the supplied file kept unchanged; FlowRadar fetches one REST kline set per needed interval (radar, chart, higher tfs) on the existing 30s poll so higher-timeframe results are placed only where they were known.
 - BTCUSDT book history: SQL pg_cron; heatmap-recorded.ts reads it only for >60m Binance BTC windows.
 - Forex: only server fns call Twelve Data, each via `fx_take_call` (shared free limit); browsers read `forex_candles`.
-- Landing mini clips draw from browser-safe landing-clips.ts (demo data only, ≤30fps, one active clip via pickActive) so the home page never opens sockets or mounts live tool engines.
