@@ -38,4 +38,4 @@
 - flow-radar-mtf.ts is the supplied file kept unchanged; FlowRadar fetches one REST kline set per needed interval (radar, chart, higher tfs) on the existing 30s poll so higher-timeframe results are placed only where they were known.
 - BTCUSDT book history: SQL pg_cron; heatmap-recorded.ts reads it only for >60m Binance BTC windows.
 - Forex: only server fns call Twelve Data, each via `fx_take_call` (shared free limit); browsers read `forex_candles`.
-- Auth: protected pages sit under `src/routes/_authenticated/` (client-only gate + PrivateBeta screen); beta access and admin actions go through SECURITY DEFINER SQL functions and profiles is column-granted (display_name only) so users cannot escalate themselves.
+- Auth gate: `src/routes/_authenticated/`; beta/admin changes only via SQL functions so users can't self-escalate.
