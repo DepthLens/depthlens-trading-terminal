@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu';
 import { THEME_PRESETS, DEFAULT_THEME, applyTheme } from '@/lib/themes';
-import { initialState, restoreState, openPair, closePair, validMinutes, STORAGE_KEY, TOOLS, THEMES, THEME_LABELS } from '@/lib/terminal-state';
+import { initialState, restoreState, withToolParam, openPair, closePair, validMinutes, STORAGE_KEY, TOOLS, THEMES, THEME_LABELS } from '@/lib/terminal-state';
 import { marketStream } from '@/lib/market-stream';
 import { LiveQuote, SourceSelect, useSourceMode, type TradeBridge } from '@/components/LiveQuote';
 import { useTerminalMobile } from '@/hooks/use-terminal-mobile';
@@ -109,7 +109,7 @@ function Terminal() {
   },[listSource]);
   // Warn only when no list prices have arrived for 15 s from either source.
   useEffect(()=>{const start=Date.now();const timer=setInterval(()=>setListFailing(Date.now()-Math.max(lastQuoteAt.current,start)>15000),5000);return()=>clearInterval(timer);},[]);
-  useEffect(()=>{try{setState(restoreState(localStorage.getItem(STORAGE_KEY)));}catch{}setRestored(true);},[]);
+  useEffect(()=>{try{setState(withToolParam(restoreState(localStorage.getItem(STORAGE_KEY)),new URLSearchParams(location.search).get('tool')));}catch{}setRestored(true);},[]);
   useEffect(()=>{if(restored)applyTheme(state.theme);},[state.theme,restored]);
   useEffect(()=>{if(restored)try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch{}},[state,restored]);
   useEffect(()=>{

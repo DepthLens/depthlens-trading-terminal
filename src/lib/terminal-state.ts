@@ -36,3 +36,7 @@ export function closePair(state: TerminalState, symbol: string): TerminalState {
   const tabs = state.tabs.filter(t => t.symbol !== symbol);
   return { ...state, tabs, active: state.active === symbol ? (tabs[Math.max(0, index - 1)]?.symbol ?? 'BTCUSDT') : state.active };
 }
+// Landing "Try it" links: ?tool=<name> switches that tool on.
+export function withToolParam(state: TerminalState, tool: string | null): TerminalState {
+  return tool && (TOOLS as readonly string[]).includes(tool) ? { ...state, tools: { ...state.tools, [tool]: true } } : state;
+}
