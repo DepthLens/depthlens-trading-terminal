@@ -98,3 +98,8 @@ After every change, add any new feature to the list in section 1.
 - Extra forex pairs (search + Popular list) load through `openForexPair`: one 5000-candle 1h download on first open (4h/1D/1W/1M built and saved), then at most one top-up per pair per hour. Every Twelve Data call (hourly job included) goes through `fx_take_call` (8/min, 800/day, logged in forex_api_calls); over the limit shows "Update paused (data limit)". Smoke: reopening EUR/AUD adds no row to forex_api_calls.
 - Futures terminal and all crypto tools are untouched by Forex; Heatmap/Footprint/DOM/CVD show "Not available for spot forex" there.
 - Landing: one section per tool (Heatmap→Flow Radar last) with demo-only canvas mini clips; only the most visible clip animates; Try-it links use /terminal?tool=<name>.
+
+## Accounts (Supabase Auth)
+- /terminal, /forex and /admin live under the `_authenticated` gate: logged-out or unverified users go to /login?returnTo=…, expired sessions show a short message. Landing, /login, /register, /reset-password and /pressure stay public.
+- Private beta: access code checked only in the database (`redeem_beta_code`), saved as `profiles.beta_access`, asked once. Users can update only their display name; roles live in `user_roles`; /admin lists users and toggles beta access via admin-only functions.
+- Smoke: logged-out /terminal redirects to login; wrong password shows "Wrong email or password."
