@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 /** Decorative looping candle animation for the outer site pages. Canvas, rAF, pauses when hidden. */
-export function CandleBackdrop({ dim = false, speed = 1 }: { dim?: boolean; speed?: number }) {
+export function CandleBackdrop({ dim = false, bright = false, speed = 1 }: { dim?: boolean; bright?: boolean; speed?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current; if (!canvas) return;
@@ -29,7 +29,7 @@ export function CandleBackdrop({ dim = false, speed = 1 }: { dim?: boolean; spee
       const gap = w / N, bw = Math.max(2, gap * .55), top = h * .12, span = h * .62;
       const y = (v: number) => top + (1 - v) * span;
       const fadeOut = lt > cycle - .8 ? (cycle - lt) / .8 : 1;
-      ctx.globalAlpha = (dim ? .35 : .7) * fadeOut;
+      ctx.globalAlpha = (bright ? 1 : dim ? .35 : .7) * fadeOut;
       const pulse = .75 + .25 * Math.sin(t * 1.2);
       const pts: [number, number][] = [];
       for (let i = 0; i < N; i++) {
@@ -39,7 +39,7 @@ export function CandleBackdrop({ dim = false, speed = 1 }: { dim?: boolean; spee
         const col = up ? "#22C55E" : "#EF4444";
         const ease = 1 - Math.pow(1 - k, 3);
         const mid = (c.o + c.c) / 2;
-        ctx.strokeStyle = col; ctx.lineWidth = 1;
+        ctx.strokeStyle = col; ctx.lineWidth = bright ? 1.5 : 1;
         ctx.beginPath(); ctx.moveTo(x, y(mid) + (y(c.hi) - y(mid)) * ease); ctx.lineTo(x, y(mid) + (y(c.lo) - y(mid)) * ease); ctx.stroke();
         const bt = y(mid) + (y(Math.max(c.o, c.c)) - y(mid)) * ease, bb = y(mid) + (y(Math.min(c.o, c.c)) - y(mid)) * ease;
         ctx.fillStyle = col; ctx.fillRect(x - bw / 2, bt, bw, Math.max(1, bb - bt));
@@ -64,6 +64,6 @@ export function CandleBackdrop({ dim = false, speed = 1 }: { dim?: boolean; spee
     const ro = new ResizeObserver(() => { resize(); draw(); }); ro.observe(canvas);
     document.addEventListener("visibilitychange", vis); vis();
     return () => { cancelAnimationFrame(raf); ro.disconnect(); document.removeEventListener("visibilitychange", vis); };
-  }, [dim, speed]);
+  }, [dim, bright, speed]);
   return <canvas ref={ref} aria-hidden data-testid="candle-backdrop" className="pointer-events-none absolute inset-0 h-full w-full" />;
 }
