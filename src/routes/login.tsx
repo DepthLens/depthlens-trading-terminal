@@ -47,10 +47,17 @@ function Login() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState<string>(search.reason ? REASONS[search.reason] : "");
   const [busy, setBusy] = useState(false);
+  const [sessionUser, setSessionUser] = useState<string | null>(null);
   const onInvalid = invalidHandler(setError);
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => { if (data.user?.email_confirmed_at) window.location.replace(dest); });
-  }, [dest]);
+    void supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email_confirmed_at && data.user.email) setSessionUser(data.user.email);
+    });
+  }, []);
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setSessionUser(null);
+  };
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(""); setInfo(""); setBusy(true);
     setRemember(remember);
@@ -88,6 +95,18 @@ function Login() {
           <Link to="/" className="mx-auto mb-5 flex w-fit flex-col items-center">
             <span className="s-logo rounded-xl"><img src={logo.url} alt="DepthLens logo" className="size-14 rounded-xl" /></span>
           </Link>
+          {sessionUser ? (
+            <>
+              <h1 className="text-center text-xl font-bold">Signed in</h1>
+              <p className="s-muted mt-1 mb-6 text-center text-sm">Signed in as <span className="s-gold font-semibold">{sessionUser}</span></p>
+              <div className="grid gap-2.5">
+                <button type="button" className="s-btn s-btn-primary h-11 w-full" onClick={() => window.location.assign(dest)}>Continue to terminal</button>
+                <button type="button" className="s-btn s-btn-secondary h-11 w-full" onClick={() => void signOut()}>Sign out</button>
+              </div>
+              <p className="mt-4 text-center text-xs"><Link to="/" className="s-muted hover:underline">← Back to home</Link></p>
+            </>
+          ) : (
+          <>
           <h1 className="text-center text-xl font-bold">Welcome back</h1>
           <p className="s-muted mt-1 mb-6 text-center text-sm">Sign in to your order-flow terminal</p>
           <form onInvalidCapture={onInvalid} onSubmit={e => void submit(e)}>
@@ -110,6 +129,8 @@ function Login() {
             </div>
             <p className="mt-4 text-center text-xs"><Link to="/" className="s-muted hover:underline">← Back to home</Link></p>
           </form>
+          </>
+          )}
         </div>
       </main>
     </div>
