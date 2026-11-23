@@ -2,12 +2,12 @@ import { useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeftRight, CandlestickChart, X } from 'lucide-react';
 export const CHOICE_KEY = 'depthlens-terminal-choice';
-export function TerminalChooser({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function TerminalChooser({ open, onClose, tool }: { open: boolean; onClose: () => void; tool?: string | null }) {
   const nav = useNavigate();
   useEffect(() => { if (!open) return; const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); addEventListener('keydown', k); return () => removeEventListener('keydown', k); }, [open, onClose]);
   if (!open) return null;
   const last = typeof localStorage !== 'undefined' ? localStorage.getItem(CHOICE_KEY) : null;
-  const go = (c: 'futures' | 'forex') => { try { localStorage.setItem(CHOICE_KEY, c); } catch { /* ignore */ } onClose(); void nav({ to: c === 'futures' ? '/terminal' : '/forex' }); };
+  const go = (c: 'futures' | 'forex') => { try { localStorage.setItem(CHOICE_KEY, c); } catch { /* ignore */ } onClose(); void nav({ to: c === 'futures' ? '/terminal' : '/forex', ...(tool ? { search: { tool } as never } : {}) }); };
   const opt = (c: 'futures' | 'forex', Icon: typeof X, title: string, text: string) => (
     <button type="button" onClick={() => go(c)} className={`s-card flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-[var(--s-gold)] ${last === c ? 'border-[var(--s-gold)]' : ''}`}>
       <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[color-mix(in_oklab,var(--s-gold)_30%,transparent)] bg-[color-mix(in_oklab,var(--s-gold)_12%,transparent)]"><Icon className="s-gold size-5" strokeWidth={2} /></span><span><span className="block font-semibold">{title}</span><span className="s-muted text-sm">{text}</span></span>

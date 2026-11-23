@@ -13,3 +13,7 @@ describe('landing clip data', () => {
   it('bars repeat every loop', () => { expect(barAt(5).close).toBe(barAt(5 + L).close); });
   it('Flow Radar marks come from the real engine, not every turn', () => { const m = radarMarks(); expect(m.setups.size + m.pats.size).toBeGreaterThan(0); expect(m.setups.size + m.pats.size).toBeLessThan(L / 2); });
 });
+import { bubbleR } from '@/lib/landing-clips';
+describe('landing preview bubbles', () => {
+  it('typical trades stay small, only the largest reach the max', () => { expect(bubbleR(0.2)).toBeLessThan(2); expect(bubbleR(1)).toBe(6); });
+});

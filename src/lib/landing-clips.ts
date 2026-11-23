@@ -35,7 +35,9 @@ export function makeSeries(seed = 7, n = L, base = 64250): MBar[] {
 }
 const S = makeSeries();
 const PMIN = Math.min(...S.map(b => b.low)), PMAX = Math.max(...S.map(b => b.high)), PAD = (PMAX - PMIN) * 0.08;
-const VOLS = S.map(b => b.volume).sort((a, z) => a - z), VQ = VOLS[Math.floor(L * .78)]!, VMAX = VOLS[L - 1]!;
+const VOLS = S.map(b => b.volume).sort((a, z) => a - z), VQ = VOLS[Math.floor(L * .78)]!, VMAX = VOLS[L - 1]!, VMIN = VOLS[0]!;
+/** Trade bubble radius from a 0..1 size fraction: steep curve so most bubbles stay small and only rare large trades grow. */
+export const bubbleR = (frac: number, min = 1.5, max = 6) => min + (max - min) * Math.max(0, Math.min(1, frac)) ** 2.2;
 const mod = (k: number) => ((k % L) + L) % L;
 const timeOf = (k: number) => T0 + k * 60000;
 /** Bar at unrolled index k; the bar at `now` is still forming (0..1). */
@@ -92,13 +94,15 @@ const hms = (ms: number) => new Date(ms).toISOString().slice(11, 19);
 const draw: Record<ClipKind, (c: C, w: number, h: number, t: number, p: Pal) => void> = {
   heatmap(c, w, h, t, p) {
     c.fillStyle = p.heat; c.fillRect(0, 0, w, h);
-    const f = frame(w, h), bs = windowAt(t), cols = bs.length * 3, cw = (f.x1 - f.x0) / cols, rows = 70, rh = (f.bot - f.top) / rows, bucket = (f.hi - f.lo) / rows, lastK = Math.floor(t / STEP);
-    for (let x = 0; x < cols; x++) { const bi = Math.floor(x / 3), b = bs[bi]!, k = lastK - (bs.length - 1) + bi, mid = b.open + (b.close - b.open) * ((x % 3) + 1) / 3;
+    const f = frame(w, h), bs = windowAt(t), cols = bs.length * 3, cw = (f.x1 - f.x0) / cols, rows = Math.max(90, Math.round((f.bot - f.top) / 2.4)), rh = (f.bot - f.top) / rows, bucket = (f.hi - f.lo) / rows, lastK = Math.floor(t / STEP);
+    // Smooth value noise along price so neighbouring rows blend into fine bands (no blocky cells).
+    const noise = (a: number, r: number) => { const q = r / 4, i = Math.floor(q), u = q - i, sm = u * u * (3 - 2 * u); return hash(a, i) * (1 - sm) + hash(a, i + 1) * sm; };
+    for (let x = 0; x < cols; x++) { const bi = Math.floor(x / 3), b = bs[bi]!, k = lastK - (bs.length - 1) + bi, mid = b.open + (b.close - b.open) * ((x % 3) + 1) / 3, slot = mod(Math.floor(k / 3)) * 7;
       for (let r = 0; r < rows; r++) { const pr = f.hi - (r + .5) * bucket, d = Math.abs(pr - mid) / (f.hi - f.lo);
-        const v = Math.max(wallAt(k, pr, mid, bucket), (.5 * Math.exp(-d * 14)) * (.3 + .7 * hash(mod(Math.floor(k / 3)) * 7, Math.round(pr / bucket))) ** 2);
-        if (v < .05 || d < .006) continue; c.fillStyle = heatColor(v); c.fillRect(f.x0 + x * cw, f.top + r * rh, cw + .6, rh + .6); } }
-    c.strokeStyle = p.text; c.lineWidth = 1.4; c.beginPath(); bs.forEach((b, i) => { const x = f.x0 + (i + 1) * 3 * cw, y = yOf(f, b.close); i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.stroke();
-    bs.forEach((b, i) => { if (b.volume < VQ) return; const buy = b.takerBuy * 2 > b.volume, x = f.x0 + (i + .7) * 3 * cw, y = yOf(f, b.close); c.fillStyle = alpha(buy ? p.up : p.down, .55); c.strokeStyle = buy ? p.up : p.down; c.beginPath(); c.arc(x, y, 2 + Math.sqrt(b.volume) * .3, 0, 7); c.fill(); c.stroke(); });
+        const v = Math.max(wallAt(k, pr, mid, bucket * 1.6), (.48 * Math.exp(-d * 9)) * (.25 + .75 * noise(slot, Math.round(pr / bucket))) ** 2);
+        if (v < .035 || d < .004) continue; c.fillStyle = heatColor(v); c.fillRect(f.x0 + x * cw, f.top + r * rh, cw + .6, rh + .4); } }
+    c.strokeStyle = p.text; c.lineWidth = 1.2; c.beginPath(); bs.forEach((b, i) => { const x = f.x0 + (i + 1) * 3 * cw, y = yOf(f, b.close); i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.stroke();
+    c.lineWidth = .8; bs.forEach((b, i) => { const buy = b.takerBuy * 2 > b.volume, x = f.x0 + (i + .7) * 3 * cw, y = yOf(f, b.close), col = buy ? p.up : p.down; c.fillStyle = alpha(col, .5); c.strokeStyle = col; c.beginPath(); c.arc(x, y, bubbleR((b.volume - VMIN) / (VMAX - VMIN)), 0, 7); c.fill(); c.stroke(); });
     axis(c, f, w, p, bs[bs.length - 1]);
   },
   footprint(c, w, h, t, p) {
@@ -160,7 +164,7 @@ const draw: Record<ClipKind, (c: C, w: number, h: number, t: number, p: Pal) => 
     const fw = Math.max(150, w * .36), bs = windowAt(t), f = frame(w - fw, h); grid(c, f, p); const cw = candles(c, f, bs, p), lastK = Math.floor(t / STEP);
     const ev: { k: number; buy: boolean; price: number; usd: number; i: number }[] = [];
     bs.forEach((b, i) => { const k = lastK - (bs.length - 1) + i; if (b.volume < VQ) return; const buy = b.takerBuy * 2 > b.volume; ev.push({ k, buy, price: buy ? b.low + (b.close - b.low) * .6 : b.high - (b.high - b.close) * .6, usd: b.volume / VMAX * 1.3e6 * (.6 + hash(mod(k), 3)), i }); });
-    ev.forEach(e => { const r = 3 + Math.sqrt(e.usd / 1e5) * 2.4, col = e.buy ? p.up : p.down, x = (e.i + .5) * cw; c.fillStyle = alpha(col, .3); c.strokeStyle = col; c.beginPath(); c.arc(x, yOf(f, e.price), r, 0, 7); c.fill(); c.stroke(); });
+    c.lineWidth = .8; ev.forEach(e => { const r = bubbleR(e.usd / 2.1e6, 2.5, 8), col = e.buy ? p.up : p.down, x = (e.i + .5) * cw; c.fillStyle = alpha(col, .3); c.strokeStyle = col; c.beginPath(); c.arc(x, yOf(f, e.price), r, 0, 7); c.fill(); c.stroke(); });
     axis(c, f, w - fw, p, bs[bs.length - 1]);
     const fx = w - fw; c.fillStyle = alpha(p.muted, .08); c.fillRect(fx, 0, fw, h); c.strokeStyle = p.grid; c.beginPath(); c.moveTo(fx + .5, 0); c.lineTo(fx + .5, h); c.stroke();
     c.font = 'bold 10px system-ui'; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillStyle = p.gold; c.fillText(`Whale feed · ${ev.length}`, fx + 8, 12);
@@ -178,7 +182,7 @@ const draw: Record<ClipKind, (c: C, w: number, h: number, t: number, p: Pal) => 
     const mx = Math.max(...liq.map(l => Math.max(l.long, l.short))) || 1, mid = (g.top + g.bot) / 2;
     c.strokeStyle = p.grid; c.beginPath(); c.moveTo(0, mid); c.lineTo(f.x1, mid); c.stroke();
     liq.forEach((l, i) => { const x = i * cw + cw * .15, bw = cw * .7; c.fillStyle = alpha(p.down, .8); c.fillRect(x, mid, bw, l.long / mx * (g.bot - mid)); c.fillStyle = alpha(p.up, .8); c.fillRect(x, mid, bw, -l.short / mx * (mid - g.top));
-      const b = bs[i]!; for (const [v, buy] of [[l.long, false], [l.short, true]] as const) if (v > mx * .35) { const col = buy ? p.up : p.down, y = yOf(f, buy ? b.high : b.low) + (buy ? -9 : 9); c.fillStyle = alpha(col, .35); c.strokeStyle = col; c.beginPath(); c.arc(x + bw / 2, y, 3 + Math.sqrt(v / mx) * 6, 0, 7); c.fill(); c.stroke(); } });
+      const b = bs[i]!; for (const [v, buy] of [[l.long, false], [l.short, true]] as const) if (v > mx * .35) { const col = buy ? p.up : p.down, y = yOf(f, buy ? b.high : b.low) + (buy ? -9 : 9); c.fillStyle = alpha(col, .35); c.strokeStyle = col; c.lineWidth = .8; c.beginPath(); c.arc(x + bw / 2, y, bubbleR(v / mx, 2, 6.5), 0, 7); c.fill(); c.stroke(); } });
     axis(c, f, w, p, bs[bs.length - 1]); c.font = '9px ui-monospace,monospace'; c.fillStyle = p.muted; c.textAlign = 'left'; c.fillText('Longs ▼ / Shorts ▲ liquidated', 6, g.top + 6);
   },
   pressure(c, w, h, t, p) {

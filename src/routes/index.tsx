@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { BarChart3, Flame, Grid3x3, ListOrdered, TrendingUp, Fish, Zap, Gauge, Radar } from "lucide-react";
 import { ToolSection, type ToolInfo } from "@/components/site/ToolSection";
 import { TerminalChooser } from "@/components/site/TerminalChooser";
 import logo from "@/assets/depthlens-logo.png.asset.json";
@@ -21,19 +20,21 @@ export const Route = createFileRoute("/")({
 });
 
 const TOOL_SECTIONS: ToolInfo[] = [
-  { kind: "heatmap", tool: "Heatmap", name: "Heatmap", icon: Flame, title: "See where liquidity is resting", text: "Order book depth painted over time, so walls and pulled orders stand out.", bullets: ["Live order book from Binance or Bybit", "Up to 60 minutes of saved history", "Bright bands mark big resting orders", "Price line drawn over the depth"] },
-  { kind: "footprint", tool: "Footprint", name: "Footprint", icon: Grid3x3, title: "Look inside every candle", text: "Buy and sell volume at each price level, built from real trades.", bullets: ["Bid × Ask, Delta or Volume modes", "Imbalances shown in bold", "Point of control outlined", "Saved and backfilled history"] },
-  { kind: "dom", tool: "DOM", name: "DOM", icon: ListOrdered, title: "Read the ladder", text: "A live depth-of-market ladder with sizes at every price.", bullets: ["Bid and ask depth bars", "Large walls highlighted", "Auto price grouping", "Smooth updates, no lag"] },
-  { kind: "cvd", tool: "CVD", name: "CVD", icon: TrendingUp, title: "Who is really pushing price", text: "Cumulative volume delta under your chart, synced with every candle.", bullets: ["Exact taker buy/sell delta", "Per-candle delta bars", "Shared crosshair and time axis", "Spot divergences fast"] },
-  { kind: "profile", tool: "Volume Profile", name: "Volume Profile", icon: BarChart3, title: "Where volume actually traded", text: "A price histogram for the visible range with key levels marked.", bullets: ["Point of control line", "Value area high and low", "Tick-aligned rows", "Updates with live trades"] },
-  { kind: "whales", tool: "Whale Trades", name: "Whale Trades", icon: Fish, title: "Spot the big players", text: "Large trades circled on the chart, sized by how much they moved.", bullets: ["Auto or custom USDT threshold", "Bursts merged into one circle", "Live whale feed", "24 hours of saved history"] },
-  { kind: "liquidations", tool: "Liquidations", name: "Liquidations", icon: Zap, title: "Watch forced exits", text: "Long and short liquidations per candle, with bubbles on price.", bullets: ["Binance and Bybit liquidation feeds", "Long vs short histogram", "Merged bubbles at the price", "24 hours kept in your browser"] },
-  { kind: "pressure", tool: "Price Pressure", name: "Price Pressure", icon: Gauge, title: "Control & Attack at a glance", text: "Plain-language strips tell you who is in control and who is attacking.", bullets: ["Buyers / sellers in control", "Buyers / sellers attacking", "Pressure panes per candle", "Open in its own tab"] },
-  { kind: "radar", tool: "Flow Radar", name: "Flow Radar", icon: Radar, title: "Setups found for you", text: "Flow Radar scans taker flow and marks setups right on the candles.", bullets: ["Setup A / B markers", "Short-timeframe patterns", "Higher-timeframe marks", "Outcome scoreboard"] },
+  { kind: "heatmap", tool: "Heatmap", name: "Heatmap", title: "See where liquidity is resting", text: "Order book depth painted over time, so walls and pulled orders stand out.", bullets: ["Live order book from Binance or Bybit", "Up to 7 days of recorded BTCUSDT depth (Binance)", "60-minute saved buffer for every other pair", "Price line and trade bubbles over the depth"] },
+  { kind: "footprint", tool: "Footprint", name: "Footprint", title: "Look inside every candle", text: "Buy and sell volume at each price level, built from real trades.", bullets: ["Bid × Ask, Delta or Volume modes", "Imbalances shown in bold", "Point of control outlined", "24 hours saved in your browser, with backfill"] },
+  { kind: "dom", tool: "DOM", name: "DOM", title: "Read the ladder", text: "A live depth-of-market ladder with sizes at every price.", bullets: ["Bid and ask depth bars", "Large walls highlighted", "Auto price grouping", "Spread and last trade in the middle"] },
+  { kind: "cvd", tool: "CVD", name: "CVD", title: "Who is really pushing price", text: "Cumulative volume delta under your chart, synced with every candle.", bullets: ["Exact taker buy/sell delta", "Line, candles or delta histogram", "Daily, weekly or visible-range reset", "Shared crosshair and time axis"] },
+  { kind: "profile", tool: "Volume Profile", name: "Volume Profile", title: "Where volume actually traded", text: "A price histogram for the visible range with key levels marked.", bullets: ["Point of control line", "Value area high and low", "Tick-aligned rows", "Updates with live trades"] },
+  { kind: "whales", tool: "Whale Trades", name: "Whale Trades", title: "Spot the big players", text: "Large trades circled on the chart, sized by their USDT value.", bullets: ["Auto or custom USDT threshold", "Bursts merged into one circle", "Live whale feed", "24 hours of saved history"] },
+  { kind: "liquidations", tool: "Liquidations", name: "Liquidations", title: "Watch forced exits", text: "Long and short liquidations per candle, with bubbles on price.", bullets: ["Binance and Bybit liquidation feeds", "Long vs short histogram", "Merged bubbles at the price", "24 hours kept in your browser"] },
+  { kind: "pressure", tool: "Price Pressure", name: "Price Pressure", title: "Control & Attack at a glance", text: "Plain-language strips tell you who is in control and who is attacking.", bullets: ["Buyers / sellers in control", "Buyers / sellers attacking", "Pressure panes per candle", "Opens in its own window"] },
+  { kind: "radar", tool: "Flow Radar", name: "Flow Radar", title: "Setups found for you", text: "Flow Radar scans taker flow and marks setups right on the candles.", bullets: ["Setup A / B markers", "Short-timeframe patterns", "Higher-timeframe marks", "Outcome scoreboard"] },
 ];
 
 function Landing() {
   const [choose, setChoose] = useState(false);
+  const [tool, setTool] = useState<string | null>(null);
+  const open = (t: string | null) => { setTool(t); setChoose(true); };
   return (
     <div className="dl-site flex min-h-dvh flex-col">
       <header className="relative z-20 flex items-center gap-3 border-b border-[var(--s-border)] bg-[color-mix(in_oklab,var(--s-bg)_75%,transparent)] px-4 py-3 backdrop-blur sm:px-6">
@@ -53,15 +54,20 @@ function Landing() {
             <h1 className="s-rise text-[34px] font-bold leading-tight sm:text-6xl" style={{ animationDelay: ".1s" }}>See the order flow behind every candle</h1>
             <p className="s-rise s-muted mx-auto mt-5 max-w-xl text-[15px] sm:text-lg" style={{ animationDelay: ".25s" }}>A live order flow terminal for Binance USDT futures. Real-time charts, multi-pair tabs, and any timeframe you want — free, in your browser.</p>
             <div className="s-rise mt-8 flex flex-wrap items-center justify-center gap-3" style={{ animationDelay: ".4s" }}>
-              <button type="button" onClick={() => setChoose(true)} className="s-btn s-btn-primary px-7 py-3 text-base">Open Terminal</button>
+              <button type="button" onClick={() => open(null)} className="s-btn s-btn-primary px-7 py-3 text-base">Open Terminal</button>
             </div>
           </div>
         </section>
-        <div className="border-t border-[var(--s-border)] py-6">
-          {TOOL_SECTIONS.map((t, i) => <ToolSection key={t.tool} info={t} flip={i % 2 === 1} />)}
+        <div className="border-t border-[var(--s-border)] md:py-6">
+          {TOOL_SECTIONS.map((t, i) => <ToolSection key={t.tool} info={t} index={i} flip={i % 2 === 1} onOpen={open} />)}
         </div>
+        <section className="border-t border-[var(--s-border)] px-5 py-14 text-center sm:px-6 md:py-20">
+          <h2 className="text-2xl font-bold sm:text-3xl">Every tool, one terminal</h2>
+          <p className="s-muted mx-auto mt-3 max-w-lg">Open DepthLens and switch any tool on from the Order flow menu.</p>
+          <button type="button" onClick={() => open(null)} className="s-btn s-btn-primary mt-7 px-7 py-3 text-base">Open Terminal</button>
+        </section>
       </main>
-      <TerminalChooser open={choose} onClose={() => setChoose(false)} />
+      <TerminalChooser open={choose} tool={tool} onClose={() => setChoose(false)} />
       <footer className="relative z-10 border-t border-[var(--s-border)] bg-[var(--s-surface)] px-6 py-6 text-xs">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 sm:flex-row">
           <nav className="flex gap-5">

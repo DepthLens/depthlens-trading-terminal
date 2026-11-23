@@ -309,13 +309,17 @@
   .lg-tool:hover { transform: none; }
 }
 /* Landing tool sections */
-.lp-frame { border: 1px solid var(--s-border); border-radius: 14px; overflow: hidden; background: var(--s-surface); box-shadow: 0 0 40px -12px color-mix(in oklab, var(--s-gold) 45%, transparent); max-width: 640px; width: 100%; }
-.lp-frame-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--s-border); font-size: 11px; color: var(--s-muted); }
-.lp-frame-bar i { width: 9px; height: 9px; border-radius: 50%; background: color-mix(in oklab, var(--s-muted) 50%, transparent); }
+.lp-frame { border: 1px solid var(--s-border); border-radius: 10px; overflow: hidden; background: var(--s-surface); box-shadow: 0 6px 24px -8px rgb(0 0 0 / .55); max-width: 640px; width: 100%; }
+.lp-frame-bar { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--s-border); font-size: 11px; color: var(--s-muted); }
+.lp-frame-bar i { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in oklab, var(--s-muted) 35%, transparent); }
 .lp-frame-bar span { margin-left: 8px; }
 .lp-play { position: absolute; inset: 0; margin: auto; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--s-gold); color: #0B0F14; }
 .lp-reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.2,1); }
-.lp-reveal.lp-in { opacity: 1; transform: none; }
+.lp-reveal.lp-in, .lp-in .lp-reveal { opacity: 1; transform: none; }
+.lp-link { display: inline-flex; align-items: center; gap: 6px; color: var(--s-gold); font-size: 14px; font-weight: 600; text-underline-offset: 4px; }
+.lp-link:hover { text-decoration: underline; }
+.lp-link svg { transition: transform .2s ease; }
+.lp-link:hover svg { transform: translateX(3px); }
 @media (prefers-reduced-motion: reduce) { .lp-reveal { transform: none; transition: opacity .3s; } }
 
 /* Mobile/touch: drop GPU-heavy login effects to remove typing/scroll lag */
