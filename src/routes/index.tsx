@@ -47,9 +47,9 @@ function Landing() {
       </header>
       <main className="relative z-10 flex flex-1 flex-col">
         <section className="relative flex min-h-[calc(100dvh-61px)] items-center justify-center overflow-hidden px-5 py-10 text-center sm:min-h-[600px] sm:px-6 sm:py-20">
-          <div className="pointer-events-none absolute inset-0 opacity-55" aria-hidden><CandleBackdrop bright speed={0.35} /></div>
+          <div className="pointer-events-none absolute inset-0 opacity-60" aria-hidden><CandleBackdrop bright speed={0.35} /></div>
           <div className="relative max-w-3xl [text-shadow:0_2px_12px_var(--s-bg)]">
-            <div aria-hidden className="pointer-events-none absolute -inset-x-8 -inset-y-10 -z-10 rounded-[3rem] bg-[radial-gradient(ellipse_at_center,color-mix(in_oklab,var(--s-bg)_70%,transparent)_0%,transparent_70%)]" />
+            <div aria-hidden className="pointer-events-none absolute -inset-x-8 -inset-y-10 -z-10 rounded-[3rem] bg-[radial-gradient(ellipse_at_center,color-mix(in_oklab,var(--s-bg)_65%,transparent)_0%,transparent_60%)]" />
             <p className="s-rise s-gold mb-4 text-xs font-semibold uppercase tracking-[.25em]">Order flow terminal</p>
             <h1 className="s-rise text-[34px] font-bold leading-tight sm:text-6xl" style={{ animationDelay: ".1s" }}>See the order flow behind every candle</h1>
             <p className="s-rise s-muted mx-auto mt-5 max-w-xl text-[15px] sm:text-lg" style={{ animationDelay: ".25s" }}>A live order flow terminal for Binance USDT futures. Real-time charts, multi-pair tabs, and any timeframe you want — free, in your browser.</p>
