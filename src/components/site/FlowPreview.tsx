@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 export type PreviewKind = "heatmap" | "footprint" | "cvd" | "profile" | "radar";
-const C = { gold: "245,184,61", up: "34,197,94", down: "239,68,68", info: "59,130,246", muted: "139,152,169" };
+const C = { gold: "240,185,11", up: "14,203,129", down: "246,70,93", info: "59,130,246", muted: "132,142,156" };
 const rgba = (c: string, a: number) => `rgba(${c},${a})`;
 
 /** Tiny decorative previews drawn on the login page; one rAF per card, paused when hidden, static under reduced motion. */

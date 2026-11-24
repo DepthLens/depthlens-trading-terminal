@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-const GOLD = "245,184,61", UP = "34,197,94", DOWN = "239,68,68", GRID = "139,152,169";
+const GOLD = "240,185,11", UP = "14,203,129", DOWN = "246,70,93", GRID = "132,142,156";
 
 /** Login-only ambient background: drifting glows (CSS), faint grid with slowly drawing price lines and fading candles (canvas), mouse light and grain. */
 export function LoginAmbient() {
