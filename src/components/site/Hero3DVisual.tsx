@@ -1,247 +1,232 @@
 import { useEffect, useRef } from 'react';
 
-/** Decorative 3D trading scene for the landing hero: extruded candlesticks with a forming live candle, a stepped
- *  bid/ask depth ladder anchored to the live price, trade pulses flowing into the book with fill rings, and floating
- *  glass HUD cards. Demo values from a seeded random walk; Canvas 2D perspective projection, ≤30 fps, paused
- *  off-screen, static frame for reduced motion. No sockets, no data fetches, no React state per frame. */
-type V = [number, number, number];
-type RGB = readonly [number, number, number];
-type Candle = { o: number; h: number; l: number; c: number; tc: number };
-type Particle = { y: number; z: number; t0: number; dur: number; buy: boolean; big: boolean };
-type Ring = { y: number; z: number; t0: number; buy: boolean; big: boolean };
-type Box = { d: number; draw: () => void };
+/** Landing hero: an institutional live candle terminal console. Flat, crisp candles (1px wicks, solid bodies) with a
+ *  forming candle, live price line + axis tag with countdown, depth-of-market profile anchored to the price axis,
+ *  delta histogram + CVD sub-pane, OHLC legend, time axis and snapping crosshair. The console sits in a subtle CSS
+ *  3D tilt with mouse parallax. Seeded demo feed only — no sockets, no fetches, no React state per frame; ≤30 fps,
+ *  paused off-screen/hidden, static frame for reduced motion. */
+type Candle = { o: number; h: number; l: number; c: number; d: number; t: number };
 
-const css = (el: HTMLElement, v: string) => getComputedStyle(el).getPropertyValue(v).trim();
-const hex = (c: string, fb: RGB): RGB => { const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(c); return m ? [parseInt(m[1]!, 16), parseInt(m[2]!, 16), parseInt(m[3]!, 16)] : fb; };
-const rgba = (c: RGB, a: number) => `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
-const lighten = (c: RGB, k: number): RGB => [c[0] + (255 - c[0]) * k, c[1] + (255 - c[1]) * k, c[2] + (255 - c[2]) * k];
-const fmt = (p: number) => p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const ease = (x: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
-
-const X0 = -1.15, X1 = 0.3, BOOK_X = 0.46, BOOK_W = 0.5, BOOK_Z = 0.15;
-const PERIOD = 2.8, START = 96310, REF = START / 1.0241;
+const UP = [14, 203, 129] as const, DOWN = [246, 70, 93] as const, GOLD = [240, 185, 11] as const;
+const rgba = (c: readonly number[], a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const MUTED = 'rgba(132,142,156,1)', GRID = 'rgba(234,236,239,0.045)', LINE = 'rgba(234,236,239,0.09)';
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const CANDLE_MS = 3200, TICK_MS = 120, TICKS_PER = Math.round(CANDLE_MS / TICK_MS), KEEP = 140;
+const fmt = (v: number) => v.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const niceStep = (raw: number) => { const p = 10 ** Math.floor(Math.log10(raw)), f = raw / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; };
+const hash = (k: number) => { const s = Math.sin(k * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+const clock = (t: number) => { const m = (9 * 60 + 30 + t) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 
 export function Hero3DVisual({ className = '' }: { className?: string }) {
-  const box = useRef<HTMLDivElement>(null), cv = useRef<HTMLCanvasElement>(null);
-  const cards = useRef<(HTMLDivElement | null)[]>([]);
-  const price = useRef<HTMLSpanElement>(null), chg = useRef<HTMLSpanElement>(null);
-  const cvdVal = useRef<HTMLDivElement>(null), cvdBar = useRef<HTMLSpanElement>(null), cvdPct = useRef<HTMLSpanElement>(null);
-  const whale = useRef<HTMLSpanElement>(null), whaleCard = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const tilt = useRef<HTMLDivElement>(null);
+  const cv = useRef<HTMLCanvasElement>(null);
+  const priceEl = useRef<HTMLSpanElement>(null);
+  const chgEl = useRef<HTMLSpanElement>(null);
+  const latEl = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    const el = box.current, c = cv.current; if (!el || !c) return;
-    const ctx = c.getContext('2d'); if (!ctx) return;
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const small = matchMedia('(max-width: 767px)').matches;
-    const up = hex(css(el, '--s-up'), [14, 203, 129]), dn = hex(css(el, '--s-down'), [246, 70, 93]);
-    const gold = hex(css(el, '--s-gold'), [240, 185, 11]), bg = hex(css(el, '--s-bg'), [8, 11, 17]);
-    const muted = hex(css(el, '--s-muted'), [132, 142, 156]);
-    let seed = 7;
+    const canvas = cv.current, box = wrap.current, card = tilt.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !box || !card || !ctx) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // ── seeded market model ──
+    let seed = 20261124;
     const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
-    const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 1.5;
-
-    // ── market model (seeded demo walk) ──
-    const N = small ? 16 : 24, S = (X1 - X0) / N, BW = S * 0.3;
-    const next = (o: number): Candle => ({ o, h: o, l: o, c: o, tc: o + gauss() * 70 + 6 });
-    const candles: Candle[] = [];
-    let p = START - 300;
-    for (let i = 0; i < N - 1; i++) { const k = next(p); k.c = k.tc; k.h = Math.max(k.o, k.c) + rnd() * 30; k.l = Math.min(k.o, k.c) - rnd() * 30; candles.push(k); p = k.c; }
-    candles.push(next(p));
-    let w = 0, h = 0, raf = 0, last = 0, t = 0, visible = true, phase = 0, shift = 0, spawn = 0, cvd = 4.82e6, buyShare = 0.64, uiAt = 0, whaleAt = -10;
-    let lo = 0, hi = 1, mx = 0, my = 0, tmx = 0, tmy = 0;
-    const parts: Particle[] = [], rings: Ring[] = [];
-    const book = Array.from({ length: 24 }, (_, i) => ({ base: 0.25 + rnd() * 0.5 + (i === 4 || i === 15 ? 0.55 : 0), ph: rnd() * 6 }));
-    const live = () => candles[candles.length - 1]!.c;
-    const range = () => { let a = Infinity, b = -Infinity; for (const k of candles) { a = Math.min(a, k.l); b = Math.max(b, k.h); } const pad = (b - a) * 0.12 + 20; return [a - pad, b + pad] as const; };
-    [lo, hi] = range();
-    const yOf = (v: number) => 0.06 + ((v - lo) / (hi - lo)) * 0.86;
-
-    // ── camera ──
-    const BASE_YAW = -0.36, BASE_PITCH = 0.26, DIST = 3.1;
-    let yaw = BASE_YAW, pitch = BASE_PITCH;
-    const rot = (q: V): V => {
-      const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
-      const x = q[0] * cy - q[2] * sy, z1 = q[0] * sy + q[2] * cy;
-      return [x, q[1] * cp - z1 * sp, q[1] * sp + z1 * cp];
+    const gauss = () => { let u = 0; while (!u) u = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd()); };
+    let p = 96180, drift = 0, vol = 5, regime = 0;
+    const tick = (k: Candle) => {
+      if (--regime <= 0) { drift = (rnd() - 0.5) * 2.2; regime = 50 + rnd() * 180; }
+      vol = Math.min(15, Math.max(2.5, vol * 0.97 + 0.15 + (rnd() < 0.025 ? rnd() * 7 : 0)));
+      const dp = drift + gauss() * vol; p += dp;
+      k.c = p; if (p > k.h) k.h = p; if (p < k.l) k.l = p;
+      k.d += Math.sign(dp || 1) * (0.4 + rnd() * 1.6) * (rnd() < 0.05 ? 5 : 1) * 12 + gauss() * 4;
     };
-    const cam = (q: V): V => { const r = rot([q[0] + 0.12, q[1] - 0.48, q[2]]); return [r[0], r[1], r[2] + DIST]; };
-    const scr = (r: V): [number, number] => { const f = Math.min(w * 1.4, h * 2.3) / r[2]; return [w * 0.5 + r[0] * f, h * 0.5 - r[1] * f]; };
-    const project = (q: V) => scr(cam(q));
+    const fresh = (t: number): Candle => ({ o: p, h: p, l: p, c: p, d: 0, t });
+    const cs: Candle[] = [];
+    for (let i = 0; i < 110; i++) { const k = fresh(i); for (let j = 0; j < TICKS_PER; j++) tick(k); cs.push(k); }
+    const forming = fresh(110); for (let j = 0; j < 6; j++) tick(forming); cs.push(forming);
+    const sessionOpen = cs[0]!.o;
 
-    const quad = (pts: V[], fill: string, stroke?: string) => {
-      ctx.beginPath(); pts.forEach((q, i) => { const s = project(q); if (i) ctx.lineTo(s[0], s[1]); else ctx.moveTo(s[0], s[1]); }); ctx.closePath();
-      ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
-    };
-    const FACES: [V, (a: V, b: V) => V[]][] = [
-      [[0, 1, 0], (a, b) => [[a[0], b[1], a[2]], [b[0], b[1], a[2]], [b[0], b[1], b[2]], [a[0], b[1], b[2]]]],
-      [[1, 0, 0], (a, b) => [[b[0], a[1], a[2]], [b[0], b[1], a[2]], [b[0], b[1], b[2]], [b[0], a[1], b[2]]]],
-      [[-1, 0, 0], (a, b) => [[a[0], a[1], a[2]], [a[0], b[1], a[2]], [a[0], b[1], b[2]], [a[0], a[1], b[2]]]],
-      [[0, 0, 1], (a, b) => [[a[0], a[1], b[2]], [b[0], a[1], b[2]], [b[0], b[1], b[2]], [a[0], b[1], b[2]]]],
-      [[0, 0, -1], (a, b) => [[a[0], a[1], a[2]], [b[0], a[1], a[2]], [b[0], b[1], a[2]], [a[0], b[1], a[2]]]],
-    ];
-    const SHADE = [1, 0.5, 0.5, 0.75, 0.75];
-    const prism = (a: V, b: V, col: RGB, alpha: number) => {
-      const top = lighten(col, 0.3);
-      FACES.forEach(([n, f], i) => {
-        const pts = f(a, b), ctr: V = [(a[0] + b[0]) / 2 + n[0] * (b[0] - a[0]) / 2, (a[1] + b[1]) / 2 + n[1] * (b[1] - a[1]) / 2, (a[2] + b[2]) / 2 + n[2] * (b[2] - a[2]) / 2];
-        const rn = rot(n), rc = cam(ctr); if (rn[0] * rc[0] + rn[1] * rc[1] + rn[2] * rc[2] >= 0) return;
-        const s = SHADE[i]!, base = i === 0 ? top : col;
-        quad(pts, rgba([base[0] * s, base[1] * s, base[2] * s], alpha), rgba(lighten(col, 0.25), alpha * 0.55));
-      });
+    // ── view state ──
+    let W = 0, H = 0, dpr = 1, raf = 0, last = 0, start = performance.now(), tickAcc = 0, scroll = 0, uiAt = 0;
+    let lo = 0, hi = 0, shown = forming.c, depthStep = 0, visible = true, running = false;
+    let hover: { x: number; y: number } | null = null, rx = 0, ry = 0, trx = 0, try_ = 0;
+    const fit = () => {
+      const r = box.getBoundingClientRect(); W = Math.max(1, r.width); H = Math.max(1, r.height); dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
-    const draw = () => {
-      if (!w || !h) return;
-      ctx.clearRect(0, 0, w, h); ctx.lineWidth = 1; ctx.lineJoin = 'round';
-      const lp = live(), yl = yOf(lp);
-      // floor grid
-      ctx.strokeStyle = rgba(gold, 0.07); ctx.beginPath();
-      for (let i = 0; i <= 14; i++) { const x = X0 - 0.05 + i * 0.12, a = project([x, 0, -0.4]), b = project([x, 0, 0.4]); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
-      for (let j = 0; j <= 4; j++) { const z = -0.4 + j * 0.2, a = project([X0 - 0.05, 0, z]), b = project([BOOK_X + BOOK_W + 0.07, 0, z]); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
-      ctx.stroke();
-      // back wall price grid with labels
-      ctx.font = `${small ? 9 : 10}px ui-monospace, SFMono-Regular, Menlo, monospace`; ctx.textBaseline = 'middle';
-      for (let j = 0; j <= 4; j++) {
-        const v = lo + ((hi - lo) * (j + 0.5)) / 5, y = yOf(v), a = project([X0 - 0.05, y, -0.4]), b = project([X1 + 0.05, y, -0.4]);
-        ctx.strokeStyle = rgba(muted, 0.12); ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle = rgba(muted, 0.55); ctx.textAlign = 'right'; ctx.fillText(fmt(v).slice(0, -3), a[0] - 6, a[1]);
+    const draw = (now: number) => {
+      const small = W < 520, axisW = small ? 60 : 64, timeH = 20, chartR = W - axisW;
+      const mainTop = 22, mainH = Math.round((H - timeH) * 0.72) - mainTop, paneTop = mainTop + mainH + 8, paneH = H - timeH - paneTop - 4;
+      const spacing = small ? 7 : 8.5, bw = Math.max(2, Math.round(spacing * 0.64)), rightPad = spacing * 5;
+      const n = Math.min(cs.length, Math.ceil((chartR - rightPad) / spacing) + 2);
+      const vis = cs.slice(cs.length - n);
+      const xOf = (j: number) => chartR - rightPad - j * spacing + scroll * spacing; // j = 0 is the forming candle
+      const live = cs[cs.length - 1]!;
+
+      // smooth auto-scale
+      let a = Infinity, b = -Infinity;
+      for (const k of vis) { if (k.l < a) a = k.l; if (k.h > b) b = k.h; }
+      const pad = (b - a) * 0.14 + 4; a -= pad; b += pad;
+      if (!lo) { lo = a; hi = b; } else { lo += (a - lo) * 0.08; hi += (b - hi) * 0.08; }
+      const Y = (v: number) => mainTop + ((hi - v) / (hi - lo)) * mainH;
+      shown += (live.c - shown) * 0.4;
+
+      ctx.clearRect(0, 0, W, H);
+      ctx.textBaseline = 'middle';
+
+      // grid + price axis labels
+      const ps = niceStep((hi - lo) / (small ? 4 : 6));
+      ctx.font = `10px ${MONO}`; ctx.textAlign = 'left';
+      for (let v = Math.ceil(lo / ps) * ps; v < hi; v += ps) {
+        const y = Math.round(Y(v)) + 0.5; if (y < mainTop + 4 || y > mainTop + mainH - 4) continue;
+        ctx.fillStyle = GRID; ctx.fillRect(0, y, chartR, 1);
+        ctx.fillStyle = MUTED; ctx.fillText(fmt(v), chartR + 8, y);
       }
-      // gather solids, paint far → near
-      const solids: Box[] = [];
-      candles.forEach((k, i) => {
-        const x = X0 + (i + 0.5 + shift) * S, bull = k.c >= k.o, col = bull ? up : dn, forming = i === candles.length - 1;
-        const y0 = yOf(Math.min(k.o, k.c)), y1 = Math.max(yOf(Math.max(k.o, k.c)), y0 + 0.008);
-        const fade = Math.min(1, (x - X0) / (S * 2.5));
-        solids.push({ d: cam([x, (y0 + y1) / 2, 0])[2], draw: () => {
-          const wa = project([x, yOf(k.l), 0]), wb = project([x, yOf(k.h), 0]);
-          ctx.strokeStyle = rgba(col, 0.85 * fade); ctx.lineWidth = forming ? 1.6 : 1.2; ctx.beginPath(); ctx.moveTo(wa[0], wa[1]); ctx.lineTo(wb[0], wb[1]); ctx.stroke(); ctx.lineWidth = 1;
-          if (forming) { ctx.save(); ctx.shadowColor = rgba(col, 0.8); ctx.shadowBlur = 14; }
-          prism([x - BW, y0, -BW], [x + BW, y1, BW], col, (forming ? 0.98 : 0.86) * fade);
-          if (forming) ctx.restore();
-          // volume block on the floor
-          const vh = 0.012 + Math.abs(k.c - k.o) / (hi - lo) * 0.18;
-          prism([x - BW, 0, 0.22 - BW * 0.6], [x + BW, vh, 0.22 + BW * 0.6], col, 0.35 * fade);
-        } });
-      });
-      const dy = small ? 0.042 : 0.034;
-      for (let side = 0; side < 2; side++) for (let k = 1; k <= 12; k++) {
-        const ask = side === 0, y = yl + (ask ? k : -k) * dy; if (y < 0.02 || y > 1.02) continue;
-        const b = book[side * 12 + k - 1]!, size = b.base * (0.82 + 0.18 * Math.sin(t * 1.3 + b.ph)) * (1 - k * 0.02);
-        const x1 = BOOK_X + size * BOOK_W, col = ask ? dn : up;
-        solids.push({ d: cam([BOOK_X + 0.1, y, 0])[2], draw: () => prism([BOOK_X, y - dy * 0.34, -BOOK_Z], [x1, y + dy * 0.34, BOOK_Z], col, 0.5 + Math.min(0.35, size * 0.3)) });
+      for (const [j, k] of vis.entries()) {
+        if (k.t % 15 !== 0) continue;
+        const x = Math.round(xOf(vis.length - 1 - j)) + 0.5; if (x < 20 || x > chartR - 20) continue;
+        ctx.fillStyle = GRID; ctx.fillRect(x, mainTop, 1, H - timeH - mainTop);
+        ctx.fillStyle = MUTED; ctx.textAlign = 'center'; ctx.fillText(clock(k.t), x, H - timeH / 2); ctx.textAlign = 'left';
       }
-      solids.sort((a, b) => b.d - a.d).forEach(s => s.draw());
-      // live price plane + line
-      const pa = project([X0, yl, 0]), pb = project([BOOK_X, yl, 0]);
-      quad([[X0, yl, -0.4], [BOOK_X, yl, -0.4], [BOOK_X, yl, 0.4], [X0, yl, 0.4]], rgba(gold, 0.03));
-      ctx.save(); ctx.strokeStyle = rgba(gold, 0.95); ctx.lineWidth = 1.4; ctx.shadowColor = rgba(gold, 0.8); ctx.shadowBlur = 10; ctx.setLineDash([6, 4]); ctx.lineDashOffset = -t * 12;
-      ctx.beginPath(); ctx.moveTo(pa[0], pa[1]); ctx.lineTo(pb[0], pb[1]); ctx.stroke(); ctx.restore();
-      // trade pulses → book, then fill rings
-      const fx = X0 + (candles.length - 0.5 + shift) * S;
-      for (const q of parts) {
-        const e = ease((t - q.t0) / q.dur), x = fx + (BOOK_X - fx) * e, y = yl + (q.buy ? 1 : -1) * dy * 0.55 * e;
-        const s = project([x, y, q.z * e]), col = q.buy ? up : dn, r = q.big ? 12 : 7;
-        const g = ctx.createRadialGradient(s[0], s[1], 0, s[0], s[1], r); g.addColorStop(0, rgba(col, 0.75)); g.addColorStop(1, rgba(col, 0));
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(s[0], s[1], r, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = rgba([255, 255, 255], 0.9); ctx.beginPath(); ctx.arc(s[0], s[1], q.big ? 2.2 : 1.3, 0, Math.PI * 2); ctx.fill();
+
+      // watermark
+      ctx.fillStyle = 'rgba(234,236,239,0.025)'; ctx.font = `600 ${small ? 22 : 30}px ${MONO}`; ctx.textAlign = 'center';
+      ctx.fillText('BTCUSDT · 1m', chartR / 2, mainTop + mainH / 2); ctx.textAlign = 'left';
+
+      // depth-of-market profile anchored to the price axis (absolute price levels, sizes breathe slowly)
+      const target = niceStep((hi - lo) / 34);
+      if (!depthStep || target / depthStep > 1.9 || depthStep / target > 1.9) depthStep = target;
+      const maxLen = Math.min(150, chartR * 0.24), rowPx = (depthStep / (hi - lo)) * mainH;
+      const tt = now * 0.0006;
+      for (let k = Math.floor(lo / depthStep); k <= Math.ceil(hi / depthStep); k++) {
+        const price = k * depthStep, y0 = Y(price + depthStep / 2), dist = Math.abs(price - live.c) / depthStep;
+        if (dist < 0.5 || y0 + rowPx < mainTop || y0 > mainTop + mainH) continue;
+        const wall = hash(k * 7.3) > 0.9, base = 0.22 + 0.55 * hash(k) ** 1.5 + Math.min(0.25, dist * 0.012);
+        const size = Math.min(1, (wall ? base * 1.9 + 0.2 : base) * (0.82 + 0.18 * Math.sin(tt + k * 1.7)));
+        const len = Math.round(size * maxLen), col = price > live.c ? DOWN : UP;
+        const top = Math.round(y0) + 1, hpx = Math.max(1, Math.round(rowPx) - 1);
+        ctx.fillStyle = rgba(col, wall ? 0.3 : 0.13); ctx.fillRect(chartR - len, top, len, hpx);
+        ctx.fillStyle = rgba(col, wall ? 0.85 : 0.4); ctx.fillRect(chartR - len, top, 1, hpx);
       }
-      for (const r of rings) {
-        const k = (t - r.t0) / 0.9, s = project([BOOK_X, yl + (r.buy ? 1 : -1) * dy * 0.55, r.z]), col = r.buy ? up : dn;
-        ctx.strokeStyle = rgba(r.big ? gold : col, (1 - k) * 0.85); ctx.lineWidth = r.big ? 2 : 1.3;
-        ctx.beginPath(); ctx.ellipse(s[0], s[1], 3 + k * (r.big ? 26 : 14), (3 + k * (r.big ? 26 : 14)) * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
+
+      // candles
+      for (const [j, k] of vis.entries()) {
+        const x = xOf(vis.length - 1 - j); if (x < -spacing || x > chartR) continue;
+        const up = k.c >= k.o, col = rgba(up ? UP : DOWN, 1), cx = Math.round(x);
+        ctx.fillStyle = col;
+        const yh = Math.round(Y(k.h)), yl = Math.round(Y(k.l));
+        ctx.fillRect(cx, yh, 1, Math.max(1, yl - yh));
+        const yt = Math.round(Y(Math.max(k.o, k.c))), yb = Math.round(Y(Math.min(k.o, k.c)));
+        ctx.fillRect(cx - Math.floor(bw / 2), yt, bw | 1, Math.max(1, yb - yt));
       }
-      ctx.lineWidth = 1;
-      // price tag at the book edge
-      const tagX = pb[0] + 6, label = fmt(lp);
-      ctx.font = `600 ${small ? 10 : 11}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-      const tw = ctx.measureText(label).width + 12, th = small ? 17 : 19;
-      ctx.save(); ctx.shadowColor = rgba(gold, 0.6); ctx.shadowBlur = 12; ctx.fillStyle = rgba(gold, 1);
-      ctx.beginPath(); ctx.roundRect(tagX, pb[1] - th / 2, tw, th, 4); ctx.fill(); ctx.restore();
-      ctx.fillStyle = rgba(bg, 1); ctx.textAlign = 'left'; ctx.fillText(label, tagX + 6, pb[1] + 0.5);
-      ctx.fillStyle = rgba(gold, 1); ctx.beginPath(); ctx.arc(pa[0] + (pb[0] - pa[0]) * 0.999, pb[1], 3, 0, Math.PI * 2); ctx.fill();
+
+      // live price line + axis tag + countdown
+      const upLive = live.c >= live.o, lc = upLive ? UP : DOWN, ly = Math.round(Y(shown)) + 0.5;
+      ctx.strokeStyle = rgba(lc, 0.75); ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(0, ly); ctx.lineTo(chartR, ly); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = rgba(lc, 1); ctx.fillRect(chartR, ly - 9, axisW, 18);
+      ctx.fillStyle = '#ffffff'; ctx.font = `600 10px ${MONO}`; ctx.fillText(fmt(shown), chartR + 6, ly);
+      const left = Math.max(0, CANDLE_MS - (now - start)), secs = Math.ceil((left / CANDLE_MS) * 60);
+      ctx.fillStyle = rgba(lc, 0.22); ctx.fillRect(chartR, ly + 9, axisW, 15);
+      ctx.fillStyle = rgba(lc, 1); ctx.font = `10px ${MONO}`; ctx.fillText(`00:${String(secs).padStart(2, '0')}`, chartR + 6, ly + 16.5);
+
+      // delta histogram + CVD line sub-pane
+      ctx.fillStyle = LINE; ctx.fillRect(0, paneTop - 4, W, 1);
+      const zero = Math.round(paneTop + paneH / 2) + 0.5;
+      let md = 1; for (const k of vis) md = Math.max(md, Math.abs(k.d));
+      ctx.fillStyle = GRID; ctx.fillRect(0, zero, chartR, 1);
+      const cvd: [number, number][] = []; let run = 0, cmin = Infinity, cmax = -Infinity;
+      for (const [j, k] of vis.entries()) {
+        const x = xOf(vis.length - 1 - j); run += k.d; cvd.push([x, run]); cmin = Math.min(cmin, run); cmax = Math.max(cmax, run);
+        if (x < -spacing || x > chartR) continue;
+        const hpx = Math.max(1, Math.round((Math.abs(k.d) / md) * (paneH / 2 - 3)));
+        ctx.fillStyle = rgba(k.d >= 0 ? UP : DOWN, 0.7);
+        ctx.fillRect(Math.round(x) - Math.floor(bw / 2), k.d >= 0 ? zero - hpx : zero + 1, bw | 1, hpx);
+      }
+      const cy = (v: number) => paneTop + 4 + (1 - (v - cmin) / Math.max(1, cmax - cmin)) * (paneH - 8);
+      ctx.strokeStyle = rgba(GOLD, 0.9); ctx.lineWidth = 1.25; ctx.beginPath();
+      cvd.forEach(([x, v], i) => (i ? ctx.lineTo(x, cy(v)) : ctx.moveTo(x, cy(v)))); ctx.stroke(); ctx.lineWidth = 1;
+      ctx.font = `600 9.5px ${MONO}`; ctx.fillStyle = MUTED; ctx.fillText('DELTA', 8, paneTop + 6);
+      ctx.fillStyle = rgba(GOLD, 0.95); ctx.fillText('CVD', 50, paneTop + 6);
+      ctx.fillStyle = MUTED; ctx.font = `10px ${MONO}`;
+      ctx.fillText(`${run >= 0 ? '+' : ''}${(run / 1000).toFixed(1)}K`, chartR + 8, paneTop + 6);
+
+      // crosshair (snaps to candle) + OHLC legend
+      let legend = live;
+      if (hover && hover.x < chartR && hover.y > mainTop && hover.y < H - timeH) {
+        const j = Math.round((chartR - rightPad + scroll * spacing - hover.x) / spacing), idx = vis.length - 1 - j;
+        const k = vis[idx]; if (k) legend = k;
+        const sx = Math.round(xOf(Math.max(0, Math.min(vis.length - 1, j)))) + 0.5, sy = Math.round(hover.y) + 0.5;
+        ctx.strokeStyle = 'rgba(234,236,239,0.35)'; ctx.setLineDash([3, 3]); ctx.beginPath();
+        ctx.moveTo(sx, mainTop); ctx.lineTo(sx, H - timeH); if (sy < mainTop + mainH) { ctx.moveTo(0, sy); ctx.lineTo(chartR, sy); } ctx.stroke(); ctx.setLineDash([]);
+        if (sy < mainTop + mainH) { ctx.fillStyle = '#2B3139'; ctx.fillRect(chartR, sy - 9, axisW, 18); ctx.fillStyle = '#EAECEF'; ctx.font = `10px ${MONO}`; ctx.fillText(fmt(hi - ((sy - mainTop) / mainH) * (hi - lo)), chartR + 6, sy); }
+      }
+      const lu = legend.c >= legend.o, lcol = rgba(lu ? UP : DOWN, 1), chg = ((legend.c - legend.o) / legend.o) * 100;
+      ctx.font = `10.5px ${MONO}`; let lx = 8; const ly2 = 11;
+      const seg = (label: string, val: string) => { ctx.fillStyle = MUTED; ctx.fillText(label, lx, ly2); lx += ctx.measureText(label).width + 3; ctx.fillStyle = lcol; ctx.fillText(val, lx, ly2); lx += ctx.measureText(val).width + 10; };
+      if (!small) { seg('O', fmt(legend.o)); seg('H', fmt(legend.h)); seg('L', fmt(legend.l)); }
+      seg('C', fmt(legend.c)); seg('', `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`);
+
+      if (now - uiAt > 250) {
+        uiAt = now;
+        const dc = ((live.c - sessionOpen) / sessionOpen) * 100;
+        if (priceEl.current) { priceEl.current.textContent = fmt(live.c); priceEl.current.style.color = rgba(upLive ? UP : DOWN, 1); }
+        if (chgEl.current) { chgEl.current.textContent = `${dc >= 0 ? '+' : ''}${dc.toFixed(2)}%`; chgEl.current.style.color = rgba(dc >= 0 ? UP : DOWN, 1); }
+        if (latEl.current) latEl.current.textContent = `${Math.round(9 + hash(Math.floor(now / 1000)) * 9)} ms`;
+      }
     };
 
-    const ui = () => {
-      const lp = live(), pct = (lp / REF - 1) * 100;
-      if (price.current) price.current.textContent = `$${fmt(lp)}`;
-      if (chg.current) { chg.current.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`; chg.current.style.color = `var(${pct >= 0 ? '--s-up' : '--s-down'})`; }
-      if (cvdVal.current) cvdVal.current.textContent = `${cvd >= 0 ? '+' : '−'}$${(Math.abs(cvd) / 1e6).toFixed(2)}M`;
-      if (cvdBar.current) cvdBar.current.style.width = `${(buyShare * 100).toFixed(0)}%`;
-      if (cvdPct.current) cvdPct.current.textContent = `${(buyShare * 100).toFixed(0)}% bids`;
-    };
-    const step = (dt: number) => {
-      t += dt; phase += dt / PERIOD; shift = Math.max(0, shift - dt / 0.45);
-      const f = candles[candles.length - 1]!, e = ease(Math.min(1, phase));
-      f.c = f.o + (f.tc - f.o) * e + Math.sin(t * 7) * 6 * (1 - e) + Math.sin(t * 2.3) * 4;
-      f.h = Math.max(f.h, f.c); f.l = Math.min(f.l, f.c);
-      if (phase >= 1) { phase = 0; f.c = f.tc; candles.shift(); candles.push(next(f.c)); shift = 1; }
-      const [tl, th] = range(); lo += (tl - lo) * Math.min(1, dt * 2); hi += (th - hi) * Math.min(1, dt * 2);
-      spawn -= dt;
-      if (spawn <= 0) {
-        spawn = 0.1 + rnd() * 0.18; const buy = rnd() < (f.tc >= f.o ? 0.64 : 0.4), big = rnd() < 0.05;
-        parts.push({ y: 0, z: (rnd() - 0.5) * 0.2, t0: t, dur: 0.9 + rnd() * 0.5, buy, big });
-      }
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const q = parts[i]!; if (t - q.t0 < q.dur) continue;
-        parts.splice(i, 1); rings.push({ y: 0, z: q.z, t0: t, buy: q.buy, big: q.big });
-        const usd = (q.big ? 1.2e7 + rnd() * 6e6 : 2e4 + rnd() * 2e5) * (q.buy ? 1 : -1);
-        cvd += usd; buyShare += ((q.buy ? 1 : 0) - buyShare) * 0.01;
-        if (q.big && t - whaleAt > 3) {
-          whaleAt = t; const btc = Math.abs(usd) / live();
-          if (whale.current) whale.current.textContent = `${btc.toFixed(0)} BTC ${q.buy ? 'buy' : 'sell'} @ $${fmt(live()).slice(0, -3)}`;
-          const wc = whaleCard.current; if (wc) { wc.style.borderColor = `var(${q.buy ? '--s-up' : '--s-down'})`; wc.animate([{ opacity: 0.4, transform: 'scale(.94)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 400, easing: 'ease-out' }); }
-        }
-      }
-      for (let i = rings.length - 1; i >= 0; i--) if (t - rings[i]!.t0 > 0.9) rings.splice(i, 1);
-      if (t - uiAt > 0.25) { uiAt = t; ui(); }
-      // camera parallax with damping
-      mx += (tmx - mx) * (1 - Math.exp(-4 * dt)); my += (tmy - my) * (1 - Math.exp(-4 * dt));
-      yaw = BASE_YAW + mx * 0.32 + Math.sin(t * 0.18) * 0.06; pitch = BASE_PITCH + my * 0.16;
-      cards.current.forEach((n, i) => { if (n) n.style.transform = `translate3d(${(-mx * (10 + i * 8)).toFixed(1)}px, ${(-my * (6 + i * 5)).toFixed(1)}px, 0)`; });
-    };
-    const size = () => { const r = el.getBoundingClientRect(), d = Math.min(devicePixelRatio || 1, 1.75); w = r.width; h = r.height; c.width = Math.round(w * d); c.height = Math.round(h * d); ctx.setTransform(d, 0, 0, d, 0, 0); draw(); };
-    const frame = (now: number) => {
-      raf = requestAnimationFrame(frame);
+    const step = (now: number) => {
+      raf = requestAnimationFrame(step);
       if (now - last < 33) return;
-      const dt = Math.min(0.1, (now - (last || now)) / 1000); last = now; step(dt); draw();
+      const dt = Math.min(200, now - last); last = now;
+      tickAcc += dt;
+      const live = cs[cs.length - 1]!;
+      while (tickAcc >= TICK_MS) { tickAcc -= TICK_MS; tick(live); }
+      if (now - start >= CANDLE_MS) { start = now; cs.push(fresh(live.t + 1)); if (cs.length > KEEP) cs.shift(); scroll = 1; }
+      scroll = Math.max(0, scroll - dt / 380);
+      rx += (trx - rx) * 0.08; ry += (try_ - ry) * 0.08;
+      card.style.setProperty('--tx', `${rx.toFixed(2)}deg`); card.style.setProperty('--ty', `${ry.toFixed(2)}deg`);
+      draw(now);
     };
-    const start = () => { if (!raf && !reduced && visible && !document.hidden) { last = 0; raf = requestAnimationFrame(frame); } };
-    const stop = () => { cancelAnimationFrame(raf); raf = 0; };
-    const move = (e: PointerEvent) => { const r = el.getBoundingClientRect(); tmx = Math.max(-0.5, Math.min(0.5, (e.clientX - r.left) / r.width - 0.5)); tmy = Math.max(-0.5, Math.min(0.5, (e.clientY - r.top) / r.height - 0.5)); };
-    const leave = () => { tmx = 0; tmy = 0; };
-    // warm up so the first frame already shows trades in flight
-    for (let i = 0; i < 40; i++) step(0.05);
-    size(); ui();
-    const ro = new ResizeObserver(size); ro.observe(el);
-    const io = new IntersectionObserver(([e]) => { visible = !!e?.isIntersecting; if (visible) start(); else stop(); }); io.observe(el);
-    const vis = () => { if (document.hidden) stop(); else start(); };
+    const play = () => { if (running || reduced || !visible || document.hidden) return; running = true; last = performance.now(); raf = requestAnimationFrame(step); };
+    const stop = () => { running = false; cancelAnimationFrame(raf); };
+
+    fit(); draw(performance.now());
+    const ro = new ResizeObserver(() => { fit(); draw(performance.now()); }); ro.observe(box);
+    const io = new IntersectionObserver(([e]) => { visible = !!e?.isIntersecting; if (visible) play(); else stop(); }); io.observe(box);
+    const vis = () => { if (document.hidden) stop(); else play(); };
     document.addEventListener('visibilitychange', vis);
-    if (!small) { window.addEventListener('pointermove', move, { passive: true }); document.documentElement.addEventListener('pointerleave', leave); }
-    el.dataset['sceneReady'] = '1';
-    start();
-    return () => { stop(); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); window.removeEventListener('pointermove', move); document.documentElement.removeEventListener('pointerleave', leave); };
+    const move = (e: PointerEvent) => {
+      const r = box.getBoundingClientRect();
+      hover = { x: e.clientX - r.left, y: e.clientY - r.top };
+      if (hover.x < 0 || hover.y < 0 || hover.x > r.width || hover.y > r.height) hover = null;
+      if (window.innerWidth >= 1024) { trx = ((e.clientY / window.innerHeight) - 0.5) * -3; try_ = ((e.clientX / window.innerWidth) - 0.5) * 4; }
+      if (reduced) draw(performance.now());
+    };
+    window.addEventListener('pointermove', move, { passive: true });
+    play();
+    return () => { stop(); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); window.removeEventListener('pointermove', move); };
   }, []);
 
-  const card = 'pointer-events-none absolute rounded-xl border border-[color-mix(in_oklab,var(--s-gold)_28%,var(--s-border))] bg-[color-mix(in_oklab,var(--s-surface)_78%,transparent)] shadow-[0_12px_40px_-12px_color-mix(in_oklab,var(--s-bg)_90%,transparent),inset_0_1px_0_color-mix(in_oklab,var(--s-text)_8%,transparent)] backdrop-blur-md will-change-transform';
-  const mono = 'font-mono tabular-nums';
   return (
-    <div ref={box} className={`relative ${className}`} aria-hidden>
-      <canvas ref={cv} className="absolute inset-0 size-full" />
-      <div ref={n => { cards.current[0] = n; }} className={`${card} left-1 top-1 flex items-center gap-2 px-3 py-2 sm:left-2 sm:top-2`}>
-        <span className="lp-live" />
-        <span className="text-[10px] font-semibold tracking-[0.12em] text-[var(--s-muted)] sm:text-[11px]">BTC/USDT PERP</span>
-        <span ref={price} className={`${mono} text-xs font-bold text-[var(--s-text)] sm:text-sm`}>$96,310.00</span>
-        <span ref={chg} className={`${mono} text-[10px] font-semibold sm:text-xs`}>+2.41%</span>
-      </div>
-      <div ref={n => { cards.current[1] = n; }} className={`${card} bottom-3 right-2 hidden w-44 px-3 py-2.5 sm:block`}>
-        <div className="flex items-center justify-between text-[10px] font-semibold tracking-[0.12em] text-[var(--s-muted)]"><span>CVD DELTA</span><span ref={cvdPct} className={mono}>64% bids</span></div>
-        <div ref={cvdVal} className={`${mono} mt-1 text-base font-bold text-[var(--s-up)]`}>+$4.82M</div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[color-mix(in_oklab,var(--s-down)_70%,transparent)]"><span ref={cvdBar} className="block h-full rounded-full bg-[var(--s-up)] transition-[width] duration-300" style={{ width: '64%' }} /></div>
-      </div>
-      <div ref={n => { cards.current[2] = n; }} className="pointer-events-none absolute bottom-1 left-1 will-change-transform sm:bottom-3 sm:left-3">
-        <div ref={whaleCard} className={`${card.replace('absolute ', '')} flex items-center gap-2 px-3 py-2`}>
-          <span className="text-[10px] font-semibold tracking-[0.12em] text-[var(--s-gold)]">WHALE FILL</span>
-          <span ref={whale} className={`${mono} text-[11px] font-semibold text-[var(--s-text)] sm:text-xs`}>185 BTC buy @ $96,480</span>
+    <div className={`lp-stage ${className}`}>
+      <div ref={tilt} className="lp-console flex h-full flex-col">
+        <div className="lp-console-bar">
+          <span className="lp-live" aria-hidden />
+          <span className="font-semibold tracking-wide text-[var(--s-text)]">BTCUSDT</span>
+          <span className="hidden sm:inline">Perpetual</span>
+          <span className="lp-tf">1m</span>
+          <span ref={priceEl} className="ml-1 font-mono font-semibold tabular-nums">—</span>
+          <span ref={chgEl} className="font-mono tabular-nums" />
+          <span className="ml-auto hidden items-center gap-3 sm:flex"><span>Binance</span><span>Latency <span ref={latEl} className="font-mono tabular-nums text-[var(--s-text)]">12 ms</span></span></span>
+          <span className="lp-demo">Demo feed</span>
+        </div>
+        <div ref={wrap} className="relative min-h-0 flex-1" aria-hidden>
+          <canvas ref={cv} className="absolute inset-0 size-full" />
         </div>
       </div>
     </div>

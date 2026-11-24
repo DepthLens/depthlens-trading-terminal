@@ -32,6 +32,8 @@ const TOOL_SECTIONS: ToolInfo[] = [
   { kind: "radar", tool: "Flow Radar", name: "Flow Radar", title: "Setups found for you", text: "Flow Radar scans taker flow and marks setups right on the candles.", bullets: ["Setup A / B markers", "Short-timeframe patterns", "Higher-timeframe marks", "Outcome scoreboard"] },
 ];
 
+const TOOL_TAGS: Record<string, string> = { heatmap: "Resting liquidity", footprint: "Bid × ask per level", dom: "Depth ladder", cvd: "Cumulative delta", profile: "POC · VAH · VAL", whales: "Large prints", liquidations: "Forced exits", pressure: "Control & attack", radar: "Setup scanner" };
+
 const STATS: [string, string][] = [["9", "Order flow tools"], ["2", "Exchange feeds: Binance + Bybit"], ["7 days", "Recorded BTCUSDT depth"], ["0", "Installs — runs in your browser"]];
 
 function Landing() {
@@ -63,13 +65,15 @@ function Landing() {
               </div>
             </div>
             <div className="s-rise relative" style={{ animationDelay: ".3s" }}>
-                            <Hero3DVisual className="h-[260px] w-full sm:h-[360px] lg:h-[460px]" />
+                            <Hero3DVisual className="h-[300px] w-full sm:h-[380px] lg:h-[440px]" />
             </div>
           </div>
-          <nav aria-label="Tools" className="s-rise relative mx-auto mt-8 grid max-w-6xl grid-cols-3 gap-2 sm:grid-cols-9 md:mt-12" style={{ animationDelay: ".5s" }}>
-            {TOOL_SECTIONS.map(t => { const Icon = TOOL_ICONS[t.kind]; return (
-              <a key={t.tool} href={`#tool-${t.kind}`} className="lp-chip" title={t.name}>
-                {Icon && <Icon className="size-5" />}<span>{t.name}</span>
+          <nav aria-label="Tools" className="s-rise lp-tnav relative mx-auto mt-10 max-w-6xl md:mt-14" style={{ animationDelay: ".5s" }}>
+            {TOOL_SECTIONS.map((t, i) => { const Icon = TOOL_ICONS[t.kind]; return (
+              <a key={t.tool} href={`#tool-${t.kind}`} className="lp-tcard" title={t.title}>
+                <span className="lp-tcard-num">{String(i + 1).padStart(2, "0")}</span>
+                <span className="lp-tcard-ico">{Icon && <Icon className="size-[18px]" />}</span>
+                <span className="min-w-0"><span className="lp-tcard-name block">{t.name}</span><span className="lp-tcard-sub block">{TOOL_TAGS[t.kind]}</span></span>
               </a>); })}
           </nav>
           <dl className="s-rise relative mx-auto mt-6 grid max-w-6xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-[var(--s-border)] bg-[var(--s-border)] sm:grid-cols-4" style={{ animationDelay: ".6s" }}>
