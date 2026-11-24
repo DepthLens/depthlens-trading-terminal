@@ -5,11 +5,11 @@
 export type ThemePreset = { id: string; label: string; swatch: [string, string]; tokens: Record<string, string> };
 
 export const THEME_PRESETS: ThemePreset[] = [
-  { id: 'gold', label: 'Black & Gold', swatch: ['#0B0F14', '#F5B83D'], tokens: {
-    '--t-bg': '#0B0F14', '--t-panel': '#121821', '--t-raised': '#18212D', '--t-border': '#1F2A37', '--t-control-border': '#2B3848', '--t-disabled': '#5B6778',
-    '--t-text': '#E6EDF3', '--t-muted': '#8B98A9', '--t-accent': '#F5B83D', '--t-accent-hover': '#FFC94D', '--t-accent-press': '#E0A42C',
-    '--t-ring': '#F5B83D', '--t-accent-fg': '#0B0F14', '--t-accent-fg-sm': '#0B0F14', '--t-grid': 'rgba(230,237,243,0.05)', '--t-crosshair': 'rgba(139,152,169,0.7)',
-    '--t-up': '#22C55E', '--t-down': '#EF4444',
+  { id: 'gold', label: 'Black & Gold', swatch: ['#080B11', '#F0B90B'], tokens: {
+    '--t-bg': '#080B11', '--t-panel': '#0F1520', '--t-raised': '#161E2B', '--t-border': '#1A2230', '--t-control-border': '#283244', '--t-disabled': '#5B6575',
+    '--t-text': '#EAECEF', '--t-muted': '#848E9C', '--t-accent': '#F0B90B', '--t-accent-hover': '#FCD535', '--t-accent-press': '#D9A507',
+    '--t-ring': '#F0B90B', '--t-accent-fg': '#080B11', '--t-accent-fg-sm': '#080B11', '--t-grid': 'rgba(234,236,239,0.05)', '--t-crosshair': 'rgba(132,142,156,0.7)',
+    '--t-up': '#0ECB81', '--t-down': '#F6465D',
   } },
   { id: 'royal', label: 'White & Royal Blue', swatch: ['#FFFFFF', '#2563EB'], tokens: {
     '--t-bg': '#FFFFFF', '--t-panel': '#F4F6FA', '--t-raised': '#E9EDF4', '--t-border': '#E2E8F0', '--t-control-border': '#CBD5E1', '--t-disabled': '#9CA3AF',

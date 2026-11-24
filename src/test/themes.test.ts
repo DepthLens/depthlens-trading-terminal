@@ -7,7 +7,7 @@ describe('theme presets', () => {
   it('picker lists exactly the four presets with Black & Gold as default', () => {
     expect(THEME_PRESETS.map(p => p.label)).toEqual(['Black & Gold', 'White & Royal Blue', 'Black & White', 'Navy & Pink']);
     expect(DEFAULT_THEME).toBe('gold'); expect(initialState().theme).toBe('gold');
-    expect([tok('gold', '--t-bg'), tok('gold', '--t-accent'), tok('gold', '--t-text')]).toEqual(['#0B0F14', '#F5B83D', '#E6EDF3']);
+    expect([tok('gold', '--t-bg'), tok('gold', '--t-accent'), tok('gold', '--t-text')]).toEqual(['#080B11', '#F0B90B', '#EAECEF']);
   });
   it('uses the requested background and accent per preset', () => {
     expect([tok('royal', '--t-bg'), tok('royal', '--t-accent'), tok('royal', '--t-accent-fg')]).toEqual(['#FFFFFF', '#2563EB', '#FFFFFF']);

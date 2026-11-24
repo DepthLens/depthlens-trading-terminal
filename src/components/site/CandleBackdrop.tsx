@@ -34,7 +34,7 @@ export function CandleBackdrop({ dim = false, bright = false, speed = 1 }: { dim
       for (let i = 0; i < candles.length; i++) {
         const c = candles[i]!; const x = (i - off) * gap + gap / 2;
         if (x < -gap || x > w + gap) continue;
-        const col = c.c >= c.o ? "#22C55E" : "#EF4444";
+        const col = c.c >= c.o ? "#0ECB81" : "#F6465D";
         ctx.strokeStyle = col; ctx.lineWidth = 1.75;
         ctx.beginPath(); ctx.moveTo(x, y(c.hi)); ctx.lineTo(x, y(c.lo)); ctx.stroke();
         const bt = y(Math.max(c.o, c.c)), bb = y(Math.min(c.o, c.c));
@@ -44,7 +44,7 @@ export function CandleBackdrop({ dim = false, bright = false, speed = 1 }: { dim
         pts.push([x, y(c.c)]);
       }
       if (pts.length > 1) {
-        ctx.strokeStyle = "#F5B83D"; ctx.globalAlpha *= .45; ctx.lineWidth = 1.5; ctx.beginPath();
+        ctx.strokeStyle = "#F0B90B"; ctx.globalAlpha *= .45; ctx.lineWidth = 1.5; ctx.beginPath();
         pts.forEach(([x, yy], i) => (i ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy))); ctx.stroke();
       }
       ctx.globalAlpha = 1;

@@ -3,7 +3,6 @@ import { useState } from "react";
 import { ToolSection, type ToolInfo } from "@/components/site/ToolSection";
 import { TerminalChooser } from "@/components/site/TerminalChooser";
 import logo from "@/assets/depthlens-logo.png.asset.json";
-import { CandleBackdrop } from "@/components/site/CandleBackdrop";
 import { Hero3DVisual } from "@/components/site/Hero3DVisual";
 import { TOOL_ICONS } from "@/components/site/ToolIcons";
 
@@ -51,10 +50,10 @@ function Landing() {
       </header>
       <main className="relative z-10 flex flex-1 flex-col">
         <section className="relative overflow-hidden px-5 pb-10 pt-10 sm:px-6 md:pb-16 md:pt-16">
-          <div className="pointer-events-none absolute inset-0 opacity-40" aria-hidden><CandleBackdrop bright speed={0.35} /></div>
-          <div aria-hidden className="lp-hero-fade pointer-events-none absolute inset-0" />
+          <div aria-hidden className="lp-grid pointer-events-none absolute inset-0" />
+          <div aria-hidden className="lp-vignette pointer-events-none absolute inset-0" />
           <div className="relative mx-auto grid w-full max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_1fr] lg:gap-6">
-            <div className="text-center lg:text-left [text-shadow:0_2px_12px_var(--s-bg)]">
+            <div className="text-center lg:text-left">
               <p className="s-rise lp-badge mx-auto lg:mx-0"><span className="lp-live" aria-hidden />Crypto futures &amp; forex · order flow terminal</p>
               <h1 className="s-rise mt-5 text-[34px] font-bold leading-[1.08] tracking-tight sm:text-6xl" style={{ animationDelay: ".1s" }}>See the order flow <span className="lp-gold-text">behind every candle</span></h1>
               <p className="s-rise s-muted mx-auto mt-5 max-w-xl text-[15px] sm:text-lg lg:mx-0" style={{ animationDelay: ".25s" }}>A live order flow terminal for Binance USDT futures. Real-time charts, multi-pair tabs, and any timeframe you want — free, in your browser.</p>
@@ -64,8 +63,7 @@ function Landing() {
               </div>
             </div>
             <div className="s-rise relative" style={{ animationDelay: ".3s" }}>
-              <div aria-hidden className="lp-orb pointer-events-none absolute inset-[12%] rounded-full" />
-              <Hero3DVisual className="h-[260px] w-full sm:h-[360px] lg:h-[460px]" />
+                            <Hero3DVisual className="h-[260px] w-full sm:h-[360px] lg:h-[460px]" />
             </div>
           </div>
           <nav aria-label="Tools" className="s-rise relative mx-auto mt-8 grid max-w-6xl grid-cols-3 gap-2 sm:grid-cols-9 md:mt-12" style={{ animationDelay: ".5s" }}>
