@@ -330,3 +330,21 @@
   .lg-card::before { animation: none; }
   .lg-tool { backdrop-filter: none; }
 }
+
+/* Landing hero polish + tool icons */
+.lp-hero-fade { background: radial-gradient(ellipse at 30% 45%, color-mix(in oklab, var(--s-bg) 70%, transparent) 0%, transparent 65%), linear-gradient(to bottom, transparent 70%, var(--s-bg)); }
+.lp-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid color-mix(in oklab, var(--s-gold) 35%, var(--s-border)); background: color-mix(in oklab, var(--s-gold) 8%, transparent); color: var(--s-gold); font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+.lp-live { width: 7px; height: 7px; border-radius: 50%; background: var(--s-up); box-shadow: 0 0 0 0 color-mix(in oklab, var(--s-up) 60%, transparent); animation: lp-pulse 2s ease-out infinite; }
+@keyframes lp-pulse { to { box-shadow: 0 0 0 8px transparent; } }
+.lp-gold-text { background: linear-gradient(100deg, var(--s-gold-hover), var(--s-gold) 45%, color-mix(in oklab, var(--s-gold) 70%, var(--s-text))); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
+.lp-orb { background: radial-gradient(circle, color-mix(in oklab, var(--s-gold) 16%, transparent), transparent 70%); filter: blur(30px); }
+.lp-chip { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; border-radius: 12px; border: 1px solid var(--s-border); background: color-mix(in oklab, var(--s-surface) 80%, transparent); color: var(--s-muted); font-size: 11px; font-weight: 500; text-align: center; line-height: 1.2; transition: border-color .2s, color .2s, transform .2s, background .2s; }
+.lp-chip svg { color: var(--s-gold); }
+.lp-chip:hover { border-color: color-mix(in oklab, var(--s-gold) 55%, var(--s-border)); color: var(--s-text); background: color-mix(in oklab, var(--s-gold) 7%, var(--s-surface)); transform: translateY(-2px); }
+.lp-icon { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 11px; color: var(--s-gold); border: 1px solid color-mix(in oklab, var(--s-gold) 32%, transparent); background: linear-gradient(145deg, color-mix(in oklab, var(--s-gold) 16%, transparent), color-mix(in oklab, var(--s-gold) 4%, transparent)); box-shadow: 0 0 22px -6px color-mix(in oklab, var(--s-gold) 45%, transparent), inset 0 1px 0 color-mix(in oklab, var(--s-gold) 25%, transparent); }
+@media (hover: hover) and (min-width: 768px) {
+  .lp-frame { transition: transform .5s cubic-bezier(.2,.7,.2,1), box-shadow .5s, border-color .5s; transform: perspective(1000px); }
+  .lp-frame:hover { transform: perspective(1000px) rotateX(2deg) rotateY(-3deg) translateY(-4px); border-color: color-mix(in oklab, var(--s-gold) 40%, var(--s-border)); box-shadow: 0 24px 50px -18px rgb(0 0 0 / .7), 0 0 30px -10px color-mix(in oklab, var(--s-gold) 35%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .lp-live { animation: none; } .lp-chip:hover, .lp-frame:hover { transform: none; } }
+@media (max-width: 480px) { .lp-badge { letter-spacing: .06em; font-size: 10px; } }

@@ -1,17 +1,22 @@
 import { useEffect, useRef } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { MiniClip } from './MiniClip';
+import { TOOL_ICONS } from './ToolIcons';
 import type { ClipKind } from '@/lib/landing-clips';
 export type ToolInfo = { kind: ClipKind; tool: string; name: string; title: string; text: string; bullets: string[] };
 /** Mobile order: label+title → preview → text → bullets → link. Desktop: preview and text side by side, alternating. */
 export function ToolSection({ info, index, flip, onOpen }: { info: ToolInfo; index: number; flip: boolean; onOpen: (tool: string) => void }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => { const el = ref.current; if (!el) return; const io = new IntersectionObserver(([e]) => { if (e?.isIntersecting) { el.classList.add('lp-in'); io.disconnect(); } }, { threshold: .15 }); io.observe(el); return () => io.disconnect(); }, []);
+  const Icon = TOOL_ICONS[info.kind];
   const textCol = flip ? 'md:col-start-1' : 'md:col-start-2', clipCol = flip ? 'md:col-start-2' : 'md:col-start-1';
   return (
-    <section ref={ref} data-tool-section={info.tool} className="mx-auto grid w-full max-w-6xl gap-y-5 px-5 py-10 sm:px-6 md:grid-cols-2 md:gap-x-14 md:py-16">
+    <section ref={ref} id={`tool-${info.kind}`} data-tool-section={info.tool} className="scroll-mt-4 mx-auto grid w-full max-w-6xl gap-y-5 px-5 py-10 sm:px-6 md:grid-cols-2 md:gap-x-14 md:py-16">
       <div className={`lp-reveal min-w-0 md:row-start-1 md:self-end ${textCol}`}>
-        <p className="s-gold font-mono text-xs font-semibold uppercase tracking-[.2em]">{String(index + 1).padStart(2, '0')} — {info.name}</p>
+        <div className="flex items-center gap-3">
+          {Icon && <span className="lp-icon"><Icon className="size-5" /></span>}
+          <p className="s-gold font-mono text-xs font-semibold uppercase tracking-[.2em]">{String(index + 1).padStart(2, '0')} — {info.name}</p>
+        </div>
         <h2 className="mt-3 text-2xl font-bold sm:text-3xl">{info.title}</h2>
       </div>
       <div className={`min-w-0 md:row-span-2 md:row-start-1 md:self-center ${clipCol} ${flip ? 'md:justify-self-end' : ''} w-full`}>

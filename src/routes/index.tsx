@@ -4,6 +4,8 @@ import { ToolSection, type ToolInfo } from "@/components/site/ToolSection";
 import { TerminalChooser } from "@/components/site/TerminalChooser";
 import logo from "@/assets/depthlens-logo.png.asset.json";
 import { CandleBackdrop } from "@/components/site/CandleBackdrop";
+import { Hero3DVisual } from "@/components/site/Hero3DVisual";
+import { TOOL_ICONS } from "@/components/site/ToolIcons";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -31,6 +33,8 @@ const TOOL_SECTIONS: ToolInfo[] = [
   { kind: "radar", tool: "Flow Radar", name: "Flow Radar", title: "Setups found for you", text: "Flow Radar scans taker flow and marks setups right on the candles.", bullets: ["Setup A / B markers", "Short-timeframe patterns", "Higher-timeframe marks", "Outcome scoreboard"] },
 ];
 
+const STATS: [string, string][] = [["9", "Order flow tools"], ["2", "Exchange feeds: Binance + Bybit"], ["7 days", "Recorded BTCUSDT depth"], ["0", "Installs — runs in your browser"]];
+
 function Landing() {
   const [choose, setChoose] = useState(false);
   const [tool, setTool] = useState<string | null>(null);
@@ -46,19 +50,35 @@ function Landing() {
         </nav>
       </header>
       <main className="relative z-10 flex flex-1 flex-col">
-        <section className="relative flex min-h-[460px] items-center justify-center overflow-hidden px-5 py-10 text-center sm:min-h-[600px] sm:px-6 sm:py-20">
-          <div className="pointer-events-none absolute inset-0 opacity-60" aria-hidden><CandleBackdrop bright speed={0.35} /></div>
-          <div className="relative max-w-3xl [text-shadow:0_2px_12px_var(--s-bg)]">
-            <div aria-hidden className="pointer-events-none absolute -inset-x-8 -inset-y-10 -z-10 rounded-[3rem] bg-[radial-gradient(ellipse_at_center,color-mix(in_oklab,var(--s-bg)_65%,transparent)_0%,transparent_60%)]" />
-            <p className="s-rise s-gold mb-4 text-xs font-semibold uppercase tracking-[.25em]">Order flow terminal</p>
-            <h1 className="s-rise text-[34px] font-bold leading-tight sm:text-6xl" style={{ animationDelay: ".1s" }}>See the order flow behind every candle</h1>
-            <p className="s-rise s-muted mx-auto mt-5 max-w-xl text-[15px] sm:text-lg" style={{ animationDelay: ".25s" }}>A live order flow terminal for Binance USDT futures. Real-time charts, multi-pair tabs, and any timeframe you want — free, in your browser.</p>
-            <div className="s-rise mt-8 flex flex-wrap items-center justify-center gap-3" style={{ animationDelay: ".4s" }}>
-              <button type="button" onClick={() => open(null)} className="s-btn s-btn-primary px-7 py-3 text-base">Open Terminal</button>
+        <section className="relative overflow-hidden px-5 pb-10 pt-10 sm:px-6 md:pb-16 md:pt-16">
+          <div className="pointer-events-none absolute inset-0 opacity-40" aria-hidden><CandleBackdrop bright speed={0.35} /></div>
+          <div aria-hidden className="lp-hero-fade pointer-events-none absolute inset-0" />
+          <div className="relative mx-auto grid w-full max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_1fr] lg:gap-6">
+            <div className="text-center lg:text-left [text-shadow:0_2px_12px_var(--s-bg)]">
+              <p className="s-rise lp-badge mx-auto lg:mx-0"><span className="lp-live" aria-hidden />Crypto futures &amp; forex · order flow terminal</p>
+              <h1 className="s-rise mt-5 text-[34px] font-bold leading-[1.08] tracking-tight sm:text-6xl" style={{ animationDelay: ".1s" }}>See the order flow <span className="lp-gold-text">behind every candle</span></h1>
+              <p className="s-rise s-muted mx-auto mt-5 max-w-xl text-[15px] sm:text-lg lg:mx-0" style={{ animationDelay: ".25s" }}>A live order flow terminal for Binance USDT futures. Real-time charts, multi-pair tabs, and any timeframe you want — free, in your browser.</p>
+              <div className="s-rise mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start" style={{ animationDelay: ".4s" }}>
+                <button type="button" onClick={() => open(null)} className="s-btn s-btn-primary px-7 py-3 text-base">Open Terminal</button>
+                <a href="#tools" className="s-btn s-btn-secondary px-6 py-3 text-base">Explore the tools</a>
+              </div>
+            </div>
+            <div className="s-rise relative" style={{ animationDelay: ".3s" }}>
+              <div aria-hidden className="lp-orb pointer-events-none absolute inset-[12%] rounded-full" />
+              <Hero3DVisual className="h-[260px] w-full sm:h-[360px] lg:h-[460px]" />
             </div>
           </div>
+          <nav aria-label="Tools" className="s-rise relative mx-auto mt-8 grid max-w-6xl grid-cols-3 gap-2 sm:grid-cols-9 md:mt-12" style={{ animationDelay: ".5s" }}>
+            {TOOL_SECTIONS.map(t => { const Icon = TOOL_ICONS[t.kind]; return (
+              <a key={t.tool} href={`#tool-${t.kind}`} className="lp-chip" title={t.name}>
+                {Icon && <Icon className="size-5" />}<span>{t.name}</span>
+              </a>); })}
+          </nav>
+          <dl className="s-rise relative mx-auto mt-6 grid max-w-6xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-[var(--s-border)] bg-[var(--s-border)] sm:grid-cols-4" style={{ animationDelay: ".6s" }}>
+            {STATS.map(([v, l]) => <div key={l} className="bg-[color-mix(in_oklab,var(--s-surface)_92%,transparent)] flex flex-col-reverse px-4 py-4 text-center"><dt className="s-muted text-xs">{l}</dt><dd className="text-lg font-bold sm:text-xl">{v}</dd></div>)}
+          </dl>
         </section>
-        <div className="border-t border-[var(--s-border)] md:py-6">
+        <div id="tools" className="scroll-mt-4 border-t border-[var(--s-border)] md:py-6">
           {TOOL_SECTIONS.map((t, i) => <ToolSection key={t.tool} info={t} index={i} flip={i % 2 === 1} onOpen={open} />)}
         </div>
         <section className="border-t border-[var(--s-border)] px-5 py-14 text-center sm:px-6 md:py-20">

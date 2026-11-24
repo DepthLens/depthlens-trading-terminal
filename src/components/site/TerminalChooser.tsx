@@ -1,10 +1,8 @@
 import { useEffect, type ReactElement } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { X } from 'lucide-react';
+import { FuturesIcon as CandlesIcon, ForexIcon as FxIcon } from './ToolIcons';
 type Ico = (p: { className?: string }) => ReactElement;
-const svg = { viewBox: '0 0 20 20', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
-const CandlesIcon: Ico = ({ className }) => (<svg {...svg} className={className}><path d="M4 3v14M10 2v16M16 4v12" /><rect x="2.5" y="7" width="3" height="6" rx=".5" /><rect x="8.5" y="5" width="3" height="5" rx=".5" /><rect x="14.5" y="7" width="3" height="5" rx=".5" /></svg>);
-const FxIcon: Ico = ({ className }) => (<svg {...svg} className={className}><path d="M3.5 8a6.5 6.5 0 0 1 11.6-3.4" /><path d="M15.5 2v3h-3" /><path d="M16.5 12a6.5 6.5 0 0 1-11.6 3.4" /><path d="M4.5 18v-3h3" /></svg>);
 export const CHOICE_KEY = 'depthlens-terminal-choice';
 export function TerminalChooser({ open, onClose, tool }: { open: boolean; onClose: () => void; tool?: string | null }) {
   const nav = useNavigate();
