@@ -72,7 +72,7 @@ function Landing() {
             {TOOL_SECTIONS.map((t, i) => { const Icon = TOOL_ICONS[t.kind]; return (
               <a key={t.tool} href={`#tool-${t.kind}`} className="lp-tcard" title={t.title}>
                 <span className="lp-tcard-num">{String(i + 1).padStart(2, "0")}</span>
-                <span className="lp-tcard-ico">{Icon && <Icon className="size-[18px]" />}</span>
+                <span className="lp-tcard-ico">{Icon && <Icon className="size-[22px]" />}</span>
                 <span className="min-w-0"><span className="lp-tcard-name block">{t.name}</span><span className="lp-tcard-sub block">{TOOL_TAGS[t.kind]}</span></span>
               </a>); })}
           </nav>
