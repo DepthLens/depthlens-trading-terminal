@@ -5,6 +5,7 @@ import { TerminalChooser } from "@/components/site/TerminalChooser";
 import logo from "@/assets/depthlens-logo.png.asset.json";
 import { Hero3DVisual } from "@/components/site/Hero3DVisual";
 import { TOOL_ICONS } from "@/components/site/ToolIcons";
+import { SiteFooter } from "@/components/site/SiteFooter";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -90,17 +91,7 @@ function Landing() {
         </section>
       </main>
       <TerminalChooser open={choose} tool={tool} onClose={() => setChoose(false)} />
-      <footer className="relative z-10 border-t border-[var(--s-border)] bg-[var(--s-surface)] px-6 py-6 text-xs">
-        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 sm:flex-row">
-          <nav className="flex gap-5">
-            <Link to="/terminal" className="s-muted hover:text-[var(--s-text)]">Terminal</Link>
-            <Link to="/forex" className="s-muted hover:text-[var(--s-text)]">Forex</Link>
-            <Link to="/login" className="s-muted hover:text-[var(--s-text)]">Login</Link>
-            <Link to="/register" className="s-muted hover:text-[var(--s-text)]">Register</Link>
-          </nav>
-          <p className="s-muted text-center">Not financial advice. Trading futures involves substantial risk of loss.</p>
-        </div>
-      </footer>
+      <SiteFooter logoUrl={logo.url} onOpenTool={open} />
     </div>
   );
 }
