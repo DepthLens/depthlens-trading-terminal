@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Mail, Headset } from "lucide-react";
+import { parsePopoutQuery } from "@/lib/popout";
 
 export const CONTACT_EMAIL = "depthlens.coy@gmail.com";
 export const WHATSAPP_DISPLAY = "+92 319 5066209";
@@ -54,7 +55,7 @@ export function SiteFooter({ logoUrl, onOpenTool }: { logoUrl: string; onOpenToo
           <ul className="mt-4 space-y-2.5">
             <li><Link to="/terminal" className={linkCls}>Crypto Futures Terminal</Link></li>
             <li><Link to="/forex" className={linkCls}>Forex Terminal</Link></li>
-            <li><Link to="/pressure" className={linkCls}>Price Pressure</Link></li>
+            <li><Link to="/pressure" search={parsePopoutQuery({})} className={linkCls}>Price Pressure</Link></li>
           </ul>
         </nav>
 
