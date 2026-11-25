@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { Crosshair, Settings2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { colorFor, percentile, COLUMN_MS, type Column } from '@/lib/heatmap-data';
-import { LONG_WINDOWS, RECORDED_SYMBOL, fillGaps, loadRecorded, loadRecorderStatus, recordedEvery, snapshotToColumn, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
+import { LONG_WINDOWS, RECORDED_SYMBOL, fillGaps, historyRange, loadRecorded, loadRecorderStatus, recordedEvery, snapshotToColumn, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
 import { calibrateHeatmap, getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
 import { orderBook } from '@/lib/order-book';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
@@ -23,7 +23,7 @@ function compact(n: number): string {
   return n.toFixed(0);
 }
 
-export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false, paused = false }: { symbol: string; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge>; mobile?: boolean; floating?: boolean; paused?: boolean }) {
+export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, floating = false, paused = false }: { symbol: string; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge>; historySource?: 'binance' | 'bybit'; mobile?: boolean; floating?: boolean; paused?: boolean }) {
   // Paused (minimized window) skips drawing only; column collection keeps running.
   const pausedRef = useRef(paused); pausedRef.current = paused;
   const [showSettings, setShowSettings] = useState(false);
@@ -38,11 +38,15 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
   const [recordedAvail, setRecordedAvail] = useState(false);
   const [recordedShown, setRecordedShown] = useState(false);
   const [status, setStatus] = useState<RecorderStatus | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [range, setRange] = useState<ReturnType<typeof historyRange>>(null);
+  const historyText = range ? `History: ${new Date(range.from).toLocaleString()} – ${new Date(range.to).toLocaleString()}, ${range.count.toLocaleString()} snapshots` : 'History: —, 0 snapshots';
   const admin = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('admin') === '1';
   useEffect(() => {
     if (!admin) return;
-    const tick = () => { void loadRecorderStatus().then(setStatus); };
-    tick(); const t = setInterval(tick, 30000); return () => clearInterval(t);
+    let stopped = false;
+    const tick = () => { void loadRecorderStatus().then(value => { if (!stopped) setStatus(value); }).catch(error => { if (!stopped) setHistoryError(error instanceof Error ? error.message : String(error)); }); };
+    tick(); const t = setInterval(tick, 30000); return () => { stopped = true; clearInterval(t); };
   }, [admin]);
   const [intensity, setIntensity] = useState(1);
   const [windowMin, setWindowMin] = useState<number>(15);
@@ -78,10 +82,22 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
     let source = orderBook.debug().source;
     let stopped = false, hidden = document.hidden, frame = 0, dirty = true;
     view.current = { center: NaN, rows: DEFAULT_ROWS };
-    // Recorded history (Binance BTCUSDT only) for windows longer than the 60-minute live buffer.
-    let recRows: RecordedSnapshot[] = [], recFor = 0, recCols: Column[] = [], recColsKey = '', loading = false, recCheckedAt = 0;
+    // Recorded history fills short gaps and extends long Binance BTCUSDT windows.
+    let recRows: RecordedSnapshot[] = [], recFor = 0, recCols: Column[] = [], recColsKey = '', loading = false, recCheckedAt = 0, requestedWindow = 0;
     let longCols: Column[] = [], longKey = '', longAt = 0, longVersion = 0, shown = false, long = false;
-    const recordedOn = () => !demo && source === 'binance' && symbol === RECORDED_SYMBOL;
+    const recordedOn = () => !demo && (historySource ?? source) === 'binance' && symbol === RECORDED_SYMBOL;
+    setRecordedAvail(recordedOn()); setRecordedShown(false); setHistoryError(null); setRange(null);
+    const requestHistory = (w: number, before: number) => {
+      if (loading || (requestedWindow === w && Date.now() - recCheckedAt < 10000)) return;
+      loading = true; requestedWindow = w; recCheckedAt = Date.now();
+      void loadRecorded(w, before).then(rows => {
+        if (stopped || controls.current.windowMin !== w) return;
+        recRows = rows; recFor = w; recColsKey = ''; longKey = ''; longAt = 0; longVersion++;
+        setRange(historyRange(rows)); setHistoryError(null); dirty = true; schedule();
+      }).catch(error => {
+        if (!stopped && controls.current.windowMin === w) setHistoryError(error instanceof Error ? error.message : String(error));
+      }).finally(() => { loading = false; });
+    };
     const windowColumns = (): readonly Column[] => {
       const w = controls.current.windowMin;
       long = w > 60 && recordedOn();
@@ -89,7 +105,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
         const liveCols = buffer.columns.slice(-Math.min(w, 60) * 60);
         // Binance BTCUSDT: fill holes (tab hidden, chart view, other pair) with the Supabase recording.
         if (!recordedOn()) { if (shown) { shown = false; setRecordedShown(false); } return liveCols; }
-        if (!loading && (recFor !== w || Date.now() - recCheckedAt > 10000)) { loading = true; recCheckedAt = Date.now(); void loadRecorded(w, Date.now()).then(rows => { if (rows !== recRows || recFor !== w) { recRows = rows; recFor = w; longVersion++; dirty = true; schedule(); } }).finally(() => { loading = false; }); }
+        if (requestedWindow !== w || Date.now() - recCheckedAt >= 10000) requestHistory(w, Date.now());
         if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = recRows.map(r => snapshotToColumn(r, buffer.bucket)); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
         const now = Date.now();
         const { cols, filled } = recFor === w ? fillGaps(liveCols, recCols, now - w * 60000, now) : { cols: [...liveCols], filled: 0 };
@@ -99,7 +115,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       const k = `${w}:${buffer.bucket}`;
       if (k === longKey && Date.now() - longAt < 5000) return longCols;
       const firstLive = buffer.columns.find(c => !c.priceOnly && !c.gap)?.time ?? Date.now();
-      if (!loading) { loading = true; void loadRecorded(w, firstLive).then(rows => { if (rows !== recRows) { recRows = rows; recFor = w; longAt = 0; dirty = true; schedule(); } }).finally(() => { loading = false; }); }
+      if (recFor !== w || Date.now() - recCheckedAt >= 10000) requestHistory(w, firstLive);
       if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = recRows.map(r => snapshotToColumn(r, buffer.bucket)); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
       const rec = recFor === w ? recCols.filter(c => c.time < firstLive) : [];
       longCols = [...rec, ...thinColumns(buffer.columns.filter(c => c.time >= firstLive), recordedEvery(w))];
@@ -120,6 +136,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       if (demo) { setCollected(buffer.columns.length); dirty = true; return; }
       const dbg = orderBook.debug();
       if (dbg.source !== source) { source = dbg.source; entry = getHeatmapEntry(source as HeatSource, symbol, bridge.current.latest?.price ?? NaN); buffer = entry.buffer;depthSpan=entry.depthSpan;fitted=false;view.current.center = NaN; }
+      setRecordedAvail(recordedOn());
       const price = bridge.current.latest?.price ?? dbg.bestBid ?? NaN;
       if (!Number.isFinite(price)) return;
       // Keep recording the book while the tab is hidden; only drawing pauses. Mark a gap only when the book is not synced.
@@ -183,7 +200,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       const c = controls.current;
       if(lastGrouping!==c.grouping){view.current.rows=Math.max(20,view.current.rows*lastGrouping/c.grouping);lastGrouping=c.grouping;}
       const cols = windowColumns();
-      const price = fixture ? demoPrice : bridge.current.latest?.price ?? NaN;
+      const price = fixture ? demoPrice : bridge.current.latest?.price ?? cols.at(-1)?.price ?? NaN;
       if (!Number.isFinite(view.current.center)) { view.current.center = price; view.current.rows = heatFitRows(depthSpan || buffer.bucket * 150, buffer.bucket, c.grouping); }
       const center = view.current.center;
       if (!cols.length || !Number.isFinite(center)) {
@@ -240,7 +257,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       // Trade bubbles: radius ∝ sqrt(volume), green buyer / red seller aggressor.
       if (c.bubblesOn) {
         for (let ci = 0; ci < N; ci++) {
-          const col = cols[ci]!;
+          const col = cols[ci]; if (!col) continue;
           if (col.gap) continue;
           const x = x0 + (ci + 0.5) * colW;
           for (const [bucket, t] of col.trades) {
@@ -262,7 +279,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       ctx.beginPath();
       let started = false;
       for (let ci = 0; ci < N; ci++) {
-        const col = cols[ci]!;
+        const col = cols[ci]; if (!col) continue;
         if (col.gap || !Number.isFinite(col.price)) { started = false; continue; }
         const x = x0 + (ci + 0.5) * colW, y = priceToY(col.price, top, band, H);
         if (started) ctx.lineTo(x, y); else ctx.moveTo(x, y);
@@ -290,7 +307,8 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       ctx.textAlign = 'center';
       const labelEvery = Math.max(1, Math.round(60 / Math.max(1, colW)));
       for (let ci = 0; ci < N; ci++) {
-        const t = cols[ci]!.time;
+        const col = cols[ci]; if (!col) continue;
+        const t = col.time;
         if (t % 60000 >= COLUMN_MS || ci % labelEvery !== 0) continue;
         const d = new Date(t);
         ctx.fillText(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, x0 + (ci + 0.5) * colW, H + 16);
@@ -327,6 +345,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
     const pulse = setInterval(() => { if (mobileRef.current && ++pulses % 2) return; dirty = true; schedule(); }, COLUMN_MS);
     centerRef.current = () => { view.current.center = fixture ? demoPrice : bridge.current.latest?.price ?? NaN; view.current.rows = heatFitRows(depthSpan || buffer.bucket * 150, buffer.bucket, controls.current.grouping); dirty = true; schedule(); };
     redrawRef.current = () => { dirty = true; schedule(); };
+    if (recordedOn()) requestHistory(controls.current.windowMin, Date.now());
     schedule();
 
     // Wheel zoom on the price axis (and plot), anchored at the cursor price.
@@ -418,7 +437,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
       canvas.removeEventListener('pointerleave', onLeave);
       if (bridge.current.heat === onTrade) bridge.current.heat = null;
     };
-  }, [symbol, bridge]);
+  }, [symbol, bridge, historySource]);
 
   const center = () => centerRef.current?.();
   const control = 'text-t-muted hover:bg-t-border/50 hover:text-t-text';
@@ -446,13 +465,15 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
         <input type="checkbox" checked={bubblesOn} onChange={e => setBubblesOn(e.target.checked)} aria-label="Toggle trade bubbles" className="accent-current" />
       </label>
       <Button variant="ghost" size="sm" onClick={center} className={`h-6 px-2 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-3" />Center</Button>
+      {recordedAvail && <span data-testid="history-range" className="basis-full text-[10px] text-t-muted tabular-nums">{historyText}</span>}
     </div>
     </>}
     <div className="relative min-h-0 flex-1">
       {toolDemoEnabled() && <span className="demo-watermark">DEMO DATA</span>}
       <canvas ref={canvasRef} className={`block size-full ${mobile ? 'touch-none' : ''}`} aria-label={`${symbol} order book heatmap`} />
       <div ref={tooltipRef} data-testid="heatmap-tooltip" className="pointer-events-none absolute z-10 hidden rounded border border-t-border bg-t-panel/95 px-2 py-1 text-[10px] tabular-nums text-t-text" />
-      {!toolDemoEnabled() && collected < 60 && <span role="status" className="pointer-events-none absolute bottom-2 left-3 text-[10px] mobile:text-xs text-t-muted">● Collecting data… {(collected / 60).toFixed(1)} min</span>}
+      {!toolDemoEnabled() && !recordedShown && collected < 60 && <span role="status" className="pointer-events-none absolute bottom-2 left-3 text-[10px] mobile:text-xs text-t-muted">● Collecting data… {(collected / 60).toFixed(1)} min</span>}
+      {historyError && <span role="alert" className="pointer-events-none absolute bottom-8 left-3 right-3 rounded bg-t-panel/95 px-2 py-1 text-xs text-t-warning">History could not load: {historyError}</span>}
       {recordedShown && <span data-testid="recorded-label" className="pointer-events-none absolute top-2 left-3 text-[10px] mobile:text-xs text-t-muted">Recorded history</span>}
       {admin && <span data-testid="recorder-status" className="pointer-events-none absolute top-6 left-3 text-[10px] text-t-muted tabular-nums">{status ? `Recorder: last ${status.last ? new Date(status.last).toLocaleTimeString('en-US', { hour12: false }) : '—'} · ${status.lastHour}/h · gaps>15s ${status.gaps} (max ${Math.round(status.maxGapSec)}s) · ${status.lastSource ?? '—'}` : 'Recorder: …'}</span>}
       {priceOnlyFrom !== null && <span data-testid="price-only-label" className="pointer-events-none absolute bottom-2 right-3 text-[10px] mobile:text-xs text-t-muted">Price and trades only.{priceOnlyFrom > 0 ? ` Order book colors start at ${new Date(priceOnlyFrom).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}</span>}
@@ -460,6 +481,7 @@ export function Heatmap({ symbol, spec, bridge, mobile = false, floating = false
     {mobile && showSettings && <div className="fixed inset-0 z-50 flex flex-col justify-end bg-t-bg/70" onClick={() => setShowSettings(false)}>
       <div role="dialog" aria-modal="true" aria-label="Heatmap settings" onClick={e => e.stopPropagation()} className="space-y-4 rounded-t-xl border-t border-t-border bg-t-panel px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-sm text-t-text">
         <div className="flex items-center justify-between"><h2 className="font-semibold">Heatmap settings</h2><Button variant="ghost" size="icon" className={`size-10 ${control}`} aria-label="Close heatmap settings" onClick={() => setShowSettings(false)}><X /></Button></div>
+        {recordedAvail && <p data-testid="history-range" className="text-xs text-t-muted tabular-nums">{historyText}</p>}
         <label className="flex h-10 items-center gap-3 text-t-muted">Intensity
           <input type="range" min={0.2} max={3} step={0.1} value={intensity} onChange={e => setIntensity(Number(e.target.value))} aria-label="Intensity" className="h-10 flex-1 accent-current" />
         </label>

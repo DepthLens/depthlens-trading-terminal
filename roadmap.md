@@ -1,5 +1,12 @@
 # Roadmap
 
+## Recorded Heatmap website fix
+- [x] Diagnose signed-in reads, swallowed errors/cache and source startup; keep recorder/data/permissions unchanged.
+- [x] Load authenticated history on startup, retain live columns, show failures and range/count.
+- [x] 216 tests pass; isolated desktop 1366×768 and phone 390×844/360×780 show history errors and long-window controls with no page errors. Preview build OK.
+- [x] Read both deployed history RPC definitions and privileges: authenticated execution/SELECT works; snapshots have RLS and only a signed-in SELECT policy, no write policies. No database changes.
+- [ ] Signed-in terminal 15m/1h/4h reload, live-price/overlay smoke and write-attempt verification: unavailable because this external Supabase project cannot supply an assistant sign-in session.
+
 ## Whale Trades
 - [x] Existing-feed detection, per-source/pair thresholds, burst merging and 24h IndexedDB history with rate-limited real backfill.
 - [x] Price/time-anchored primitive, feed navigation, saved settings, badge and isolated demo fixtures.

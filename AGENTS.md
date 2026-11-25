@@ -31,7 +31,7 @@
 - DOM ladder grouping/auto-size/wall rules live in browser-safe `dom-ladder.ts`; `DomLadder.tsx` only reads the existing order-book engine on a ≤10 fps canvas loop and never stores the ladder in React state or opens sockets.
 - CVD exact deltas and cached exchange history live in browser-safe cvd-data/cvd-store; Cvd uses a native lightweight-charts pane sharing the existing time scale, native resize separator, price-axis width and crosshair, with existing LiveQuote feed only. Execution IDs deduplicate recent Bybit trades against live trades; Binance kline totals replace rather than accumulate.
 
-- BTCUSDT book history: SQL pg_cron; heatmap-recorded.ts reads it only for >60m Binance BTC windows.
+- BTCUSDT book history: SQL pg_cron; heatmap-recorded.ts uses hydrated signed-in read-only RPCs for Binance BTC windows, never caches failures, and fills short-window gaps without replacing live book columns.
 - Forex: only server fns call Twelve Data, each via `fx_take_call` (shared free limit); browsers read `forex_candles`.
 - Auth gate: `src/routes/_authenticated/`; beta/admin changes only via SQL functions so users can't self-escalate.
 - Forex terminal reuses TerminalView (forex prop) with its own storage keys; forex-terminal.ts owns pair kinds/tabs. XAUUSDT uses the normal Binance tools; spot pairs show ForexChart (forex_candles) and an honest unavailable card, never fake data.

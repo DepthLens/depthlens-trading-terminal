@@ -90,7 +90,7 @@ After every change, add any new feature to the list in section 1.
 - Smoke: compare radar off-default 1h scoreboard/markers, enable patterns on 15m and hover measured monthly line, switch 2h (no patterns, restriction note), retain demo and overlay/pane alignment checks.
 - Flow Radar higher-timeframe marks: radar tf defaults to Same as chart; fixed tf differing from chart hides radar marks (note shown); patterns use chart tf; 1h/4h marks via unchanged flow-radar-mtf.ts on last small candle; forming note is panel text only.
 
-- Heatmap recorded history: Binance BTCUSDT shows 4h/24h/7d windows with a "Recorded history" label; other pairs and ≤60m windows unchanged. ?admin=1 shows recorder status.
+- Heatmap recorded history: Binance BTCUSDT fills missing 15m/1h history and extends 4h/24h/7d windows with a "Recorded history" label; live book columns win. Settings show history range/count and load errors are visible. Reads wait for the signed-in session; recorder/data stay unchanged. ?admin=1 shows recorder status.
 - Smoke: on Binance BTCUSDT Heatmap pick 4h, confirm the label and no console errors.
 
 ## Forex (/forex)

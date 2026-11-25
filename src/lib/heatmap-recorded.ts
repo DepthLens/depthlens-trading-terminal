@@ -1,5 +1,5 @@
 // Recorded BTCUSDT order book history (Binance USD-M) saved by the backend recorder every 5 seconds.
-// Only used by the Heatmap for windows longer than its 60-minute live buffer.
+// Read-only history fills short-window gaps and extends the 60-minute live buffer.
 import { ROWS, type Column } from './heatmap-data';
 
 export type RecordedSnapshot = { ts: string; source: string; mid: number; step: number; base: number; bids: number[]; asks: number[] };
@@ -37,27 +37,42 @@ const cache = new Map<string, { at: number; rows: RecordedSnapshot[] }>();
 // Fetch recorded snapshots older than `before`, thinned on the server. Cached for 60 seconds.
 export async function loadRecorded(windowMin: number, before: number): Promise<RecordedSnapshot[]> {
   const every = recordedEvery(windowMin);
-  const k = `${windowMin}`;
+  const { supabase } = await import('@/integrations/supabase/client');
+  // Wait for persisted auth to hydrate before asking an authenticated-only RPC.
+  const { data: auth, error: authError } = await supabase.auth.getSession();
+  if (authError) throw new Error(authError.message);
+  if (!auth.session) throw new Error('Sign in to read recorded history');
+  const k = `${auth.session.user.id}:${windowMin}:${Math.floor(before / 60000)}`;
   const hit = cache.get(k);
   if (hit && Date.now() - hit.at < 60000) return hit.rows;
-  const { supabase } = await import('@/integrations/supabase/client');
   const from = new Date(Date.now() - windowMin * 60000).toISOString(), to = new Date(before).toISOString();
   const rows: RecordedSnapshot[] = [];
   for (let off = 0; off < MAX_COLS + 1000; off += 1000) {
     const { data, error } = await supabase.rpc('ob_history', { p_from: from, p_to: to, p_every: every }).range(off, off + 999);
-    if (error || !data) break;
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('History returned no response');
     rows.push(...(data as RecordedSnapshot[]));
     if (data.length < 1000) break;
   }
-  cache.set(k, { at: Date.now(), rows });
+  for (const [key, value] of cache) if (Date.now() - value.at >= 60000) cache.delete(key);
+  if (rows.length) cache.set(k, { at: Date.now(), rows });
   return rows;
 }
 
 export type RecorderStatus = { last: string | null; lastHour: number; gaps: number; maxGapSec: number; lastSource: string | null };
 export async function loadRecorderStatus(): Promise<RecorderStatus | null> {
   const { supabase } = await import('@/integrations/supabase/client');
+  const { data: auth, error: authError } = await supabase.auth.getSession();
+  if (authError) throw new Error(authError.message);
+  if (!auth.session) throw new Error('Sign in to read recorder status');
   const { data, error } = await supabase.rpc('ob_recorder_status');
-  return error ? null : (data as RecorderStatus);
+  if (error) throw new Error(error.message);
+  return data as RecorderStatus | null;
+}
+
+export function historyRange(rows: readonly RecordedSnapshot[]): { from: number; to: number; count: number } | null {
+  const times = rows.map(row => Date.parse(row.ts)).filter(Number.isFinite);
+  return times.length ? { from: Math.min(...times), to: Math.max(...times), count: times.length } : null;
 }
 
 // Fill the holes of a short (≤60 min) live window with recorded snapshots, one column per second.
@@ -73,9 +88,9 @@ export function fillGaps(live: readonly Column[], recorded: readonly Column[], f
   let j = -1, filled = 0;
   for (let s = Math.floor(fromMs / 1000); s <= Math.floor(toMs / 1000); s++) {
     const own = bySec.get(s);
-    if (isBook(own)) { out.push(own!); continue; }
+    if (own && isBook(own)) { out.push(own); continue; }
     if (!own && (isBook(bySec.get(s - 1)) || isBook(bySec.get(s + 1)) || isBook(bySec.get(s - 2)) || isBook(bySec.get(s + 2)))) continue;
-    while (j + 1 < rec.length && rec[j + 1]!.time <= s * 1000) j++;
+    while (j + 1 < rec.length) { const next = rec[j + 1]; if (!next || next.time > s * 1000) break; j++; }
     const hit = j >= 0 ? rec[j] : undefined;
     if (hit && s * 1000 - hit.time < 10000) {
       out.push({ ...hit, time: s * 1000, trades: own?.trades ?? new Map(), price: own && Number.isFinite(own.price) ? own.price : hit.price, gap: false, priceOnly: false });
