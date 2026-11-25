@@ -194,8 +194,8 @@ export function PriceChart({ symbol, minutes, theme, priceFormat, bridge, mobile
     {footprint && footprintSettings && <div className={`pointer-events-none absolute inset-x-0 bottom-[calc(var(--cvd-h,0px)+var(--pp-h,0px)+var(--liq-h,0px))] ${mobile?'top-0':'top-8'}`}><Footprint chartRef={profileChartRef} hostRef={ref} source={source} symbol={symbol} settings={footprintSettings} spec={priceFormat} mobile={mobile} minutes={minutes} revision={chartRevision}/></div>}
     <div className={mobile ? 'absolute right-[calc(var(--axis-w,64px)+4px)] top-1.5 z-10 flex flex-col gap-1' : 'absolute bottom-[calc(var(--cvd-h,0px)+var(--pp-h,0px)+var(--liq-h,0px)+48px)] left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-md border border-t-border bg-t-panel/95 p-1'}>
       {footprint && <Button variant="ghost" className={`${buttonClass} ${mobile ? 'h-10 w-10 p-1 text-xs' : 'px-2 text-xs'}`} aria-label="Fit footprint" title="Fit footprint" onClick={fitFootprint}>{mobile ? 'Fit' : 'Fit footprint'}</Button>}
-      <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom In" title="Zoom In" onClick={()=>zoom(0.75)}><ZoomIn /></Button>
-      <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom Out" title="Zoom Out" onClick={()=>zoom(1.3333)}><ZoomOut /></Button>
+      {!mobile&&<><Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom In" title="Zoom In" onClick={()=>zoom(0.75)}><ZoomIn /></Button>
+      <Button variant="ghost" size="icon" className={buttonClass} aria-label="Zoom Out" title="Zoom Out" onClick={()=>zoom(1.3333)}><ZoomOut /></Button></>}
       <Button variant="ghost" size="icon" className={buttonClass} aria-label="Reload" title="Reload — latest candle and default zoom" onClick={reset}><RotateCcw /></Button>
     </div>
     {!mobile && <span role="status" className={`pointer-events-none absolute bottom-[calc(var(--pp-strip,0px)+8px)] left-3 text-[10px] ${status==='Live'?'text-t-up':'text-t-muted'}`}>● {status}</span>}
