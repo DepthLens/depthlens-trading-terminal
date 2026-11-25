@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { attackInfo, barHeight, combinedSentence, controlInfo, controlSentence, Hold, scoreAll, liveCandleCounts, type AttackInfo, type ControlInfo, type FbSettings } from '@/lib/flow-bars';
 import type { Bar } from '@/lib/chart-data';
 import type { Attack, Control } from '@/lib/price-pressure';
@@ -88,5 +87,5 @@ export function AttackBar({ chartRef, minutes, symbol, settings, onChange, mobil
 }
 
 export function FlowBarsGear({ onClick }: { onClick: () => void }) {
-  return <DropdownMenuItem asChild onSelect={onClick}><Button variant="ghost" size="icon" aria-label="Control & Attack bars settings" title="Control & Attack bars settings" className="size-8 text-t-muted hover:bg-t-border mobile:size-10"><Settings className="size-4" /></Button></DropdownMenuItem>;
+  return <Button type="button" onClick={onClick} variant="ghost" size="icon" aria-label="Control & Attack bars settings" title="Control & Attack bars settings" className="size-8 text-t-muted hover:bg-t-border mobile:size-10"><Settings className="size-4" /></Button>;
 }

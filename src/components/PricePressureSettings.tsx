@@ -1,12 +1,11 @@
 import { Settings, X, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { CVD_ANCHORS } from '@/lib/cvd-data';
 import { PP_WEIGHTS, type PpSettings } from '@/lib/price-pressure';
 
 export function PricePressureGear({ onClick }: { onClick: () => void }) {
-  return <DropdownMenuItem asChild onSelect={onClick}><Button variant="ghost" size="icon" aria-label="Price Pressure settings" title="Price Pressure settings" className="size-8 text-t-muted hover:bg-t-border mobile:size-10"><Settings className="size-4"/></Button></DropdownMenuItem>;
+  return <Button type="button" onClick={onClick} variant="ghost" size="icon" aria-label="Price Pressure settings" title="Price Pressure settings" className="size-8 text-t-muted hover:bg-t-border mobile:size-10"><Settings className="size-4"/></Button>;
 }
 export function PricePressureSettingsPanel({ settings, onChange, onClose, mobile, theme }: { settings: PpSettings; onChange: (v: PpSettings) => void; onClose: () => void; mobile: boolean; theme: string }) {
   const input = 'h-10 min-w-0 rounded border border-t-border bg-t-bg px-2 text-sm text-t-text';

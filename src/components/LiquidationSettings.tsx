@@ -1,9 +1,8 @@
 import { Settings, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { LIQ_PRESETS, type LiqSettings } from '@/lib/liquidation-data';
-export function LiquidationGear({ onClick }: { onClick: () => void }) { return <DropdownMenuItem asChild onSelect={onClick}><Button variant="ghost" size="icon" aria-label="Liquidations settings" title="Liquidations settings" className="size-8 text-t-muted hover:bg-t-border mobile:size-10"><Settings className="size-4"/></Button></DropdownMenuItem>; }
+export function LiquidationGear({ onClick }: { onClick: () => void }) { return <Button type="button" onClick={onClick} variant="ghost" size="icon" aria-label="Liquidations settings" title="Liquidations settings" className="size-8 text-t-muted hover:bg-t-border mobile:size-10"><Settings className="size-4"/></Button>; }
 export function LiquidationSettingsPanel({ settings: s, onChange, onClose, mobile, theme, source }: { settings: LiqSettings; onChange: (s: LiqSettings) => void; onClose: () => void; mobile: boolean; theme: string; source: string }) {
   const input = 'h-10 min-w-0 rounded border border-t-border bg-t-bg px-2 text-sm text-t-text';
   const mode = s.threshold === 'Auto' ? 'Auto' : LIQ_PRESETS.includes(s.threshold) ? String(s.threshold) : 'custom';

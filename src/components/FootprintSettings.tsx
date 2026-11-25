@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react';
 import { Settings, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { GROUPS, buildCandle, since, type FootprintSettings } from '@/lib/footprint-data';
 import { peekFootprint } from '@/lib/footprint-store';
 import type { TradeSource } from '@/lib/live-price';
 
-export function FootprintGear({ onClick }: { onClick: () => void }) { return <DropdownMenuItem asChild onSelect={onClick}><Button variant="ghost" size="icon" aria-label="Footprint settings" title="Footprint settings" className="size-8 text-t-muted hover:bg-t-border mobile:size-10"><Settings className="size-4"/></Button></DropdownMenuItem>; }
+export function FootprintGear({ onClick }: { onClick: () => void }) { return <Button type="button" onClick={onClick} variant="ghost" size="icon" aria-label="Footprint settings" title="Footprint settings" className="size-8 text-t-muted hover:bg-t-border mobile:size-10"><Settings className="size-4"/></Button>; }
 const NAMES: Record<TradeSource, string> = { binance: 'Binance', bybit: 'Bybit' };
 export function FootprintSettingsPanel({ settings, onChange, onClose, mobile, theme, source, symbol, tick, minutes }: { settings: FootprintSettings; onChange: (s: FootprintSettings) => void; onClose: () => void; mobile: boolean; theme: string; source: TradeSource; symbol: string; tick: number; minutes: number }) {
   const [first, setFirst] = useState<number | null>(null);
