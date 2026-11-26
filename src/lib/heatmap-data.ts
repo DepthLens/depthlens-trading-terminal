@@ -1,7 +1,7 @@
 // Browser-safe heatmap buffer: one order book snapshot column per second, typed arrays, 60 minutes max.
 export type TradeSide = 'Buy' | 'Sell';
 export type HeatTrade = { buy: number; sell: number; count?: number; price?: number; buyCoin?: number; sellCoin?: number };
-export type Column = { time: number; origin: number; data: Float32Array; trades: Map<number, HeatTrade>; price: number; gap: boolean; priceOnly?: boolean; empty?: boolean; pricePath?: number[] };
+export type Column = { time: number; origin: number; data: Float32Array; trades: Map<number, HeatTrade>; price: number; gap: boolean; priceOnly?: boolean; empty?: boolean; pricePath?: number[]; recorded?: boolean };
 export const COLUMN_MS = 1000;
 export const MAX_COLUMNS = 3600; // 60 minutes of one-second columns
 export const ROWS = 1024; // buckets per column, centered on the price at sample time
@@ -69,14 +69,14 @@ export class HeatmapBuffer {
     this.bucket = bucket;
   }
   index(price: number) { return Math.floor(price / this.bucket); }
-  trade(price: number, size: number, side: TradeSide | undefined) {
+  trade(price: number, size: number, side: TradeSide | undefined, count = 1) {
     if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(size) || size <= 0) return;
     const i = this.index(price);
     const t = this.pending.get(i) ?? { buy: 0, sell: 0 };
     const notional = price * size;
     const total = t.buy + t.sell;
     t.price = ((t.price ?? price) * total + price * notional) / (total + notional);
-    t.count = (t.count ?? 0) + 1;
+    t.count = (t.count ?? 0) + count;
     if (side === 'Sell') { t.sell += notional; t.sellCoin = (t.sellCoin ?? 0) + size; }
     else { t.buy += notional; t.buyCoin = (t.buyCoin ?? 0) + size; }
     this.pending.set(i, t);

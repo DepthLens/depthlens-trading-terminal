@@ -135,7 +135,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         if (!pageCols) {
           const rows = peekRecordedPage(every, p);
           if (!rows) { requestPage(every, p); continue; }
-          pageCols = snapshotsToColumns(rows, buffer.bucket, every); navPageCols.set(ck, pageCols);
+          pageCols = snapshotsToColumns(rows, buffer.bucket, every, w <= 60); navPageCols.set(ck, pageCols);
           if (navPageCols.size > 24) { const o = navPageCols.keys().next().value; if (o !== undefined) navPageCols.delete(o); }
         }
         for (const c of pageCols) if (c.time >= from && c.time < end) out.push(c);
@@ -167,7 +167,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     };
     const windowColumns = (): readonly Column[] => {
       const w = controls.current.windowMin;
-      if (navOn()) { long = false; const cols = navColumns(); const hasRecorded = recordedOn() && navPageCols.size > 0 && cols.some(c => !c.empty); if (shown !== hasRecorded) { shown = hasRecorded; setRecordedShown(shown); } return cols; }
+      if (navOn()) { long = false; const cols = navColumns(); const hasRecorded = cols.some(c => c.recorded); if (shown !== hasRecorded) { shown = hasRecorded; setRecordedShown(shown); } return cols; }
       long = w > 60 && recordedOn();
       if (!long) {
         const liveCols = buffer.columns.slice(-Math.min(w, 60) * 60);
@@ -184,7 +184,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       if (k === longKey && Date.now() - longAt < 5000) return longCols;
       const firstLive = buffer.columns.find(c => !c.priceOnly && !c.gap)?.time ?? Date.now();
       if (recFor !== w || Date.now() - recCheckedAt >= 10000) requestHistory(w, firstLive);
-      if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = snapshotsToColumns(recRows, buffer.bucket, recordedEvery(w)); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
+      if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = snapshotsToColumns(recRows, buffer.bucket, recordedEvery(w), false); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
       const rec = recFor === w ? recCols.filter(c => c.time < firstLive) : [];
       longCols = [...rec, ...thinColumns(buffer.columns.filter(c => c.time >= firstLive), recordedEvery(w))];
       longKey = k; longAt = Date.now(); longVersion++;
@@ -194,8 +194,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     const slotOf = (col: Column, ci: number) => long || navOn() ? ci : Math.floor(col.time / 1000) % 3600;
 
     // Trades flow in through the bridge; every trade is aggregated immediately.
-    const onTrade = (tick: { price: number; size?: number; side?: 'Buy' | 'Sell' }) => {
-      if (!demo && tick.size !== undefined) buffer.trade(tick.price, tick.size, tick.side);
+    const onTrade = (tick: { price: number; size?: number; side?: 'Buy' | 'Sell'; tradeCount?: number }) => {
+      if (!demo && tick.size !== undefined) buffer.trade(tick.price, tick.size, tick.side, tick.tradeCount);
     };
     bridge.current.heat = onTrade;
 
@@ -604,7 +604,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const control = 'text-t-muted hover:bg-t-border/50 hover:text-t-text';
   useEffect(() => { if (symbol !== RECORDED_SYMBOL && windowMin > 60) setWindowMin(60); }, [symbol, windowMin]);
   const availableMs = recordedAvail ? RECORDED_RETENTION_MS : collected * 1000;
-  const retentionText = recordedAvail ? `History kept: ${Math.round(RECORDED_RETENTION_MS / 86400000)} days` : 'History kept: 60 minutes (this browser)';
+  const retentionText = recordedAvail ? `History kept: up to ${Math.round(RECORDED_RETENTION_MS / 86400000)} days (storage capped)` : 'History kept: 60 minutes (this browser)';
   const nowMs = Date.now();
   const pickTime = (value: string) => { setGotoValue(value); const t = new Date(value).getTime(); if (Number.isFinite(t)) navApi.current?.goTo(t + windowMin * 30000); };
   const liveButton = (cls: string) => <Button size="sm" onClick={() => navApi.current?.goLive()} className={`${cls} bg-t-accent text-t-bg hover:bg-t-accent/90`} aria-label="Return to live">Live ▶</Button>;
@@ -647,7 +647,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     <div className="relative min-h-0 flex-1">
       {toolDemoEnabled() && <span className="demo-watermark">DEMO DATA</span>}
       <canvas ref={canvasRef} className={`block size-full ${mobile ? 'touch-none' : ''}`} aria-label={`${symbol} order book heatmap`} />
-      <span ref={rangeRef} data-testid="heatmap-range" className="pointer-events-none absolute top-2 right-[78px] text-[10px] tabular-nums text-t-muted" />
+      <span ref={rangeRef} data-testid="heatmap-range" className={`pointer-events-none absolute ${mobile && recordedShown ? admin ? 'top-10' : 'top-7' : 'top-2'} right-[78px] text-[10px] tabular-nums text-t-muted`} />
       {navLoading && <span role="status" className="pointer-events-none absolute top-7 left-1/2 -translate-x-1/2 rounded bg-t-panel/95 px-2 py-0.5 text-[10px] mobile:text-xs text-t-muted">Loading history…</span>}
       <div ref={tooltipRef} data-testid="heatmap-tooltip" className="pointer-events-none absolute z-10 hidden rounded border border-t-border bg-t-panel/95 px-2 py-1 text-[10px] tabular-nums text-t-text" />
       {!toolDemoEnabled() && !recordedShown && collected < 60 && <span role="status" className="pointer-events-none absolute bottom-2 left-3 text-[10px] mobile:text-xs text-t-muted">● Collecting data… {(collected / 60).toFixed(1)} min</span>}

@@ -65,6 +65,15 @@ describe('recorded heatmap history', () => {
     expect(cols[0]?.priceOnly).toBe(true);
     expect(cols[0]?.data.every(value => value === 0)).toBe(true);
   });
+  it('uses recorded trade prices instead of minute-close browser backfill', () => {
+    const rec = snapshotsToColumns([trades], 1);
+    const time = Date.parse(trades.ts);
+    const own: Column = { time: time + 1000, origin: 0, data: new Float32Array(0), trades: new Map(), price: 999, priceOnly: true, gap: false };
+    expect(fillGaps([own], rec, time, time + 4000).cols.find(c => c.time === time + 1000)?.price).toBe(101);
+  });
+  it('does not expand the 4h window past its bounded column count', () => {
+    expect(snapshotsToColumns(Array(2880).fill(trades), 1, 5, false)).toHaveLength(2880);
+  });
   it('uses 5s columns for 4h and thins longer windows to ≤2880 columns', () => {
     expect(recordedEvery(240)).toBe(5);
     expect(recordedEvery(1440)).toBe(30);

@@ -38,11 +38,11 @@ export function snapshotToColumn(s: RecordedSnapshot, bucket: number, second?: n
   const points = new Map(s.price_points ?? []);
   const path = [...points].sort((a, b) => a[0] - b[0]).filter(([sec]) => second === undefined || sec <= second).map(([, price]) => price);
   const price = path.at(-1) ?? (s.close === null || s.close === undefined ? s.mid : second === undefined ? s.close : NaN);
-  return { time: Date.parse(s.ts) + (second ?? 0) * 1000, origin, data, trades, price, gap: false, ...(n === 0 ? { priceOnly: true } : {}), ...(second === undefined && path.length ? { pricePath: path } : {}) };
+  return { time: Date.parse(s.ts) + (second ?? 0) * 1000, origin, data, trades, price, gap: false, recorded: true, ...(n === 0 ? { priceOnly: true } : {}), ...(second === undefined && path.length ? { pricePath: path } : {}) };
 }
 
-export function snapshotsToColumns(rows: readonly RecordedSnapshot[], bucket: number, every = 5): Column[] {
-  return rows.flatMap(row => every <= 5 && (row.trade_levels?.length || row.price_points?.length)
+export function snapshotsToColumns(rows: readonly RecordedSnapshot[], bucket: number, every = 5, expandSeconds = true): Column[] {
+  return rows.flatMap(row => expandSeconds && every <= 5 && (row.trade_levels?.length || row.price_points?.length)
     ? Array.from({ length: 5 }, (_, second) => snapshotToColumn(row, bucket, second))
     : [snapshotToColumn(row, bucket)]);
 }
@@ -115,7 +115,7 @@ export function fillGaps(live: readonly Column[], recorded: readonly Column[], f
     const hit = j >= 0 ? rec[j] : undefined;
     if (hit && s * 1000 - hit.time < 10000) {
       const exact = Math.floor(hit.time / 1000) === s;
-      out.push({ ...hit, time: s * 1000, trades: own?.trades.size ? own.trades : exact ? hit.trades : new Map(), price: own && Number.isFinite(own.price) ? own.price : hit.price, gap: false, priceOnly: hit.priceOnly ?? false });
+      out.push({ ...hit, time: s * 1000, trades: own?.trades.size ? own.trades : exact ? hit.trades : new Map(), price: own && !hit.recorded && Number.isFinite(own.price) ? own.price : hit.price, gap: false, priceOnly: hit.priceOnly ?? false });
       filled++;
       continue;
     }

@@ -12,6 +12,12 @@ it('opens one combined Binance stream and forwards klines', () => {
   streams.entries[0]?.receive({data:{k:{t:60000}}}); expect(kline).toHaveBeenCalledWith({k:{t:60000}});
   stop(); expect(streams.entries[0]?.stop).toHaveBeenCalledOnce();
 });
+it('forwards Binance execution count for accurate heatmap trade tooltips without another connection', () => {
+  const price = vi.fn(); const stop = livePriceStream('BTCUSDT', price, vi.fn());
+  streams.entries[0]?.receive({ data: { e: 'aggTrade', s: 'BTCUSDT', p: '100', q: '2', T: 1000, E: 1000, f: 10, l: 14, a: 20, m: false } });
+  expect(price.mock.calls[0]?.[0]?.tradeCount).toBe(5);
+  expect(streams.entries).toHaveLength(1); stop();
+});
 it('processes every Bybit trade in a batch in order with p, v, S, T', () => {
   const price = vi.fn(); const stop = livePriceStream('BTCUSDT', price, vi.fn(), '1m', undefined, undefined, 'bybit');
   streams.entries[0]?.receive({topic:'publicTrade.BTCUSDT',ts:1000,data:[{s:'BTCUSDT',p:'100',v:'0.5',S:'Buy',T:900},{s:'BTCUSDT',p:'101',v:'2',S:'Sell',T:900},{s:'BTCUSDT',p:'99',v:'1',S:'Buy',T:901}]});

@@ -1,9 +1,10 @@
 # Roadmap
 
 ## Recorded heatmap trades rebuild
-- [ ] Replace old snapshots with fresh five-second Binance BTCUSDT book/trade recording, cursor continuity and bounded retention.
-- [ ] Reconstruct recorded trades and per-second price path; flat volume-scaled bubbles, saved units and trade tooltip.
-- [ ] Verify recorder output/storage, rule tests, desktop/phone navigation and protection smoke checks.
+- [x] Fresh five-second Binance BTCUSDT book/trade recording; advancing cursor, no recorder errors, no old rows, seven-day/250 MB retention cap.
+- [x] Per-second recorded trades/prices; shared flat bubbles, exact USDT/coin volumes, execution counts, saved units and tooltips.
+- [x] More than ten minutes of real recordings verified; isolated desktop/390×844 heatmaps pass drag, Go to, Live, source labels, long windows and reload units. Public landing/login/Pressure smoke passes; preview build OK.
+- [ ] Signed-in terminal history reload and full protection smoke (Tools, overlays, DOM, Footprint, CVD): blocked because the external Supabase project cannot supply an assistant session. No login/permission changes made.
 
 ## Recorded Heatmap website fix
 - [x] Diagnose signed-in reads, swallowed errors/cache and source startup; keep recorder/data/permissions unchanged.

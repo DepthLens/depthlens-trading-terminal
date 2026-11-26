@@ -1,7 +1,7 @@
 // Module-level heatmap history store. Buffers live here, keyed by source:symbol, so
 // window/grouping/intensity changes, tool toggles, tab switches and remounts never
 // clear history. Only a source change clears everything. Persisted to IndexedDB.
-import { HeatmapBuffer, COLUMN_MS, MAX_COLUMNS, type Column } from './heatmap-data';
+import { HeatmapBuffer, COLUMN_MS, MAX_COLUMNS, type Column, type HeatTrade } from './heatmap-data';
 import { loadHeatmapBuffer, saveHeatmapBuffer } from './heatmap-persist';
 import { depthRowSize } from './tool-layout';
 
@@ -63,7 +63,7 @@ export function calibrateHeatmap(source: HeatSource, symbol: string, entry: Entr
   void saveHeatmapBuffer(key(source, symbol), entry.buffer.bucket, entry.buffer.columns, true, depthSpan);
 }
 
-type RawTrade = { time: number; price: number; size: number; side: 'Buy' | 'Sell' };
+type RawTrade = { time: number; price: number; size: number; side: 'Buy' | 'Sell'; count?: number };
 
 async function fetchJson(url: string): Promise<any | null> {
   if (Date.now() < blockedUntil) return null;
@@ -106,7 +106,7 @@ export async function backfill(source: HeatSource, symbol: string, buffer: Heatm
     for (let i = 0; i < 10; i++) { // maximum 10 requests
       const data = await fetchJson(`https://fapi.binance.com/fapi/v1/aggTrades?symbol=${symbol}&startTime=${start}&endTime=${now}&limit=1000`);
       if (!Array.isArray(data) || !data.length) break;
-      for (const t of data) trades.push({ time: Number(t.T), price: Number(t.p), size: Number(t.q), side: t.m ? 'Sell' : 'Buy' });
+      for (const t of data) trades.push({ time: Number(t.T), price: Number(t.p), size: Number(t.q), side: t.m ? 'Sell' : 'Buy', count: Math.max(1, Number(t.l) - Number(t.f) + 1) || 1 });
       const lastT = Number(data[data.length - 1].T);
       if (data.length < 1000 || lastT >= now - 1000) break;
       start = lastT + 1;
@@ -118,7 +118,7 @@ export async function backfill(source: HeatSource, symbol: string, buffer: Heatm
   }
 
   // Bucket trades per second.
-  const tradesBySec = new Map<number, Map<number, { buy: number; sell: number }>>();
+  const tradesBySec = new Map<number, Map<number, HeatTrade>>();
   for (const t of trades) {
     if (t.time < from) continue;
     const sec = Math.floor(t.time / COLUMN_MS) * COLUMN_MS;
@@ -127,7 +127,11 @@ export async function backfill(source: HeatSource, symbol: string, buffer: Heatm
     const bi = buffer.index(t.price);
     const agg = m.get(bi) ?? { buy: 0, sell: 0 };
     const notional = t.price * t.size;
-    if (t.side === 'Sell') agg.sell += notional; else agg.buy += notional;
+    const total = agg.buy + agg.sell;
+    agg.price = ((agg.price ?? t.price) * total + t.price * notional) / (total + notional);
+    agg.count = (agg.count ?? 0) + (t.count ?? 1);
+    if (t.side === 'Sell') { agg.sell += notional; agg.sellCoin = (agg.sellCoin ?? 0) + t.size; }
+    else { agg.buy += notional; agg.buyCoin = (agg.buyCoin ?? 0) + t.size; }
     m.set(bi, agg);
   }
 

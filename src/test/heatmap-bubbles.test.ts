@@ -26,11 +26,11 @@ describe('heatmap trade bubble rules', () => {
   });
   it('keeps live quantities and trade counts through bucket changes', () => {
     const buffer = new HeatmapBuffer(100, 1);
-    buffer.trade(100, 2, 'Buy'); buffer.trade(103, 4, 'Sell');
+    buffer.trade(100, 2, 'Buy', 3); buffer.trade(103, 4, 'Sell', 2);
     buffer.sample(1000, new Map(), new Map(), 103);
     buffer.configureBucket(10);
     const cell = buffer.columns[0]?.trades.get(10);
-    expect(cell?.buyCoin).toBe(2); expect(cell?.sellCoin).toBe(4); expect(cell?.count).toBe(2);
+    expect(cell?.buyCoin).toBe(2); expect(cell?.sellCoin).toBe(4); expect(cell?.count).toBe(5);
     expect(cell?.buy).toBe(200); expect(cell?.sell).toBe(412);
   });
 });
