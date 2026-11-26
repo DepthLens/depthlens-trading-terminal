@@ -43,6 +43,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const labelRef = useRef<number | null>(null);
   const [recordedAvail, setRecordedAvail] = useState(false);
   const [recordedShown, setRecordedShown] = useState(false);
+  const [liveBinance, setLiveBinance] = useState(true);
   const [status, setStatus] = useState<RecorderStatus | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [range, setRange] = useState<ReturnType<typeof historyRange>>(null);
@@ -98,7 +99,9 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     // Recorded history fills short gaps and extends long Binance BTCUSDT windows.
     let recRows: RecordedSnapshot[] = [], recFor = 0, recCols: Column[] = [], recColsKey = '', loading = false, recCheckedAt = 0, requestedWindow = 0;
     let longCols: Column[] = [], longKey = '', longAt = 0, longVersion = 0, shown = false, long = false;
-    const recordedOn = () => !demo && (historySource ?? source) === 'binance' && symbol === RECORDED_SYMBOL;
+    // Recorded history is Binance BTCUSDT and loads whatever the live price source is.
+    const recordedOn = () => !demo && symbol === RECORDED_SYMBOL;
+    setLiveBinance((historySource ?? source) === 'binance');
     setRecordedAvail(recordedOn()); setRecordedShown(false); setHistoryError(null); setRange(null);
     // ---- Time navigation state (paged recorded history + live buffer) ----
     let navCols: Column[] = [], navKey = '', wheelAcc = 0, wheelAt = 0, lastRange = '';
@@ -193,7 +196,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     const timer = setInterval(() => {
       if (demo) { setCollected(buffer.columns.length); dirty = true; return; }
       const dbg = orderBook.debug();
-      if (dbg.source !== source) { source = dbg.source; entry = getHeatmapEntry(source as HeatSource, symbol, bridge.current.latest?.price ?? NaN); buffer = entry.buffer;depthSpan=entry.depthSpan;fitted=false;view.current.center = NaN; }
+      if (dbg.source !== source) { source = dbg.source; setLiveBinance((historySource ?? source) === 'binance'); entry = getHeatmapEntry(source as HeatSource, symbol, bridge.current.latest?.price ?? NaN); buffer = entry.buffer;depthSpan=entry.depthSpan;fitted=false;view.current.center = NaN; }
       setRecordedAvail(recordedOn());
       const price = bridge.current.latest?.price ?? dbg.bestBid ?? NaN;
       if (!Number.isFinite(price)) return;
@@ -563,6 +566,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
 
   const center = () => centerRef.current?.();
   const control = 'text-t-muted hover:bg-t-border/50 hover:text-t-text';
+  useEffect(() => { if (symbol !== RECORDED_SYMBOL && windowMin > 60) setWindowMin(60); }, [symbol, windowMin]);
   const availableMs = recordedAvail ? RECORDED_RETENTION_MS : collected * 1000;
   const retentionText = recordedAvail ? `History kept: ${Math.round(RECORDED_RETENTION_MS / 86400000)} days` : 'History kept: 60 minutes (this browser)';
   const nowMs = Date.now();
@@ -600,7 +604,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         {JUMPS.map(([label, ms]) => <Button key={label} variant="ghost" size="sm" disabled={ms > availableMs} onClick={() => navApi.current?.goTo(Date.now() - ms)} className={`h-6 px-2 text-xs ${control}`}>{label}</Button>)}
       </span>
       {!live && liveButton('h-6 px-2 text-xs')}
-      <span className="basis-full text-[10px] text-t-muted tabular-nums"><span data-testid="history-kept">{retentionText}</span>{recordedAvail && <> · <span data-testid="history-range">{historyText}</span></>}</span>
+      <span className="basis-full text-[10px] text-t-muted tabular-nums"><span data-testid="history-kept">{retentionText}</span>{!recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL && <> · <span data-testid="recorded-only">Recorded history: BTCUSDT only</span></>}{recordedAvail && <> · <span data-testid="history-range">{historyText}</span></>}</span>
     </div>
     </>}
     <div className="relative min-h-0 flex-1">
@@ -611,14 +615,14 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       <div ref={tooltipRef} data-testid="heatmap-tooltip" className="pointer-events-none absolute z-10 hidden rounded border border-t-border bg-t-panel/95 px-2 py-1 text-[10px] tabular-nums text-t-text" />
       {!toolDemoEnabled() && !recordedShown && collected < 60 && <span role="status" className="pointer-events-none absolute bottom-2 left-3 text-[10px] mobile:text-xs text-t-muted">● Collecting data… {(collected / 60).toFixed(1)} min</span>}
       {historyError && <span role="alert" className="pointer-events-none absolute bottom-8 left-3 right-3 rounded bg-t-panel/95 px-2 py-1 text-xs text-t-warning">History could not load: {historyError}</span>}
-      {recordedShown && <span data-testid="recorded-label" className="pointer-events-none absolute top-2 left-3 text-[10px] mobile:text-xs text-t-muted">Recorded history</span>}
+      {recordedShown && <span data-testid="recorded-label" className="pointer-events-none absolute top-2 left-3 text-[10px] mobile:text-xs text-t-muted">{liveBinance ? 'Recorded history' : 'Recorded history: Binance BTCUSDT'}</span>}
       {admin && <span data-testid="recorder-status" className="pointer-events-none absolute top-6 left-3 text-[10px] text-t-muted tabular-nums">{status ? `Recorder: last ${status.last ? new Date(status.last).toLocaleTimeString('en-US', { hour12: false }) : '—'} · ${status.lastHour}/h · gaps>15s ${status.gaps} (max ${Math.round(status.maxGapSec)}s) · ${status.lastSource ?? '—'}` : 'Recorder: …'}</span>}
       {priceOnlyFrom !== null && <span data-testid="price-only-label" className="pointer-events-none absolute bottom-2 right-3 text-[10px] mobile:text-xs text-t-muted">Price and trades only.{priceOnlyFrom > 0 ? ` Order book colors start at ${new Date(priceOnlyFrom).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}</span>}
     </div>
     {mobile && showSettings && <div className="fixed inset-0 z-50 flex flex-col justify-end bg-t-bg/70" onClick={() => setShowSettings(false)}>
       <div role="dialog" aria-modal="true" aria-label="Heatmap settings" onClick={e => e.stopPropagation()} className="space-y-4 rounded-t-xl border-t border-t-border bg-t-panel px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-sm text-t-text">
         <div className="flex items-center justify-between"><h2 className="font-semibold">Heatmap settings</h2><Button variant="ghost" size="icon" className={`size-10 ${control}`} aria-label="Close heatmap settings" onClick={() => setShowSettings(false)}><X /></Button></div>
-        <p data-testid="history-kept" className="text-xs text-t-muted">{retentionText}</p>
+        <p data-testid="history-kept" className="text-xs text-t-muted">{retentionText}{!recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL && <> · <span data-testid="recorded-only">Recorded history: BTCUSDT only</span></>}</p>
         {recordedAvail && <p data-testid="history-range" className="text-xs text-t-muted tabular-nums">{historyText}</p>}
         <div className="space-y-1"><span className="text-t-muted">Go to</span>
           {gotoInput('h-10 w-full bg-t-bg px-2 text-sm')}
