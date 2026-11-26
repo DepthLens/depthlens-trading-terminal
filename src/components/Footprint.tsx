@@ -3,7 +3,8 @@ import type { CandlestickSeriesOptions } from 'lightweight-charts';
 import { clusterRowTicks, FOOTPRINT_FIT_SPACING, buildCandle, formatVolume, since, type FootprintSettings } from '@/lib/footprint-data';
 import { shouldFitFootprint } from '@/lib/tool-layout';
 import { toolDemoEnabled, demoFootprint } from '@/lib/tool-demo';
-import { backfillFootprint, footprintStore } from '@/lib/footprint-store';
+import { backfillFootprint, footprintStore, footprintTail } from '@/lib/footprint-store';
+import { baseTicks, effectiveGroup, ensurePages, ensureRecordingStart, isRecordedFootprint, pagesFor, recordedCandle, recordedError, recordingStartMs } from '@/lib/footprint-recorded';
 import { FootprintPrimitive, type FootprintBar } from '@/lib/footprint-overlay';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 import type { TradeSource } from '@/lib/live-price';
@@ -11,7 +12,8 @@ import type { ProfileChart } from '@/components/VolumeProfile';
 
 const SOURCE_NAME: Record<TradeSource, string> = { binance: 'Binance', bybit: 'Bybit' };
 const STYLE_KEYS = ['upColor', 'downColor', 'borderVisible', 'borderUpColor', 'borderDownColor', 'wickUpColor', 'wickDownColor', 'wickVisible'] as const;
-export const MAX_FOOTPRINT_CANDLES = 150;
+export const MAX_FOOTPRINT_CANDLES = 300;
+const utcTime = (ms: number) => `${new Date(ms).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} UTC`;
 
 export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, mobile, minutes, revision }: { chartRef: MutableRefObject<ProfileChart | null>; hostRef: MutableRefObject<HTMLDivElement | null>; source: TradeSource; symbol: string; settings: FootprintSettings; spec: PriceSpec; mobile: boolean; minutes: number; revision: number }) {
   const autoGroupRef = useRef(0);
@@ -50,17 +52,38 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
       const lo = Math.max(0, Math.floor(range.from) - 1), hi = Math.min(data.length - 1, Math.ceil(range.to) + 1);
       const pxPerPrice = h / (top - bottom);
       if (settings.grouping === 'Auto') autoGroupRef.current = clusterRowTicks(spec.minMove, pxPerPrice, autoGroupRef.current);
-      const group = settings.grouping === 'Auto' ? autoGroupRef.current : settings.grouping;
+      const err = recordedError(), recorded = !demo && isRecordedFootprint(symbol) && !err;
+      const recStart = recordingStartMs();
+      let group = settings.grouping === 'Auto' ? autoGroupRef.current : settings.grouping;
+      if (recorded) group = effectiveGroup(group, baseTicks(minutes));
       const bars: FootprintBar[] = [];
+      let loading = 0, before = 0, need: number[] = [];
+      const tail = recorded ? footprintTail(source, symbol) : { start: null, trades: [] };
       for (let i = lo; i <= hi; i++) {
         const d = data[i]; if (!d || !('high' in d)) continue;
         const time = Number(d.time);
-        bars.push({ time, open: d.open, close: d.close, high: d.high, low: d.low, fp: buildCandle(store, time * 1000, minutes, group, settings.ratio, settings.unit) });
+        let fp = null as FootprintBar['fp'] | null;
+        if (recorded) {
+          const r = recordedCandle({ start: time * 1000, minutes, tick: spec.minMove, group, ratio: settings.ratio, unit: settings.unit, recStart, tail });
+          if (r.kind === 'ok') fp = r.candle;
+          else if (r.kind === 'loading') { loading++; fp = { start: time * 1000, rows: [], bid: 0, ask: 0, poc: null, peak: 0, coverage: 'none' }; }
+          else { before++; fp = { ...buildCandle(store, time * 1000, minutes, group, settings.ratio, settings.unit), note: 'not-recorded' }; }
+        }
+        bars.push({ time, open: d.open, close: d.close, high: d.high, low: d.low, fp: fp ?? buildCandle(store, time * 1000, minutes, group, settings.ratio, settings.unit) });
       }
       primitive.bars = bars;
+      if (recorded && recStart !== null) {
+        // Only the visible candles plus a 3-candle margin are requested; pages far from the view fall out of the LRU.
+        const ms = minutes * 60000, d0 = data[Math.max(0, lo - 3)], d1 = data[Math.min(data.length - 1, hi + 3)];
+        if (d0 && d1) { const from = Math.max(recStart, Number(d0.time) * 1000), to = Math.min(Date.now(), Number(d1.time) * 1000 + ms); if (to > from) need = pagesFor(from, to, baseTicks(minutes)); }
+        if (need.length) void ensurePages(spec.minMove, baseTicks(minutes), need).then(changed => { if (changed) schedule(); });
+      } else if (recorded) void ensureRecordingStart().then(t => { if (t !== null) schedule(); });
       const first = since(store);
-      note.textContent = `Footprint data since ${first === null ? '—' : new Date(first).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} · Real trades from ${SOURCE_NAME[source]} only`;
-      Object.assign(note.dataset, { group: String(group), auto: String(settings.grouping === 'Auto'), rowSize: String(+(group * spec.minMove).toPrecision(10)), since: first === null ? '' : String(first), candles: String(bars.filter(b => b.fp.coverage !== 'none').length), partial: String(bars.filter(b => b.fp.coverage === 'partial').length), source });
+      const live = `Footprint data since ${first === null ? '—' : new Date(first).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} · Real trades from ${SOURCE_NAME[source]} only`;
+      note.textContent = recorded
+        ? `Source: recorded trades (Binance BTCUSDT) from ${recStart === null ? '…' : utcTime(recStart)}${source !== 'binance' ? ` · live candle: ${SOURCE_NAME[source]}` : ''}${loading ? ' · Loading recorded footprint…' : ''}${before ? ' · Older candles: not recorded' : ''}`
+        : `${isRecordedFootprint(symbol) && err && !demo ? `Recorded footprint unavailable (${err}) · ` : ''}Source: live · ${live}`;
+      Object.assign(note.dataset, { group: String(group), auto: String(settings.grouping === 'Auto'), rowSize: String(+(group * spec.minMove).toPrecision(10)), since: first === null ? '' : String(first), candles: String(bars.filter(b => b.fp.coverage !== 'none').length), partial: String(bars.filter(b => b.fp.coverage === 'partial').length), source, recorded: String(recorded), recStart: recStart === null ? '' : String(recStart), loading: String(loading), notRecorded: String(before) });
       primitive.refresh();
     };
     const schedule = () => { clearTimeout(timer); timer = setTimeout(() => { timer = undefined; recalculate(); }, 200); };
@@ -91,6 +114,7 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
     };
     const refresh = setInterval(() => { if (!dragging && !timer) recalculate(); }, 1000);
     const filler = setInterval(backfill, 4000);
+    if (isRecordedFootprint(symbol) && !toolDemoEnabled()) void ensureRecordingStart().then(() => schedule());
     const initialBackfill = setTimeout(backfill, 600);
     recalculate();
     return () => {

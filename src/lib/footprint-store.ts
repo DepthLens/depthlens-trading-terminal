@@ -1,6 +1,7 @@
 // Module-level footprint buffers keyed by source:symbol, persisted to IndexedDB every 10 s.
 import { addLiveTrade, addSegment, addTrade, createStore, isCovered, lastGap, mergeSegments, prune, DAY, type FootprintStore } from './footprint-data';
 import type { LivePrice, TradeSource } from './live-price';
+import { isRecordedFootprint, type TailTrade } from './footprint-recorded';
 
 const DB_NAME = 'depthlens-footprint', DB_STORE = 'buffers';
 const stores = new Map<string, FootprintStore>();
@@ -49,6 +50,26 @@ export function peekFootprint(source: TradeSource, symbol: string) { return stor
 export function addFootprintTrade(symbol: string, tick: LivePrice, minMove: number) {
   if (!tick.exchange || tick.size === undefined || !tick.side) return;
   addLiveTrade(footprintStore(tick.exchange, symbol, minMove), tick.time, tick.price, tick.size, tick.side === 'Sell');
+  if (isRecordedFootprint(symbol)) addTail(`${tick.exchange}:${symbol}`, { time: tick.time, price: tick.price, size: tick.size, sell: tick.side === 'Sell' });
+}
+// Raw live trades of the recorded symbol (15 minutes, capped) so the forming candle can start exactly at the
+// newest recorded second without double counting.
+const TAIL_MS = 900000, TAIL_MAX = 300000;
+const tails = new Map<string, { start: number; trades: TailTrade[] }>();
+function addTail(key: string, t: TailTrade) {
+  let tail = tails.get(key);
+  if (!tail) { tail = { start: t.time, trades: [] }; tails.set(key, tail); }
+  tail.trades.push(t);
+  const first = tail.trades[0];
+  if (tail.trades.length > TAIL_MAX || (first && first.time < t.time - TAIL_MS - 60000)) {
+    const cut = t.time - TAIL_MS; let i = 0;
+    while (i < tail.trades.length && ((tail.trades[i]?.time ?? 0) < cut || tail.trades.length - i > TAIL_MAX)) i++;
+    tail.trades.splice(0, i); tail.start = Math.max(tail.start, cut);
+  }
+}
+export function footprintTail(source: TradeSource, symbol: string): { start: number | null; trades: readonly TailTrade[] } {
+  const tail = tails.get(`${source}:${symbol}`);
+  return tail ? tail : { start: null, trades: [] };
 }
 export const footprintPaused = () => Date.now() < pausedUntil;
 /** Fill the latest uncovered gap in [from, now) with real trades; at most 20 requests per pair per 5 minutes. */

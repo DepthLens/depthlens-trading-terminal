@@ -3,7 +3,8 @@ import { Settings, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { GROUPS, buildCandle, since, type FootprintSettings } from '@/lib/footprint-data';
-import { peekFootprint } from '@/lib/footprint-store';
+import { footprintTail, peekFootprint } from '@/lib/footprint-store';
+import { baseTicks, ensurePages, isRecordedFootprint, pagesFor, recordedCandle, recordingStartMs } from '@/lib/footprint-recorded';
 import type { TradeSource } from '@/lib/live-price';
 
 export function FootprintGear({ onClick }: { onClick: () => void }) { return <Button type="button" onClick={onClick} variant="ghost" size="icon" aria-label="Footprint settings" title="Footprint settings" className="size-8 text-t-muted hover:bg-t-border mobile:size-10"><Settings className="size-4"/></Button>; }
@@ -16,19 +17,26 @@ export function FootprintSettingsPanel({ settings, onChange, onClose, mobile, th
     const ms = minutes * 60000, start = Math.floor(Date.now() / ms) * ms - ms, store = peekFootprint(source, symbol);
     const rowSize = Number(document.querySelector<HTMLElement>('[data-testid="footprint"]')?.dataset['rowSize']) || tick;
     const group = Math.max(1, Math.round(rowSize / tick));
-    const fp = store ? buildCandle(store, start, minutes, group, settings.ratio) : null;
+    const recStart = recordingStartMs(), useRec = isRecordedFootprint(symbol) && recStart !== null && start >= recStart;
+    const rec = async () => {
+      const args = { start, minutes, tick, group, ratio: settings.ratio, unit: 'coin' as const, recStart, tail: footprintTail(source, symbol) };
+      let r = recordedCandle(args);
+      if (r.kind === 'loading') { await ensurePages(tick, baseTicks(minutes), pagesFor(start, start + ms, baseTicks(minutes))); r = recordedCandle(args); }
+      return r.kind === 'ok' ? r.candle : null;
+    };
     setDebug(['Loading kline volume…']);
+    const fp = useRec ? await rec() : store ? buildCandle(store, start, minutes, group, settings.ratio) : null;
     let kline = NaN;
     try {
-      const url = source === 'binance' ? `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&startTime=${start}&endTime=${start + ms - 1}&limit=1500` : `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=1&start=${start}&end=${start + ms - 1}&limit=1000`;
-      const body = await (await fetch(url)).json(), list: string[][] = source === 'binance' ? body : body?.result?.list ?? [];
+      const url = source === 'binance' || useRec ? `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&startTime=${start}&endTime=${start + ms - 1}&limit=1500` : `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=1&start=${start}&end=${start + ms - 1}&limit=1000`;
+      const body = await (await fetch(url)).json(), list: string[][] = source === 'binance' || useRec ? body : body?.result?.list ?? [];
       kline = list.filter(k => Number(k[0]) >= start && Number(k[0]) < start + ms).reduce((a, k) => a + Number(k[5]), 0);
     } catch { /* reported below */ }
     const buy = fp?.ask ?? 0, sell = fp?.bid ?? 0, total = buy + sell, full = fp?.coverage === 'full';
     const diff = kline > 0 ? Math.abs(total - kline) / kline * 100 : NaN;
     const pass = full && diff <= 5;
     const verdict = !Number.isFinite(kline) ? 'FAIL (kline volume unavailable)' : !full ? `FAIL (candle not fully covered by collected trades: ${fp?.coverage ?? 'none'})` : pass ? `PASS (${diff.toFixed(2)}% diff)` : `FAIL (${diff.toFixed(2)}% diff)`;
-    const lines = [`Candle open: ${new Date(start).toLocaleString('en-GB')}`, `Row size: ${+rowSize.toPrecision(10)}`, `Rows: ${fp?.rows.length ?? 0}`, `Buy volume: ${buy.toFixed(4)}`, `Sell volume: ${sell.toFixed(4)}`, `Footprint total: ${total.toFixed(4)}`, `Kline volume: ${Number.isFinite(kline) ? kline.toFixed(4) : '—'}`, `Result: ${verdict}`];
+    const lines = [`Data: ${useRec ? 'recorded trades (Binance BTCUSDT)' : 'live trades'}`, `Candle open: ${new Date(start).toLocaleString('en-GB')}`, `Row size: ${+rowSize.toPrecision(10)}`, `Rows: ${fp?.rows.length ?? 0}`, `Buy volume: ${buy.toFixed(4)}`, `Sell volume: ${sell.toFixed(4)}`, `Footprint total: ${total.toFixed(4)}`, `Kline volume: ${Number.isFinite(kline) ? kline.toFixed(4) : '—'}`, `Result: ${verdict}`];
     console.info(`[DepthLens] Footprint debug ${symbol} ${minutes}m: ${verdict}`, lines.join(' | '));
     setDebug(lines);
   };
@@ -48,6 +56,7 @@ export function FootprintSettingsPanel({ settings, onChange, onClose, mobile, th
       <label htmlFor="fp-poc">POC</label><div className="flex h-10 items-center"><Switch id="fp-poc" aria-label="Footprint POC" checked={settings.poc} onCheckedChange={poc => onChange({ ...settings, poc })} className={sw}/></div>
       <label htmlFor="fp-opacity">Opacity {Math.round(settings.opacity * 100)}%</label><input id="fp-opacity" aria-label="Footprint opacity" type="range" min={.1} max={1} step={.05} value={settings.opacity} onChange={e => onChange({ ...settings, opacity: Number(e.target.value) })} className="h-10 w-full accent-t-accent"/>
     </div>
+    {isRecordedFootprint(symbol) && <p className="mt-4 text-xs text-t-muted" data-testid="footprint-recorded">Source: recorded trades (Binance BTCUSDT){recordingStartMs() !== null ? ` from ${new Date(recordingStartMs() ?? 0).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} UTC` : ''}; earlier candles use live trades and show "not recorded"</p>}
     <p className="mt-4 text-xs text-t-muted" data-testid="footprint-since">Footprint data: {first===null?'0':Math.max(0,Math.floor((Date.now()-first)/60000))} min · {NAMES[source]}</p>
     <p className="mt-1 text-xs text-t-muted">Real trades from {NAMES[source]} only</p>
     <Button variant="outline" className="mt-3 h-10 w-full border-t-border bg-t-bg text-t-text hover:bg-t-border" onClick={() => void runDebug()}>Footprint debug</Button>

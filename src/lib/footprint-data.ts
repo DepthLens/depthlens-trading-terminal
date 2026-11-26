@@ -79,7 +79,7 @@ export function coverage(store: FootprintStore, start: number, end: number): 'no
 export const since = (store: FootprintStore) => store.segments[0]?.[0] ?? null;
 
 export type FootprintRow = { row: number; low: number; high: number; bid: number; ask: number; askImb: boolean; bidImb: boolean };
-export type FootprintCandle = { start: number; rows: FootprintRow[]; bid: number; ask: number; poc: number | null; peak: number; coverage: 'none' | 'partial' | 'full' };
+export type FootprintCandle = { start: number; rows: FootprintRow[]; bid: number; ask: number; poc: number | null; peak: number; coverage: 'none' | 'partial' | 'full'; note?: 'not-recorded' };
 /** Sums 1m buckets into one candle; grouping merges g base rows on the same fixed grid. */
 export function buildCandle(store: FootprintStore, start: number, minutes: number, group: number, ratio: number, unit: 'coin' | 'USDT' = 'coin'): FootprintCandle {
   const end = start + minutes * 60000, merged = new Map<number, Cell>();
@@ -92,7 +92,11 @@ export function buildCandle(store: FootprintStore, start: number, minutes: numbe
       const t = merged.get(g); if (t) { t.bid += bid; t.ask += ask; } else merged.set(g, { bid, ask });
     }
   }
-  const size = store.tick * group, keys = [...merged.keys()].sort((a, b) => a - b);
+  return finishCandle(merged, store.tick * group, start, ratio, coverage(store, start, end));
+}
+/** Rows, totals, POC and diagonal imbalances from grouped cells (shared by live and recorded footprints). */
+export function finishCandle(merged: Map<number, Cell>, size: number, start: number, ratio: number, cov: FootprintCandle['coverage']): FootprintCandle {
+  const keys = [...merged.keys()].sort((a, b) => a - b);
   let bid = 0, ask = 0, poc: number | null = null, peak = 0;
   const rows: FootprintRow[] = keys.map(k => {
     const c = merged.get(k) ?? { bid: 0, ask: 0 }; bid += c.bid; ask += c.ask;
@@ -100,7 +104,7 @@ export function buildCandle(store: FootprintStore, start: number, minutes: numbe
     if (c.bid + c.ask > peak) { peak = c.bid + c.ask; poc = k; }
     return { row: k, low: k * size, high: (k + 1) * size, bid: c.bid, ask: c.ask, askImb: !!below && below.bid > 0 && c.ask >= r * below.bid, bidImb: !!above && above.ask > 0 && c.bid >= r * above.ask };
   });
-  return { start, rows, bid, ask, poc, peak, coverage: coverage(store, start, end) };
+  return { start, rows, bid, ask, poc, peak, coverage: cov };
 }
 /** Smallest grouping whose row is at least minPx tall at the current zoom. */
 export function autoGroup(tick: number, pxPerPrice: number, minPx: number) {

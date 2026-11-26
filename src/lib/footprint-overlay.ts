@@ -33,7 +33,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
     this.lastDraw = []; this.outside = 0;
     const ts = this.api.chart.timeScale(), spacing = ts.options().barSpacing, w = this.cellWidth(), s = this.settings, c = this.colors;
     const detailed = spacing >= FOOTPRINT_DETAIL_SPACING && !this.hidden;
-    let texts = 0, cells = 0, imbalances = 0, emptyColumns = 0;
+    let texts = 0, cells = 0, imbalances = 0, emptyColumns = 0, stacked = 0;
     ctx.save();
     const range = ts.getVisibleLogicalRange(), data = this.api.series.data();
     const cached = new Map(this.bars.map(bar => [bar.time, bar]));
@@ -53,6 +53,10 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
       ctx.globalAlpha = 1; ctx.strokeStyle = ctx.fillStyle = bar.close >= bar.open ? c.up : c.down;
       ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(candleX, hi); ctx.lineTo(candleX, lo); ctx.stroke();
       ctx.fillRect(candleX - bodyW / 2, Math.min(open, close), bodyW, Math.max(1, Math.abs(close - open)));
+      if (bar.fp.note === 'not-recorded' && spacing >= 40 && !this.hidden && hi > 14) {
+        ctx.save(); ctx.globalAlpha = .45; ctx.font = '9px ui-monospace,monospace'; ctx.fillStyle = c.muted; ctx.textBaseline = 'bottom';
+        const label = 'not recorded'; ctx.fillText(label, x - this.measure(ctx, label) / 2, hi - 3, Math.max(20, w)); ctx.restore();
+      }
       if (!hasData) {
         if(emptyFootprintColumn(spacing,hasData)&&!this.hidden){emptyColumns++;ctx.save();ctx.globalAlpha=.28;ctx.strokeStyle=c.muted;ctx.setLineDash([3,3]);ctx.strokeRect(left+.5,hi+.5,w-1,Math.max(1,lo-hi-1));ctx.restore();this.lastDraw.push({name:'Footprint no-data column',price:bar.high,drawnY:hi});if(w>=100&&lo-hi>18){ctx.font='10px ui-monospace,monospace';ctx.fillStyle=c.muted;ctx.textBaseline='middle';ctx.fillText('No footprint data',left+7,(hi+lo)/2,w-14);}}
         continue;
@@ -65,6 +69,12 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
       const cellLeft = left + 9, cellW = w - 9;
       const rows = bar.fp.rows.filter(r => r.bid + r.ask > 0 && r.high > bar.low && r.low < bar.high);
       const peak = Math.max(1e-12, ...rows.map(r => r.bid + r.ask));
+      const stackRuns: { side: 'bid' | 'ask'; low: number; high: number; count: number }[] = [];
+      for (const row of rows) {
+        const side = s.imbalance ? rowImbalance(row.bid, row.ask, s.ratio) : null, run = stackRuns.at(-1);
+        if (side && run && run.side === side && Math.abs(run.high - row.low) < 1e-9 * Math.max(1, row.low)) { run.high = row.high; run.count++; }
+        else if (side) stackRuns.push({ side, low: row.low, high: row.high, count: 1 });
+      }
       for (const row of rows) {
         const topP = Math.min(row.high, bar.high), bottomP = Math.max(row.low, bar.low);
         const y1 = this.api.series.priceToCoordinate(topP), y2 = this.api.series.priceToCoordinate(bottomP);
@@ -99,6 +109,14 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
         }
         ctx.restore();
       }
+      // Stacked imbalances: 3+ adjacent same-side imbalance rows get a bar on the cell's right edge.
+      for (const run of stackRuns) {
+        if (run.count < 3) continue;
+        const y1 = this.api.series.priceToCoordinate(Math.min(run.high, bar.high)), y2 = this.api.series.priceToCoordinate(Math.max(run.low, bar.low));
+        if (y1 === null || y2 === null || y2 <= y1) continue;
+        ctx.globalAlpha = 1; ctx.fillStyle = run.side === 'ask' ? c.up : c.down;
+        ctx.fillRect(left + w - 3, y1, 3, y2 - y1); stacked++;
+      }
       if (s.totals && lo < mediaSize.height - 24) {
         ctx.globalAlpha = 1; ctx.font = '11px ui-monospace, monospace'; ctx.textBaseline = 'middle';
         const delta = bar.fp.ask - bar.fp.bid;
@@ -108,7 +126,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
       }
     }
     ctx.restore();
-    Object.assign(this.api.host.dataset, { footprintEmpty: String(emptyColumns), footprintOutside: String(this.outside), footprintTexts: String(texts), footprintCells: String(cells), footprintImbalances: String(imbalances), footprintSpacing: String(spacing) });
+    Object.assign(this.api.host.dataset, { footprintEmpty: String(emptyColumns), footprintOutside: String(this.outside), footprintTexts: String(texts), footprintCells: String(cells), footprintImbalances: String(imbalances), footprintStacked: String(stacked), footprintSpacing: String(spacing) });
   }) }) }];
   paneViews() { return this.views; }
   at(x: number, y: number) {
