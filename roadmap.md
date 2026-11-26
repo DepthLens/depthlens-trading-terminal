@@ -1,5 +1,10 @@
 # Roadmap
 
+## Recorded heatmap trades rebuild
+- [ ] Replace old snapshots with fresh five-second Binance BTCUSDT book/trade recording, cursor continuity and bounded retention.
+- [ ] Reconstruct recorded trades and per-second price path; flat volume-scaled bubbles, saved units and trade tooltip.
+- [ ] Verify recorder output/storage, rule tests, desktop/phone navigation and protection smoke checks.
+
 ## Recorded Heatmap website fix
 - [x] Diagnose signed-in reads, swallowed errors/cache and source startup; keep recorder/data/permissions unchanged.
 - [x] Load authenticated history on startup, retain live columns, show failures and range/count.
