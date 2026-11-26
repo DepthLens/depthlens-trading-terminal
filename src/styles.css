@@ -398,5 +398,5 @@
 .ps-in { animation: ps-in 200ms ease-out both; }
 .ps-out { animation: ps-in 200ms ease-in reverse both; }
 .pairs-icon .pairs-coin-a, .pairs-icon .pairs-coin-b { transition: transform 150ms ease-out; transform-box: fill-box; transform-origin: center; }
-.pairs-btn:hover .pairs-coin-a { transform: translate(1px, 1px) rotate(-12deg); }
-.pairs-btn:hover .pairs-coin-b { transform: translate(-1px, -1px) rotate(12deg); }
+.pairs-btn:hover .pairs-coin-a { transform: translateX(1px) rotate(-10deg); }
+.pairs-btn:hover .pairs-coin-b { transform: translateX(-1px) rotate(10deg); }

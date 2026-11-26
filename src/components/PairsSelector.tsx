@@ -5,10 +5,10 @@ import type { PriceSpec, Quote } from '@/lib/market-data';
 
 /** Two overlapping coins with a small swap arrow — the Pairs mark. */
 export function PairsIcon({ className = 'size-4' }: { className?: string }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`pairs-icon ${className}`} aria-hidden="true">
-    <g className="pairs-coin-a"><circle cx="9" cy="10" r="5.5"/><path d="M9 7.5v5"/></g>
-    <g className="pairs-coin-b"><circle cx="15" cy="14" r="5.5"/><path d="M13 14h4"/></g>
-    <path d="M3 20.5h4m0 0-1.5-1.5M21 3.5h-4m0 0 1.5 1.5"/>
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className={`pairs-icon ${className}`} aria-hidden="true">
+    <g className="pairs-coin-a"><circle cx="7" cy="12" r="5"/><path d="M7 9.5v5"/></g>
+    <g className="pairs-coin-b"><circle cx="17" cy="12" r="5"/><path d="M15.5 10.5h3M15.5 13.5h3"/></g>
+    <path d="M10.5 7.5h3M12.5 6.5l1 1-1 1M13.5 16.5h-3M11.5 15.5l-1 1 1 1" strokeWidth={1.4}/>
   </svg>;
 }
 
