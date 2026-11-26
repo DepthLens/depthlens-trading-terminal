@@ -94,6 +94,7 @@ After every change, add any new feature to the list in section 1.
 
 - Heatmap recorded history: Binance BTCUSDT fills missing 15m/1h history and extends 4h/24h/7d windows with a "Recorded history" label; live book columns win. Settings show history range/count and load errors are visible. Reads wait for the signed-in session. The approved fresh recorder saves five-second book/trades with a contiguous cursor and per-second prices, capped at seven days/250 MB. Glossy 3D sphere bubbles (buy/sell split portions, thin stems, no text) use shared square-root sizing, saved USDT/coin units and trade tooltips. ?admin=1 shows recorder status.
 - Smoke: on Binance BTCUSDT Heatmap pick 4h, confirm the label and no console errors.
+- Heatmap screen-sized loading: only visible columns plus a 300-slot margin are built, decoded (lazy, ≤400 rows per frame, LRU-bounded) and painted (changed slots only, batched blits); column width still comes from the full window so the look is unchanged; long live windows use the paged loader; ≤3,000 bubbles; flows refresh ≤4×/s. Smoke: 4h opens within ~2 s, drag back/forward 3× with no long tasks and flat memory.
 - Heatmap Wall lines: saved switch (default on), top 0.5/1/2% of visible resting sizes held ≥30s/2m/5m, green bid / red ask lines thickening with size, right-edge "Bid wall 12.4M · 18m" labels, Held / dashed Pulled / grey Broken, fade after 15m/1h/4h, show/hide pulled and broken, info tooltip; same rules on recorded history; detection at most once per second, no sockets.
 
 ## Forex (/forex)
