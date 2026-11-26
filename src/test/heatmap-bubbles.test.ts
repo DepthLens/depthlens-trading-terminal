@@ -34,3 +34,10 @@ describe('heatmap trade bubble rules', () => {
     expect(cell?.buy).toBe(200); expect(cell?.sell).toBe(412);
   });
 });
+import { bubbleBuyShare } from '@/lib/heatmap-bubbles';
+describe('bubbleBuyShare', () => {
+  it('returns the buy fraction of total aggressive volume', () => {
+    expect(bubbleBuyShare({ buy: 75, sell: 25 } as never)).toBe(0.75);
+    expect(bubbleBuyShare({ buy: 0, sell: 0 } as never)).toBe(0);
+  });
+});

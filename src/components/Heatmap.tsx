@@ -3,7 +3,7 @@ import { Crosshair, Settings2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { colorFor, percentile, COLUMN_MS, type Column, type HeatTrade } from '@/lib/heatmap-data';
 import { LONG_WINDOWS, RECORDED_RETENTION_MS, RECORDED_SYMBOL, buildNavColumns, fillGaps, historyRange, loadRecorded, loadRecordedPage, loadRecorderStatus, pageEvery, pageSpanMs, peekRecordedPage, recordedEvery, snapshotsToColumns, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
-import { bubbleNumber, bubbleRadius, bubbleVolume, dominantBubble } from '@/lib/heatmap-bubbles';
+import { bubbleBuyShare, bubbleNumber, bubbleRadius, bubbleVolume, dominantBubble } from '@/lib/heatmap-bubbles';
 import { HEATMAP_UNIT_KEY, restoreHeatmapUnit, type HeatmapUnit } from '@/lib/terminal-state';
 import { calibrateHeatmap, getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
 import { orderBook } from '@/lib/order-book';
@@ -336,22 +336,39 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
             const executionPrice = t.price ?? (bucket + .5) * buffer.bucket;
             const y = priceToY(executionPrice, top, band, H);
             if (y < -radius || y > H + radius) continue;
-            ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.globalAlpha = .72; ctx.fillStyle = dot.buy ? cUp : cDown; ctx.fill(); ctx.globalAlpha = 1;
             bubbleHits.push({ x, y, radius, price: executionPrice, time: col.time, trade: t });
-            if (radius >= 11) {
-              const label = bubbleNumber(bubbleVolume(t, executionPrice, c.bubbleUnit));
-              let font = 11; ctx.font = `600 ${font}px sans-serif`;
-              const width = ctx.measureText(label).width, limit = radius * 1.65;
-              if (width > limit) { font = Math.max(6, font * limit / width); ctx.font = `600 ${font}px sans-serif`; }
-              if (ctx.measureText(label).width <= limit) {
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.shadowColor = cBg; ctx.shadowBlur = 2; ctx.shadowOffsetY = 1;
-                ctx.fillStyle = styles.getPropertyValue('--flow-text').trim(); ctx.fillText(label, x, y);
-                ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; ctx.textBaseline = 'alphabetic';
-              }
-            }
           }
+        }
+        // Thin stems link consecutive executions along the trade path.
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1; ctx.beginPath();
+        for (let i = 1; i < bubbleHits.length; i++) {
+          const p = bubbleHits[i - 1]!, q = bubbleHits[i]!;
+          if (q.time === p.time) continue;
+          ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y);
+        }
+        ctx.stroke();
+        // Volumetric spheres: smaller drawn last so they stay visible on top of larger ones.
+        const order = [...bubbleHits].sort((m, n) => n.radius - m.radius);
+        for (const { x, y, radius, trade: t } of order) {
+          const share = bubbleBuyShare(t), buyMain = share >= .5, minor = buyMain ? 1 - share : share;
+          ctx.save(); ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.clip();
+          ctx.fillStyle = buyMain ? cUp : cDown; ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+          if (minor > .08 && radius >= 4) {
+            const start = Math.PI / 2 - minor * Math.PI, end = Math.PI / 2 + minor * Math.PI;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, radius, start, end); ctx.closePath();
+            ctx.fillStyle = buyMain ? cDown : cUp; ctx.fill();
+          }
+          const shade = ctx.createRadialGradient(x - radius * .32, y - radius * .35, radius * .05, x, y, radius);
+          shade.addColorStop(0, 'rgba(255,255,255,0.55)'); shade.addColorStop(.25, 'rgba(255,255,255,0.12)');
+          shade.addColorStop(.7, 'rgba(0,0,0,0.12)'); shade.addColorStop(1, 'rgba(0,0,0,0.6)');
+          ctx.fillStyle = shade; ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+          if (radius >= 5) {
+            const spec = ctx.createRadialGradient(x - radius * .35, y - radius * .4, 0, x - radius * .35, y - radius * .4, radius * .32);
+            spec.addColorStop(0, 'rgba(255,255,255,0.85)'); spec.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = spec; ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+          }
+          ctx.restore();
+          ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = .75; ctx.stroke();
         }
         ctx.restore();
       }

@@ -17,4 +17,8 @@ export function bubbleNumber(value: number): string {
   if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
   if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
   return value.toFixed(value < 10 ? 2 : 1);
+}// Share of aggressive buying (0–1) used to split a sphere into buy/sell portions.
+export function bubbleBuyShare(trade: HeatTrade): number {
+  const total = trade.buy + trade.sell;
+  return total > 0 ? trade.buy / total : 0;
 }
