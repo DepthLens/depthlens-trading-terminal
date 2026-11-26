@@ -130,7 +130,7 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
       setPriceSpecs(Object.fromEntries(keep.map(m=>[m.symbol,priceSpec(m)])));setPairs(forex?[GOLD,...FOREX_PAIRS,...POPULAR_FX]:keep.map(m=>m.symbol));setPairStatus('');
     }catch{if(!abort.signal.aborted){setPairStatus('Markets unavailable · retrying');retry=setTimeout(load,5000);}}};void load();
 
-    const stop=marketStream('wss://fstream.binance.com/ws/!miniTicker@arr',data=>{
+    const stop=marketStream('wss://fstream.binance.com/market/ws/!miniTicker@arr',data=>{
       if(!Array.isArray(data))return;
       if(listSourceRef.current==='bybit')return;
       lastQuoteAt.current=Date.now();

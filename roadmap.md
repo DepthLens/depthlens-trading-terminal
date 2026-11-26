@@ -122,6 +122,6 @@
 ## Heatmap time navigation + tool audit
 - [x] Heatmap drag/scroll back, Go to, Live ▶, dated axis, paged history, empty-time notes, History kept
 - [x] Whale label no longer overlaps Liquidations/Pressure panes
-- [ ] Binance live trades/candles silent on old stream address — waiting on user approval for an extra order-book connection
+- [x] Binance live trades/candles moved to the new Binance address; order book on its own connection
 - [ ] Intermittent "Value is null" chart error (phone, Binance 1h, seen once, not reproduced)
 - [ ] Signed-in checks (recorded history paging, 10-minute runs) not possible from the assistant session

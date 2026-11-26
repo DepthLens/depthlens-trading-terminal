@@ -1,9 +1,11 @@
 export type ConnectionSource = 'binance' | 'bybit';
 export type ConnectionSnapshot = { source: string; state: string; openSockets: number; lastError: string; lastMessageAt: number | null; failures: number; connectedAt: number | null };
-type Options = { exchange?: ConnectionSource; purpose?: 'active' | 'markets'; subscription?: object; onFailure?: (failures: number) => void };
+type Options = { exchange?: ConnectionSource; purpose?: 'active' | 'markets' | 'book'; subscription?: object; onFailure?: (failures: number) => void };
 type Entry = { key: string; url: string; socket?: WebSocket; stopped: boolean; timer?: ReturnType<typeof setTimeout>; idle?: ReturnType<typeof setTimeout>; failures: number; state: string; lastError: string; lastMessageAt: number | null; connectedAt: number | null; stop: (reason: string) => void };
 type Topic = { receive: (data: any) => void; connection: (open: boolean) => void };
 
+// Binance moved trades/klines/tickers to /market; depth still arrives on the combined public endpoint.
+const BINANCE_BOOK_URL = 'wss://fstream.binance.com/stream';
 // This module is the only WebSocket owner. Retired sockets remain tracked until CLOSED.
 class ConnectionManager {
   private entries = new Map<string, Entry>();
@@ -17,11 +19,14 @@ class ConnectionManager {
       ? { op: subscribe ? 'subscribe' : 'unsubscribe', args: [topic] }
       : { method: subscribe ? 'SUBSCRIBE' : 'UNSUBSCRIBE', params: [topic], id: ++this.requestId }));
   }
-  // Multiplex optional feeds onto an existing owner; this method never creates a socket.
+  // Optional feeds multiplex onto the active owner. Binance depth is the one exception: Binance serves it
+  // only on its public endpoint, so it gets one lazily-created 'binance:book' socket that closes with its last topic.
   subscribe(exchange: ConnectionSource, topic: string, receive: Topic['receive'], connection: Topic['connection']) {
-    const key = `${exchange}:active`;
+    const book = exchange === 'binance' && topic.includes('@depth');
+    const key = book ? 'binance:book' : `${exchange}:active`;
     let topics = this.topics.get(key);
     if (!topics) { topics = new Map(); this.topics.set(key, topics); }
+    if (book && !this.entries.has(key)) this.connect(BINANCE_BOOK_URL, () => {}, undefined, { exchange: 'binance', purpose: 'book' });
     const previous = topics.get(topic);
     if (previous) previous.connection(false);
     const item = { receive, connection }; topics.set(topic, item);
@@ -30,7 +35,7 @@ class ConnectionManager {
     return () => {
       if (topics.get(topic) !== item) return;
       this.command(key, topic, false); topics.delete(topic); connection(false);
-      if (!topics.size) this.topics.delete(key);
+      if (!topics.size) { this.topics.delete(key); if (book) this.entries.get(key)?.stop('no book topics'); }
     };
   }
   snapshot(exchange: ConnectionSource = 'binance', purpose = 'active'): ConnectionSnapshot {
@@ -66,9 +71,9 @@ class ConnectionManager {
     const open = () => {
       if (entry.stopped || this.entries.get(key) !== entry) return;
       this.prune();
-      // Wait for the old close handshake, and never exceed three physical sockets.
+      // Wait for the old close handshake, and never exceed four physical sockets.
       const blocked = [...this.sockets].some(socket => (socket as WebSocket & { depthLensKey?: string }).depthLensKey === key);
-      if (blocked || this.sockets.size >= 3) { entry.timer = setTimeout(open, 25); return; }
+      if (blocked || this.sockets.size >= 4) { entry.timer = setTimeout(open, 25); return; }
       entry.state = 'Connecting';
       let socket: WebSocket;
       try { socket = new WebSocket(url); } catch { failed('Socket creation failed'); return; }

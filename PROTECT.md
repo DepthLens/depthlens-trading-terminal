@@ -46,13 +46,13 @@ Read this file before any change. It applies to every future request.
 6. Desktop and a 390x844 phone view are not broken.
 7. Run checkOverlayStability() after scrolling/zooming; log PASS or FAIL for every overlay with at most 1px error. This includes "Footprint within high/low" (no cell outside its candle) and "Volume Profile bar height" (no bar taller than one row).
 8. With Footprint on and zoomed in, small rows with numbers appear and Footprint debug logs PASS for a fully covered candle.
-10. Turn DOM on: best bid/ask match Book debug, ladder updates, sockets ≤3, chart/live price/tools unchanged; turn it off.
+10. Turn DOM on: best bid/ask match Book debug, ladder updates, sockets ≤4, chart/live price/tools unchanged; turn it off.
 9. Check demo at 1366x768 and 390x844 in navy/light/midnight/ocean: many thin Heatmap rows/bright band, clear VP outside-area and POC, readable Footprint plus consistent empty columns. Confirm watermark is absent without query.
-11. Turn CVD on at desktop/phone, verify Binance BTC 1m/5m/1h and ETH 15m then Bybit, all anchors/modes/units, pane resizing and moving live price; run checkPaneAlignment() after scroll/zoom (candle x and right axes within 1px), with Volume Profile/Footprint/DOM/timer and Heatmap hiding; sockets ≤3 and no console errors.
+11. Turn CVD on at desktop/phone, verify Binance BTC 1m/5m/1h and ETH 15m then Bybit, all anchors/modes/units, pane resizing and moving live price; run checkPaneAlignment() after scroll/zoom (candle x and right axes within 1px), with Volume Profile/Footprint/DOM/timer and Heatmap hiding; sockets ≤4 and no console errors.
 
-12. Whale Trades: BTC/ETH/DOGE 1m/5m desktop 1366x768 and phone 390x844, Bybit and Binance when delivering; demo appearance, feed navigation/flash, settings restore, four-direction drag/zoom, circle price stability ≤1px, moving live price, Heatmap hiding and coexistence with all other tools, sockets ≤3, no console errors.
+12. Whale Trades: BTC/ETH/DOGE 1m/5m desktop 1366x768 and phone 390x844, Bybit and Binance when delivering; demo appearance, feed navigation/flash, settings restore, four-direction drag/zoom, circle price stability ≤1px, moving live price, Heatmap hiding and coexistence with all other tools, sockets ≤4, no console errors.
 
-13. Control & Attack bars: BTC 1m and ETH 5m at 1366x768 and 390x844 show state words, meter and sentences with no overlap; live price moves; sockets ≤3.
+13. Control & Attack bars: BTC 1m and ETH 5m at 1366x768 and 390x844 show state words, meter and sentences with no overlap; live price moves; sockets ≤4.
 
 Report the result as a short list.
 
@@ -70,7 +70,7 @@ After every change, add any new feature to the list in section 1.
 ## Floating tool windows (Part 1: Heatmap, DOM, Book debug, Whale feed)
 - Rules live in browser-safe `window-manager.ts` (saved under `depthlens-windows`); `ToolWindows.tsx` is a layer above the chart that takes pointer events only on windows and minimized chips, and never touches chart internals.
 - Tools menu: "Tool windows: Floating | Docked" and "Reset windows"; per-tool Dock/Float; Close turns the tool off (Whale feed: feed setting off; Book debug: off). Minimized windows stay mounted and only pause drawing. Phones (below 768px) never use windows.
-- Smoke: at 1366x768 open DOM, Heatmap, Whale feed and Book debug together; drag, resize, minimize, restore, close, refresh (positions return); chart pans/zooms outside windows; live price moves; sockets ≤3; no console errors.
+- Smoke: at 1366x768 open DOM, Heatmap, Whale feed and Book debug together; drag, resize, minimize, restore, close, refresh (positions return); chart pans/zooms outside windows; live price moves; sockets ≤4; no console errors.
 
 ## Pressure page
 - The toolbar "Pressure" button (desktop and phone) opens /pressure?symbol&tf&source in a NEW TAB; /popout/pressure and /popout/price-pressure redirect there.

@@ -117,7 +117,7 @@ export function livePriceStream(symbol: string, onPrice: (tick: LivePrice) => vo
       open(other); startPolling(); current = null;
     };
     if (source === 'binance') {
-      stopFns.binance = marketStream(`wss://fstream.binance.com/stream?streams=${lower}@aggTrade/${lower}@kline_${interval}`, message => {
+      stopFns.binance = marketStream(`wss://fstream.binance.com/market/stream?streams=${lower}@aggTrade/${lower}@kline_${interval}`, message => {
         const data = message.data ?? message;
         if (data.k) { if (current === 'binance') onKline?.(data); return; }
         if (data.e !== undefined && data.e !== 'aggTrade') return;

@@ -132,7 +132,7 @@ export function PopoutChart({ symbol, minutes, source, theme, onStatus }: { symb
           } catch {}
         };
       } else {
-        ws = new WebSocket(`wss://fstream.binance.com/ws/${lower}@kline_${native ?? '1m'}`);
+        ws = new WebSocket(`wss://fstream.binance.com/market/ws/${lower}@kline_${native ?? '1m'}`);
         ws.onopen = () => { attempts = 0; onStatus?.('Live'); };
         ws.onmessage = ev => {
           try {
