@@ -15,9 +15,12 @@ export class MarkerEngine {
   markers: Marker[] = [];
   private lastTime = -Infinity;
   private bursts: number[] = [];
+  // Same values as `bursts`, kept sorted so the 95th percentile is a lookup instead of a sort per trade price.
+  private sortedBursts: number[] = [];
   private seen = new Map<string, number>();
   get processedTo() { return this.lastTime; }
-  reset() { this.markers = []; this.lastTime = -Infinity; this.bursts = []; this.seen.clear(); }
+  reset() { this.markers = []; this.lastTime = -Infinity; this.bursts = []; this.sortedBursts = []; this.seen.clear(); }
+  private static lowerBound(a: number[], v: number) { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m]! < v) lo = m + 1; else hi = m; } return lo; }
   private add(m: Marker) {
     const k = `${m.kind}:${m.index}`, prev = this.seen.get(k);
     if (prev !== undefined && m.time - prev < DEDUP_MS) return;
@@ -69,9 +72,12 @@ export class MarkerEngine {
         // Absorption: a top-5% aggressive burst into one price, yet price moves < 2 ticks beyond it.
         if (s.absorption) {
           const burst = Math.max(buy, sell);
-          if (burst > 0) { this.bursts.push(burst); if (this.bursts.length > 2000) this.bursts.splice(0, this.bursts.length - 2000); }
+          if (burst > 0) {
+            this.bursts.push(burst); this.sortedBursts.splice(MarkerEngine.lowerBound(this.sortedBursts, burst), 0, burst);
+            if (this.bursts.length > 2000) for (const old of this.bursts.splice(0, this.bursts.length - 2000)) this.sortedBursts.splice(MarkerEngine.lowerBound(this.sortedBursts, old), 1);
+          }
           if (this.bursts.length >= 50) {
-            const sorted = [...this.bursts].sort((a, b) => a - b), p95 = sorted[Math.floor(sorted.length * ABS_PCT / 100)] ?? Infinity;
+            const sorted = this.sortedBursts, p95 = sorted[Math.floor(sorted.length * ABS_PCT / 100)] ?? Infinity;
             const selling = sell >= buy;
             const beyond = selling ? (price - minP) / bucket : (maxP - price) / bucket;
             if (burst >= p95 && beyond < ABS_TICKS) this.add({ kind: 'absorption', time: c.time, price, index: i, side: selling ? 'sell' : 'buy', size: burst, buy, sell, detail: `Absorption: aggressive ${selling ? 'selling' : 'buying'} met resting orders; price moved < ${ABS_TICKS} ticks beyond` });

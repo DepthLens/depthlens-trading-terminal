@@ -76,3 +76,14 @@ describe('heatmap view (screen-sized loading)', () => {
     expect(cache.collect('p', rows, 0, 5e6, r => snapshotsToColumns([r], 1), { left: 1000 }, [])).toBe(true);
   });
 });
+
+describe('markers stay exact after the speed-up', () => {
+  it('absorption percentile uses the same sliding window of the last 2,000 bursts', async () => {
+    const { MarkerEngine } = await import('@/lib/heatmap-markers');
+    const mk = (t: number, buy: number, price: number): Column => ({ time: t * 1000, origin: 0, data: new Float32Array(ROWS).fill(1), trades: new Map([[100, { buy, sell: 0 }]]), price, gap: false });
+    const cols = Array.from({ length: 2600 }, (_, i) => mk(i, i === 2500 ? 1e9 : 1 + (i % 97), 100.5));
+    const e = new MarkerEngine();
+    e.process(cols, 1, 0, { pulled: false, iceberg: false, absorption: true }, 1000);
+    expect(e.markers.some(m => m.kind === 'absorption' && m.time === 2500 * 1000)).toBe(true);
+  });
+});
