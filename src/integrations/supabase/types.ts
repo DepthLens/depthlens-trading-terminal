@@ -158,7 +158,9 @@ export type Database = {
           id: number
           last_agg_trade_id: number | null
           last_error: string | null
+          oldest_removed_day: string | null
           recording_started_at: string
+          retention_warning: string | null
           updated_at: string
         }
         Insert: {
@@ -166,7 +168,9 @@ export type Database = {
           id?: number
           last_agg_trade_id?: number | null
           last_error?: string | null
+          oldest_removed_day?: string | null
           recording_started_at?: string
+          retention_warning?: string | null
           updated_at?: string
         }
         Update: {
@@ -174,7 +178,9 @@ export type Database = {
           id?: number
           last_agg_trade_id?: number | null
           last_error?: string | null
+          oldest_removed_day?: string | null
           recording_started_at?: string
+          retention_warning?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -330,8 +336,14 @@ export type Database = {
         }[]
       }
       ob_recorder_cleanup: { Args: never; Returns: undefined }
+      ob_recorder_cleanup_budget: {
+        Args: { p_budget: number }
+        Returns: undefined
+      }
       ob_recorder_status: { Args: never; Returns: Json }
       ob_recorder_tick: { Args: never; Returns: undefined }
+      ob_retention_stats: { Args: never; Returns: Json }
+      ob_snapshots_bytes: { Args: never; Returns: number }
       ob_store: {
         Args: { p_asks: Json; p_bids: Json; p_source: string; p_ts: string }
         Returns: undefined
