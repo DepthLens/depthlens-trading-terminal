@@ -131,3 +131,4 @@
 - [x] Binance live trades/candles moved to the new Binance address; order book on its own connection
 - [ ] Intermittent "Value is null" chart error (phone, Binance 1h, seen once, not reproduced)
 - [ ] Signed-in checks (recorded history paging, 10-minute runs) not possible from the assistant session
+- [x] Heatmap Wall lines (live + recorded, settings, info tooltip)

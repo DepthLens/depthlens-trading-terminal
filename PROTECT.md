@@ -92,6 +92,7 @@ After every change, add any new feature to the list in section 1.
 
 - Heatmap recorded history: Binance BTCUSDT fills missing 15m/1h history and extends 4h/24h/7d windows with a "Recorded history" label; live book columns win. Settings show history range/count and load errors are visible. Reads wait for the signed-in session. The approved fresh recorder saves five-second book/trades with a contiguous cursor and per-second prices, capped at seven days/250 MB. Glossy 3D sphere bubbles (buy/sell split portions, thin stems, no text) use shared square-root sizing, saved USDT/coin units and trade tooltips. ?admin=1 shows recorder status.
 - Smoke: on Binance BTCUSDT Heatmap pick 4h, confirm the label and no console errors.
+- Heatmap Wall lines: saved switch (default on), top 0.5/1/2% of visible resting sizes held ≥30s/2m/5m, green bid / red ask lines thickening with size, right-edge "Bid wall 12.4M · 18m" labels, Held / dashed Pulled / grey Broken, fade after 15m/1h/4h, show/hide pulled and broken, info tooltip; same rules on recorded history; detection at most once per second, no sockets.
 
 ## Forex (/forex)
 - Forex candles are read only from the shared Supabase `forex_candles` table (seeded from public/forex-candles.json); browsers never call Twelve Data. 4h/1D/1W/1M are rebuilt from newer 1h candles. Smoke: EUR/USD 1D starts 21 Oct 2026, last close 1.09662; XAU/USD 4H loads with 0 Twelve Data requests.

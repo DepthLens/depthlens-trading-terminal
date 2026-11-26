@@ -2,3 +2,4 @@
 - Flow Radar rules live in browser-safe flow-radar.ts; FlowRadar.tsx polls Binance REST klines (taker buy volume) every 30s and marks only via native markers/price lines on existing chart candles, never opening sockets.
 - Short-TF Patterns: supplied atlas flow-radar-patterns.ts stays unchanged; flow-radar-pattern-layer.ts maps radar candles to native markers, no new traffic.
 - flow-radar-mtf.ts is the supplied file kept unchanged; FlowRadar fetches one REST kline set per needed interval (radar, chart, higher tfs) on the existing 30s poll so higher-timeframe results are placed only where they were known.
+- Heatmap wall detection/status rules live in browser-safe `heatmap-walls.ts` over Column arrays, so live and recorded history share one rule set; Heatmap.tsx re-detects at most once per second and only draws per frame.

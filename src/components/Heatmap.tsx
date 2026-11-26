@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { Crosshair, Settings2, X } from 'lucide-react';
+import { Crosshair, Info, Settings2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { colorFor, percentile, COLUMN_MS, type Column, type HeatTrade } from '@/lib/heatmap-data';
 import { LONG_WINDOWS, RECORDED_RETENTION_MS, RECORDED_SYMBOL, buildNavColumns, fillGaps, historyRange, loadRecorded, loadRecordedPage, loadRecorderStatus, pageEvery, pageSpanMs, peekRecordedPage, recordedEvery, snapshotsToColumns, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
 import { bubbleBuyShare, bubbleNumber, bubbleRadius, bubbleVolume, dominantBubble } from '@/lib/heatmap-bubbles';
+import { DEFAULT_WALLS, HEATMAP_WALLS_KEY, WALL_FADES, WALL_INFO, WALL_MIN_TIMES, WALL_PERCENTILES, WALL_STATUS_LABEL, detectWalls, restoreWallSettings, wallAge, wallAlpha, wallWidth, type Wall, type WallSettings } from '@/lib/heatmap-walls';
 import { HEATMAP_UNIT_KEY, restoreHeatmapUnit, type HeatmapUnit } from '@/lib/terminal-state';
 import { calibrateHeatmap, getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
 import { orderBook } from '@/lib/order-book';
@@ -66,6 +67,9 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   useEffect(() => { try { setBubbleUnit(restoreHeatmapUnit(localStorage.getItem(HEATMAP_UNIT_KEY))); } catch { /* unavailable browser storage */ } }, []);
   const selectUnit = (unit: HeatmapUnit) => { setBubbleUnit(unit); if (!toolDemoEnabled()) { try { localStorage.setItem(HEATMAP_UNIT_KEY, unit); } catch { /* unavailable browser storage */ } } };
   const coinLabel = symbol.replace(/USDT$/, '');
+  const [walls, setWalls] = useState<WallSettings>(DEFAULT_WALLS);
+  useEffect(() => { try { setWalls(restoreWallSettings(localStorage.getItem(HEATMAP_WALLS_KEY))); } catch { /* unavailable browser storage */ } }, []);
+  const updateWalls = (patch: Partial<WallSettings>) => setWalls(prev => { const next = { ...prev, ...patch }; if (!toolDemoEnabled()) { try { localStorage.setItem(HEATMAP_WALLS_KEY, JSON.stringify(next)); } catch { /* unavailable browser storage */ } } return next; });
   // Time navigation: end === null follows live; otherwise the view is paused at that absolute end time.
   const [live, setLive] = useState(true);
   const [navLoading, setNavLoading] = useState(false);
@@ -75,10 +79,10 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const rangeRef = useRef<HTMLSpanElement>(null);
   // Mutable view/drawing state; the rAF loop reads these refs so drawing never rerenders React.
   const view = useRef({ center: NaN, rows: DEFAULT_ROWS });
-  const controls = useRef({ intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit });
-  controls.current = { intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit };
+  const controls = useRef({ intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit, walls });
+  controls.current = { intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit, walls };
   const specRef = useRef(spec); specRef.current = spec;
-  useEffect(() => { redrawRef.current?.(); }, [intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit]);
+  useEffect(() => { redrawRef.current?.(); }, [intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit, walls]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -102,6 +106,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     let source = orderBook.debug().source;
     let stopped = false, hidden = document.hidden, frame = 0, dirty = true;
     let bubbleHits: { x: number; y: number; radius: number; price: number; time: number; trade: HeatTrade }[] = [];
+    // Wall lines are re-detected at most once per second (or on a settings change), never per frame.
+    let wallList: Wall[] = [], wallThr = 0, wallKey = '', wallAt = 0;
     view.current = { center: NaN, rows: DEFAULT_ROWS };
     // Recorded history fills short gaps and extends long Binance BTCUSDT windows.
     let recRows: RecordedSnapshot[] = [], recFor = 0, recCols: Column[] = [], recColsKey = '', loading = false, recCheckedAt = 0, requestedWindow = 0;
@@ -321,6 +327,43 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         const slot = slotOf(col, ci);
         ctx.drawImage(off, slot, 0, 1, rows, x0 + ci * colW, 0, colW, H);
       }
+      // Wall lines: large resting orders that persisted, with Held / Pulled / Broken outcomes.
+      const wallLabels: { y: number; text: string; color: string; alpha: number; peak: number }[] = [];
+      const ws = c.walls, nowT = navOn() ? (cols.at(-1)?.time ?? Date.now()) : Date.now();
+      if (ws.on) {
+        const midIdx = Math.floor((top - band / 2) / buffer.bucket), half = Math.min(600, Math.ceil(band / buffer.bucket));
+        const wk = `${JSON.stringify(ws)}:${buffer.bucket}:${c.windowMin}:${navOn()}:${demo}`;
+        if (wk !== wallKey || Date.now() - wallAt >= 1000) {
+          const r = detectWalls(cols, buffer.bucket, midIdx - half, midIdx + half, ws, nowT);
+          wallList = r.walls; wallThr = r.threshold; wallKey = wk; wallAt = Date.now();
+        }
+        const xAt = (t: number) => {
+          if (!N || t <= (cols[0]?.time ?? 0)) return x0;
+          let a = 0, b = N - 1;
+          while (a < b) { const m = (a + b + 1) >> 1; if ((cols[m]?.time ?? 0) <= t) a = m; else b = m - 1; }
+          return x0 + (a + .5) * colW;
+        };
+        ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+        for (const w of wallList) {
+          if ((w.status === 'pulled' && !ws.showPulled) || (w.status === 'broken' && !ws.showBroken)) continue;
+          const alpha = wallAlpha(w, nowT, ws.fadeMs), y = Math.round(priceToY(w.price, top, band, H)) + .5;
+          if (alpha <= .02 || y < 0 || y > H) continue;
+          const xa = Math.max(0, xAt(w.start)), xb = w.endedAt === null ? W : Math.min(W, xAt(w.endedAt));
+          const color = w.status === 'broken' ? cMuted : w.side === 'bid' ? cUp : cDown;
+          const lw = wallWidth(w.peak, wallThr), xe = Math.max(xa + 2, xb);
+          ctx.setLineDash(w.status === 'pulled' ? [5, 4] : []);
+          // Dark halo keeps the line readable on top of bright liquidity cells.
+          ctx.globalAlpha = alpha * .7; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.lineWidth = lw + 2;
+          ctx.beginPath(); ctx.moveTo(xa, y); ctx.lineTo(xe, y); ctx.stroke();
+          ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = lw;
+          ctx.beginPath(); ctx.moveTo(xa, y); ctx.lineTo(xe, y); ctx.stroke();
+          const size = c.bubbleUnit === 'USDT' ? compact(w.size) : `${bubbleNumber(w.size / w.price)} ${symbol.replace(/USDT$/, '')}`;
+          const status = WALL_STATUS_LABEL[w.status];
+          wallLabels.push({ y, alpha, color, peak: w.peak, text: `${w.side === 'bid' ? 'Bid' : 'Ask'} wall ${size} · ${wallAge((w.endedAt ?? nowT) - w.start)}${status ? ` · ${status}` : ''}` });
+        }
+        ctx.restore(); ctx.setLineDash([]);
+      }
+      Object.assign(canvas.dataset, { walls: String(wallLabels.length), wallStatuses: wallLabels.map(l => l.text.split(' · ')[2] ?? 'Active').join(',') });
       Object.assign(canvas.dataset, { rows: String(rows), bucket: String(buffer.bucket), depthSpan: String(depthSpan), columnWidth: String(colW), demo: String(demo), normalizationAt: String(normAt) });
       // Trade bubbles: radius ∝ sqrt(volume), green buyer / red seller aggressor.
       bubbleHits = [];
@@ -389,6 +432,21 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         }
       }
       ctx.lineWidth = 1; ctx.strokeStyle = styles.getPropertyValue('--flow-text').trim(); ctx.stroke();
+
+      // Wall labels at the right edge of the plot; the biggest walls win when labels would overlap.
+      if (wallLabels.length) {
+        ctx.save(); ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+        const used: number[] = [];
+        for (const l of [...wallLabels].sort((a, b) => b.peak - a.peak)) {
+          const ly = Math.min(H - 4, Math.max(10, l.y - 3));
+          if (used.some(u => Math.abs(u - ly) < 12)) continue;
+          used.push(ly);
+          const tw = ctx.measureText(l.text).width;
+          ctx.globalAlpha = .88; ctx.fillStyle = cBg; ctx.fillRect(W - tw - 9, ly - 10, tw + 8, 14);
+          ctx.globalAlpha = Math.max(.7, l.alpha); ctx.fillStyle = l.color; ctx.fillText(l.text, W - 5, ly);
+        }
+        ctx.restore();
+      }
 
       // Best bid / ask thin lines.
       const dbg = orderBook.debug();
@@ -651,6 +709,17 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         <input type="checkbox" checked={bubblesOn} onChange={e => setBubblesOn(e.target.checked)} aria-label="Toggle trade bubbles" className="accent-current" />
       </label>
       <span role="group" aria-label="Bubble volume unit" className="flex items-center gap-1">{(['USDT', 'BTC'] as const).map(unit => <Button key={unit} variant="ghost" size="sm" aria-pressed={bubbleUnit === unit} onClick={() => selectUnit(unit)} className={`h-6 px-2 text-xs ${bubbleUnit === unit ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{unit === 'USDT' ? unit : coinLabel}</Button>)}</span>
+      <span className="flex items-center gap-1.5 text-t-muted" role="group" aria-label="Wall lines">
+        <label className="flex items-center gap-1.5">Walls<input type="checkbox" checked={walls.on} onChange={e => updateWalls({ on: e.target.checked })} aria-label="Toggle wall lines" className="accent-current" /></label>
+        {walls.on && <>
+          <select value={walls.percentile} onChange={e => updateWalls({ percentile: Number(e.target.value) })} aria-label="Wall size percentile" className="h-6 rounded border border-t-border bg-t-panel px-1 text-xs text-t-text">{WALL_PERCENTILES.map(v => <option key={v} value={v}>Top {v}%</option>)}</select>
+          <select value={walls.minMs} onChange={e => updateWalls({ minMs: Number(e.target.value) })} aria-label="Wall minimum time" className="h-6 rounded border border-t-border bg-t-panel px-1 text-xs text-t-text">{WALL_MIN_TIMES.map(v => <option key={v} value={v}>≥ {wallAge(v)}</option>)}</select>
+          <select value={walls.fadeMs} onChange={e => updateWalls({ fadeMs: Number(e.target.value) })} aria-label="Wall fade time" className="h-6 rounded border border-t-border bg-t-panel px-1 text-xs text-t-text">{WALL_FADES.map(v => <option key={v} value={v}>Fade {wallAge(v).replace(' 0m', '')}</option>)}</select>
+          <label className="flex items-center gap-1">Pulled<input type="checkbox" checked={walls.showPulled} onChange={e => updateWalls({ showPulled: e.target.checked })} aria-label="Show pulled walls" className="accent-current" /></label>
+          <label className="flex items-center gap-1">Broken<input type="checkbox" checked={walls.showBroken} onChange={e => updateWalls({ showBroken: e.target.checked })} aria-label="Show broken walls" className="accent-current" /></label>
+        </>}
+        <span title={WALL_INFO} aria-label={WALL_INFO} role="img" data-testid="wall-info" className="cursor-help"><Info className="size-3" /></span>
+      </span>
       <Button variant="ghost" size="sm" onClick={center} className={`h-6 px-2 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-3" />Center</Button>
       <span className="flex items-center gap-1" role="group" aria-label="Go to time">
         <span className="text-t-muted">Go to</span>
@@ -674,7 +743,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       {priceOnlyFrom !== null && <span data-testid="price-only-label" className="pointer-events-none absolute bottom-2 right-3 text-[10px] mobile:text-xs text-t-muted">Price and trades only.{priceOnlyFrom > 0 ? ` Order book colors start at ${new Date(priceOnlyFrom).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}</span>}
     </div>
     {mobile && showSettings && <div className="fixed inset-0 z-50 flex flex-col justify-end bg-t-bg/70" onClick={() => setShowSettings(false)}>
-      <div role="dialog" aria-modal="true" aria-label="Heatmap settings" onClick={e => e.stopPropagation()} className="space-y-4 rounded-t-xl border-t border-t-border bg-t-panel px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-sm text-t-text">
+      <div role="dialog" aria-modal="true" aria-label="Heatmap settings" onClick={e => e.stopPropagation()} className="max-h-[85dvh] space-y-4 overflow-y-auto rounded-t-xl border-t border-t-border bg-t-panel px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-sm text-t-text">
         <div className="flex items-center justify-between"><h2 className="font-semibold">Heatmap settings</h2><Button variant="ghost" size="icon" className={`size-10 ${control}`} aria-label="Close heatmap settings" onClick={() => setShowSettings(false)}><X /></Button></div>
         <p data-testid="history-kept" className="text-xs text-t-muted">{retentionText}{!recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL && <> · <span data-testid="recorded-only">Recorded history: BTCUSDT only</span></>}</p>
         {recordedAvail && <p data-testid="history-range" className="text-xs text-t-muted tabular-nums">{historyText}</p>}
@@ -701,6 +770,26 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
           <input type="checkbox" checked={bubblesOn} onChange={e => setBubblesOn(e.target.checked)} aria-label="Toggle trade bubbles" className="size-5 accent-current" />
         </label>
         <div role="group" aria-label="Bubble volume unit" className="grid grid-cols-2 gap-2">{(['USDT', 'BTC'] as const).map(unit => <Button key={unit} variant="ghost" aria-pressed={bubbleUnit === unit} onClick={() => selectUnit(unit)} className={`h-10 text-sm ${bubbleUnit === unit ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{unit === 'USDT' ? unit : coinLabel}</Button>)}</div>
+        <div className="space-y-2 border-t border-t-border pt-3" role="group" aria-label="Wall lines">
+          <label className="flex h-10 items-center justify-between gap-3 text-t-muted">Wall lines
+            <input type="checkbox" checked={walls.on} onChange={e => updateWalls({ on: e.target.checked })} aria-label="Toggle wall lines" className="size-5 accent-current" />
+          </label>
+          <p data-testid="wall-info" className="text-xs text-t-muted">{WALL_INFO}</p>
+          {walls.on && <>
+            <span className="text-t-muted">Size</span>
+            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Wall size percentile">{WALL_PERCENTILES.map(v => <Button key={v} variant="ghost" aria-pressed={walls.percentile === v} onClick={() => updateWalls({ percentile: v })} className={`h-10 text-sm ${walls.percentile === v ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>Top {v}%</Button>)}</div>
+            <span className="text-t-muted">Minimum time</span>
+            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Wall minimum time">{WALL_MIN_TIMES.map(v => <Button key={v} variant="ghost" aria-pressed={walls.minMs === v} onClick={() => updateWalls({ minMs: v })} className={`h-10 text-sm ${walls.minMs === v ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{wallAge(v)}</Button>)}</div>
+            <span className="text-t-muted">Fade old lines after</span>
+            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Wall fade time">{WALL_FADES.map(v => <Button key={v} variant="ghost" aria-pressed={walls.fadeMs === v} onClick={() => updateWalls({ fadeMs: v })} className={`h-10 text-sm ${walls.fadeMs === v ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{wallAge(v).replace(' 0m', '')}</Button>)}</div>
+            <label className="flex h-10 items-center justify-between gap-3 text-t-muted">Show pulled walls
+              <input type="checkbox" checked={walls.showPulled} onChange={e => updateWalls({ showPulled: e.target.checked })} aria-label="Show pulled walls" className="size-5 accent-current" />
+            </label>
+            <label className="flex h-10 items-center justify-between gap-3 text-t-muted">Show broken walls
+              <input type="checkbox" checked={walls.showBroken} onChange={e => updateWalls({ showBroken: e.target.checked })} aria-label="Show broken walls" className="size-5 accent-current" />
+            </label>
+          </>}
+        </div>
       </div>
     </div>}
   </div>;
