@@ -8,7 +8,7 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 it('opens one combined Binance stream and forwards klines', () => {
   const kline = vi.fn(); const stop = livePriceStream('BTCUSDT', vi.fn(), vi.fn(), '5m', kline);
   expect(streams.entries).toHaveLength(1);
-  expect(streams.entries[0]?.url).toBe('wss://fstream.binance.com/stream?streams=btcusdt@aggTrade/btcusdt@kline_5m');
+  expect(streams.entries[0]?.url).toBe('wss://fstream.binance.com/market/stream?streams=btcusdt@aggTrade/btcusdt@kline_5m');
   streams.entries[0]?.receive({data:{k:{t:60000}}}); expect(kline).toHaveBeenCalledWith({k:{t:60000}});
   stop(); expect(streams.entries[0]?.stop).toHaveBeenCalledOnce();
 });

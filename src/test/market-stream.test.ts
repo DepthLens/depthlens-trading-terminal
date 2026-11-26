@@ -48,10 +48,10 @@ it('backs off 1, 2, 4 seconds up to 30 seconds, resetting only on a message', ()
   FakeSocket.instances.at(-1)?.onmessage?.({data:'{}'});
   expect(connectionManager.snapshot().failures).toBe(0); stop();
 });
-it('never exceeds three sockets across the two exchanges and purposes', () => {
-  const stops = [marketStream('wss://a', vi.fn()), marketStream('wss://b', vi.fn(), undefined, {purpose:'markets'}), marketStream('wss://c', vi.fn(), undefined, {exchange:'bybit'}), marketStream('wss://d', vi.fn(), undefined, {exchange:'bybit',purpose:'markets'})];
-  vi.advanceTimersByTime(100); expect(FakeSocket.instances).toHaveLength(3);
-  expect(connectionManager.snapshot().openSockets).toBe(3); stops.forEach(stop => stop());
+it('never exceeds four sockets across the two exchanges and purposes', () => {
+  const stops = [marketStream('wss://a', vi.fn()), marketStream('wss://b', vi.fn(), undefined, {purpose:'markets'}), marketStream('wss://c', vi.fn(), undefined, {exchange:'bybit'}), marketStream('wss://d', vi.fn(), undefined, {exchange:'bybit',purpose:'markets'}), marketStream('wss://e', vi.fn(), undefined, {purpose:'book'})];
+  vi.advanceTimersByTime(100); expect(FakeSocket.instances).toHaveLength(4);
+  expect(connectionManager.snapshot().openSockets).toBe(4); stops.forEach(stop => stop());
 });
 it('cleans up StrictMode-style mounting and hot reload without stale delivery or retries', () => {
   const receive = vi.fn();
@@ -86,15 +86,20 @@ it('multiplexes book subscriptions onto existing sockets without opening an extr
   socket.onmessage?.({ data: JSON.stringify(data) }); expect(receive).toHaveBeenCalledTimes(1);
   expect(FakeSocket.instances).toHaveLength(1); stop();
 });
-it('replays Binance depth subscription after reconnect and uses SUBSCRIBE/UNSUBSCRIBE', () => {
+it('opens one Binance book socket for depth, replays it after reconnect and closes it with the last topic', () => {
   const connection = vi.fn();
-  const stop = marketStream('wss://binance', vi.fn());
-  const socket = FakeSocket.instances[0]; if (!socket) throw new Error(); socket.readyState = 1; socket.onopen?.();
+  const stop = marketStream('wss://binance-market', vi.fn());
+  const active = FakeSocket.instances[0]; if (!active) throw new Error(); active.readyState = 1; active.onopen?.();
   const unsubscribe = connectionManager.subscribe('binance', 'btcusdt@depth@100ms', vi.fn(), connection);
+  const socket = FakeSocket.instances[1]; if (!socket) throw new Error();
+  expect(socket.url).toBe('wss://fstream.binance.com/stream');
+  expect(active.send).not.toHaveBeenCalled();
+  socket.readyState = 1; socket.onopen?.();
   expect(JSON.parse(socket.send.mock.calls.at(-1)?.[0] ?? '{}')).toMatchObject({ method: 'SUBSCRIBE', params: ['btcusdt@depth@100ms'] });
   socket.onerror?.(); socket.readyState = 3; vi.advanceTimersByTime(1000);
-  const next = FakeSocket.instances.at(-1); if (!next) throw new Error(); next.readyState = 1; next.onopen?.();
+  const next = FakeSocket.instances.at(-1); if (!next || next === socket) throw new Error(); next.readyState = 1; next.onopen?.();
   expect(JSON.parse(next.send.mock.calls.at(-1)?.[0] ?? '{}')).toMatchObject({ method: 'SUBSCRIBE', params: ['btcusdt@depth@100ms'] });
   expect(connection).toHaveBeenLastCalledWith(true);
-  unsubscribe(); expect(JSON.parse(next.send.mock.calls.at(-1)?.[0] ?? '{}')).toMatchObject({ method: 'UNSUBSCRIBE' }); stop();
+  unsubscribe(); expect(JSON.parse(next.send.mock.calls.at(-1)?.[0] ?? '{}')).toMatchObject({ method: 'UNSUBSCRIBE' });
+  expect(next.close).toHaveBeenCalledOnce(); stop();
 });
