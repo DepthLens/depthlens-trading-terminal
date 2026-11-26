@@ -156,19 +156,25 @@ export type Database = {
         Row: {
           binance_blocked_until: string | null
           id: number
+          last_agg_trade_id: number | null
           last_error: string | null
+          recording_started_at: string
           updated_at: string
         }
         Insert: {
           binance_blocked_until?: string | null
           id?: number
+          last_agg_trade_id?: number | null
           last_error?: string | null
+          recording_started_at?: string
           updated_at?: string
         }
         Update: {
           binance_blocked_until?: string | null
           id?: number
+          last_agg_trade_id?: number | null
           last_error?: string | null
+          recording_started_at?: string
           updated_at?: string
         }
         Relationships: []
@@ -178,36 +184,51 @@ export type Database = {
           asks: number[]
           base: number
           bids: number[]
+          close: number | null
           created_at: string
+          high: number | null
           id: number
+          low: number | null
           mid: number
+          price_points: Json
           source: string
           step: number
           symbol: string
+          trade_levels: Json
           ts: string
         }
         Insert: {
           asks: number[]
           base: number
           bids: number[]
+          close?: number | null
           created_at?: string
+          high?: number | null
           id?: never
+          low?: number | null
           mid: number
+          price_points?: Json
           source: string
           step: number
           symbol?: string
+          trade_levels?: Json
           ts: string
         }
         Update: {
           asks?: number[]
           base?: number
           bids?: number[]
+          close?: number | null
           created_at?: string
+          high?: number | null
           id?: never
+          low?: number | null
           mid?: number
+          price_points?: Json
           source?: string
           step?: number
           symbol?: string
+          trade_levels?: Json
           ts?: string
         }
         Relationships: []
@@ -297,18 +318,25 @@ export type Database = {
           asks: number[]
           base: number
           bids: number[]
+          close: number
+          high: number
+          low: number
           mid: number
+          price_points: Json
           source: string
           step: number
+          trade_levels: Json
           ts: string
         }[]
       }
+      ob_recorder_cleanup: { Args: never; Returns: undefined }
       ob_recorder_status: { Args: never; Returns: Json }
       ob_recorder_tick: { Args: never; Returns: undefined }
       ob_store: {
         Args: { p_asks: Json; p_bids: Json; p_source: string; p_ts: string }
         Returns: undefined
       }
+      ob_store_trades: { Args: { p_trades: Json }; Returns: undefined }
       redeem_beta_code: { Args: { _code: string }; Returns: boolean }
     }
     Enums: {

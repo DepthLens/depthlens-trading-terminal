@@ -1,6 +1,7 @@
 // Browser-safe heatmap buffer: one order book snapshot column per second, typed arrays, 60 minutes max.
 export type TradeSide = 'Buy' | 'Sell';
-export type Column = { time: number; origin: number; data: Float32Array; trades: Map<number, { buy: number; sell: number }>; price: number; gap: boolean; priceOnly?: boolean; empty?: boolean };
+export type HeatTrade = { buy: number; sell: number; count?: number; price?: number; buyCoin?: number; sellCoin?: number };
+export type Column = { time: number; origin: number; data: Float32Array; trades: Map<number, HeatTrade>; price: number; gap: boolean; priceOnly?: boolean; empty?: boolean; pricePath?: number[] };
 export const COLUMN_MS = 1000;
 export const MAX_COLUMNS = 3600; // 60 minutes of one-second columns
 export const ROWS = 1024; // buckets per column, centered on the price at sample time
@@ -46,7 +47,7 @@ export function colorFor(t: number): [number, number, number] {
 export class HeatmapBuffer {
   bucket: number;
   private cols: Column[] = [];
-  private pending = new Map<number, { buy: number; sell: number }>();
+  private pending = new Map<number, HeatTrade>();
   private pendingPrice = NaN;
   constructor(price: number, bucket = autoBucketSize(price)) {
     this.bucket = bucket;
@@ -54,9 +55,9 @@ export class HeatmapBuffer {
   configureBucket(bucket: number) {
     if (!(bucket > 0) || bucket === this.bucket) return;
     const old = this.bucket;
-    const rebin=(values:Map<number,{buy:number;sell:number}>)=>{
-      const result=new Map<number,{buy:number;sell:number}>();
-      for(const [index,t] of values){const key=Math.floor((index+.5)*old/bucket),target=result.get(key)??{buy:0,sell:0};target.buy+=t.buy;target.sell+=t.sell;result.set(key,target);}
+    const rebin=(values:Map<number,HeatTrade>)=>{
+      const result=new Map<number,HeatTrade>();
+      for(const [index,t] of values){const key=Math.floor((index+.5)*old/bucket),target=result.get(key)??{buy:0,sell:0}; const total=target.buy+target.sell+t.buy+t.sell; target.price=total>0?((target.price??(key+.5)*bucket)*(target.buy+target.sell)+(t.price??(index+.5)*old)*(t.buy+t.sell))/total:(key+.5)*bucket;target.buy+=t.buy;target.sell+=t.sell;target.count=(target.count??0)+(t.count??0);target.buyCoin=(target.buyCoin??0)+(t.buyCoin??t.buy/(t.price??(index+.5)*old));target.sellCoin=(target.sellCoin??0)+(t.sellCoin??t.sell/(t.price??(index+.5)*old));result.set(key,target);}
       return result;
     };
     this.pending=rebin(this.pending);
@@ -73,7 +74,11 @@ export class HeatmapBuffer {
     const i = this.index(price);
     const t = this.pending.get(i) ?? { buy: 0, sell: 0 };
     const notional = price * size;
-    if (side === 'Sell') t.sell += notional; else t.buy += notional;
+    const total = t.buy + t.sell;
+    t.price = ((t.price ?? price) * total + price * notional) / (total + notional);
+    t.count = (t.count ?? 0) + 1;
+    if (side === 'Sell') { t.sell += notional; t.sellCoin = (t.sellCoin ?? 0) + size; }
+    else { t.buy += notional; t.buyCoin = (t.buyCoin ?? 0) + size; }
     this.pending.set(i, t);
     this.pendingPrice = price;
   }

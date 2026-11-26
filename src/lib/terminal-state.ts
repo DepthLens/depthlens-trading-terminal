@@ -3,6 +3,9 @@ export const TOOLS = ['Heatmap', 'Volume Profile', 'Footprint', 'DOM', 'CVD', 'P
 export const THEMES = ['navy', 'light', 'midnight', 'ocean', 'bw'] as const;
 export const THEME_LABELS: Record<string, string> = { navy: 'Black & White (default)', light: 'Light', midnight: 'Midnight', ocean: 'Ocean', bw: 'Black & White' };
 export const STORAGE_KEY = 'depthlens.terminal.v1';
+export const HEATMAP_UNIT_KEY = 'depthlens.heatmap.bubble-unit';
+export type HeatmapUnit = 'USDT' | 'BTC';
+export function restoreHeatmapUnit(raw: string | null): HeatmapUnit { return raw === 'BTC' ? 'BTC' : 'USDT'; }
 export type TerminalTab = { symbol: string; minutes: number };
 export type TerminalState = { tabs: TerminalTab[]; active: string; tools: Record<string, boolean>; theme: string };
 export const initialState = (): TerminalState => ({ tabs: [{ symbol: 'BTCUSDT', minutes: 1 }], active: 'BTCUSDT', tools: Object.fromEntries(TOOLS.map(t => [t, t === 'Candle timer' || t === 'Control & Attack bars'])), theme: DEFAULT_THEME });

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { Crosshair, Settings2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { colorFor, percentile, COLUMN_MS, type Column } from '@/lib/heatmap-data';
-import { LONG_WINDOWS, RECORDED_RETENTION_MS, RECORDED_SYMBOL, buildNavColumns, fillGaps, historyRange, loadRecorded, loadRecordedPage, loadRecorderStatus, pageEvery, pageSpanMs, peekRecordedPage, recordedEvery, snapshotToColumn, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
+import { colorFor, percentile, COLUMN_MS, type Column, type HeatTrade } from '@/lib/heatmap-data';
+import { LONG_WINDOWS, RECORDED_RETENTION_MS, RECORDED_SYMBOL, buildNavColumns, fillGaps, historyRange, loadRecorded, loadRecordedPage, loadRecorderStatus, pageEvery, pageSpanMs, peekRecordedPage, recordedEvery, snapshotsToColumns, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
+import { bubbleNumber, bubbleRadius, bubbleVolume, dominantBubble } from '@/lib/heatmap-bubbles';
+import { HEATMAP_UNIT_KEY, restoreHeatmapUnit, type HeatmapUnit } from '@/lib/terminal-state';
 import { calibrateHeatmap, getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
 import { orderBook } from '@/lib/order-book';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
@@ -60,6 +62,10 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const [grouping, setGrouping] = useState<number>(1);
   const [minBubble, setMinBubble] = useState(10000);
   const [bubblesOn, setBubblesOn] = useState(true);
+  const [bubbleUnit, setBubbleUnit] = useState<HeatmapUnit>('USDT');
+  useEffect(() => { try { setBubbleUnit(restoreHeatmapUnit(localStorage.getItem(HEATMAP_UNIT_KEY))); } catch { /* unavailable browser storage */ } }, []);
+  const selectUnit = (unit: HeatmapUnit) => { setBubbleUnit(unit); if (!toolDemoEnabled()) { try { localStorage.setItem(HEATMAP_UNIT_KEY, unit); } catch { /* unavailable browser storage */ } } };
+  const coinLabel = symbol.replace(/USDT$/, '');
   // Time navigation: end === null follows live; otherwise the view is paused at that absolute end time.
   const [live, setLive] = useState(true);
   const [navLoading, setNavLoading] = useState(false);
@@ -69,10 +75,10 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const rangeRef = useRef<HTMLSpanElement>(null);
   // Mutable view/drawing state; the rAF loop reads these refs so drawing never rerenders React.
   const view = useRef({ center: NaN, rows: DEFAULT_ROWS });
-  const controls = useRef({ intensity, windowMin, grouping, minBubble, bubblesOn });
-  controls.current = { intensity, windowMin, grouping, minBubble, bubblesOn };
+  const controls = useRef({ intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit });
+  controls.current = { intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit };
   const specRef = useRef(spec); specRef.current = spec;
-  useEffect(() => { redrawRef.current?.(); }, [intensity, windowMin, grouping, minBubble, bubblesOn]);
+  useEffect(() => { redrawRef.current?.(); }, [intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -95,6 +101,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     off.width = 3600;
     let source = orderBook.debug().source;
     let stopped = false, hidden = document.hidden, frame = 0, dirty = true;
+    let bubbleHits: { x: number; y: number; radius: number; price: number; time: number; trade: HeatTrade }[] = [];
     view.current = { center: NaN, rows: DEFAULT_ROWS };
     // Recorded history fills short gaps and extends long Binance BTCUSDT windows.
     let recRows: RecordedSnapshot[] = [], recFor = 0, recCols: Column[] = [], recColsKey = '', loading = false, recCheckedAt = 0, requestedWindow = 0;
@@ -128,7 +135,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         if (!pageCols) {
           const rows = peekRecordedPage(every, p);
           if (!rows) { requestPage(every, p); continue; }
-          pageCols = rows.map(r => snapshotToColumn(r, buffer.bucket)); navPageCols.set(ck, pageCols);
+          pageCols = snapshotsToColumns(rows, buffer.bucket, every); navPageCols.set(ck, pageCols);
           if (navPageCols.size > 24) { const o = navPageCols.keys().next().value; if (o !== undefined) navPageCols.delete(o); }
         }
         for (const c of pageCols) if (c.time >= from && c.time < end) out.push(c);
@@ -160,14 +167,14 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     };
     const windowColumns = (): readonly Column[] => {
       const w = controls.current.windowMin;
-      if (navOn()) { long = false; if (shown) { shown = false; setRecordedShown(false); } return navColumns(); }
+      if (navOn()) { long = false; const cols = navColumns(); const hasRecorded = recordedOn() && navPageCols.size > 0 && cols.some(c => !c.empty); if (shown !== hasRecorded) { shown = hasRecorded; setRecordedShown(shown); } return cols; }
       long = w > 60 && recordedOn();
       if (!long) {
         const liveCols = buffer.columns.slice(-Math.min(w, 60) * 60);
         // Binance BTCUSDT: fill holes (tab hidden, chart view, other pair) with the Supabase recording.
         if (!recordedOn()) { if (shown) { shown = false; setRecordedShown(false); } return liveCols; }
         if (requestedWindow !== w || Date.now() - recCheckedAt >= 10000) requestHistory(w, Date.now());
-        if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = recRows.map(r => snapshotToColumn(r, buffer.bucket)); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
+        if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = snapshotsToColumns(recRows, buffer.bucket); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
         const now = Date.now();
         const { cols, filled } = recFor === w ? fillGaps(liveCols, recCols, now - w * 60000, now) : { cols: [...liveCols], filled: 0 };
         if (shown !== filled > 0) { shown = filled > 0; setRecordedShown(shown); }
@@ -177,7 +184,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       if (k === longKey && Date.now() - longAt < 5000) return longCols;
       const firstLive = buffer.columns.find(c => !c.priceOnly && !c.gap)?.time ?? Date.now();
       if (recFor !== w || Date.now() - recCheckedAt >= 10000) requestHistory(w, firstLive);
-      if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = recRows.map(r => snapshotToColumn(r, buffer.bucket)); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
+      if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = snapshotsToColumns(recRows, buffer.bucket, recordedEvery(w)); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
       const rec = recFor === w ? recCols.filter(c => c.time < firstLive) : [];
       longCols = [...rec, ...thinColumns(buffer.columns.filter(c => c.time >= firstLive), recordedEvery(w))];
       longKey = k; longAt = Date.now(); longVersion++;
@@ -316,25 +323,39 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       }
       Object.assign(canvas.dataset, { rows: String(rows), bucket: String(buffer.bucket), depthSpan: String(depthSpan), columnWidth: String(colW), demo: String(demo), normalizationAt: String(normAt) });
       // Trade bubbles: radius ∝ sqrt(volume), green buyer / red seller aggressor.
+      bubbleHits = [];
       if (c.bubblesOn) {
-        for (let ci = 0; ci < N; ci++) {
+        ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+        for (let ci = Math.max(0, Math.floor(-x0 / colW)); ci < N; ci++) {
           const col = cols[ci]; if (!col) continue;
           if (col.gap) continue;
           const x = x0 + (ci + 0.5) * colW;
           for (const [bucket, t] of col.trades) {
-            for (const [vol, color] of [[t.buy, cUp], [t.sell, cDown]] as const) {
-              if (vol < c.minBubble) continue;
-              const y = priceToY((bucket + 0.5) * buffer.bucket, top, band, H);
-              if (y < -20 || y > H + 20) continue;
-              const r = Math.min(28, Math.max(2.5, Math.sqrt(vol) / 40));
-              ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
-              ctx.globalAlpha = 0.55; ctx.fillStyle = color; ctx.fill();
-              ctx.globalAlpha = 0.9; ctx.lineWidth = 1; ctx.strokeStyle = styles.getPropertyValue('--flow-text').trim(); ctx.stroke();
-              ctx.globalAlpha = 1;
+            const dot = dominantBubble(t), radius = bubbleRadius(dot.notional, c.minBubble);
+            if (!radius) continue;
+            const executionPrice = t.price ?? (bucket + .5) * buffer.bucket;
+            const y = priceToY(executionPrice, top, band, H);
+            if (y < -radius || y > H + radius) continue;
+            ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.globalAlpha = .72; ctx.fillStyle = dot.buy ? cUp : cDown; ctx.fill(); ctx.globalAlpha = 1;
+            bubbleHits.push({ x, y, radius, price: executionPrice, time: col.time, trade: t });
+            if (radius >= 11) {
+              const label = bubbleNumber(bubbleVolume(t, executionPrice, c.bubbleUnit));
+              let font = 11; ctx.font = `600 ${font}px sans-serif`;
+              const width = ctx.measureText(label).width, limit = radius * 1.65;
+              if (width > limit) { font = Math.max(6, font * limit / width); ctx.font = `600 ${font}px sans-serif`; }
+              if (ctx.measureText(label).width <= limit) {
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.shadowColor = cBg; ctx.shadowBlur = 2; ctx.shadowOffsetY = 1;
+                ctx.fillStyle = styles.getPropertyValue('--flow-text').trim(); ctx.fillText(label, x, y);
+                ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; ctx.textBaseline = 'alphabetic';
+              }
             }
           }
         }
+        ctx.restore();
       }
+      Object.assign(canvas.dataset, { bubbles: String(bubbleHits.length), largeBubbles: String(bubbleHits.filter(dot => dot.radius >= 11).length) });
 
       // Price line through per-second last trade prices.
       ctx.beginPath();
@@ -342,9 +363,13 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       for (let ci = 0; ci < N; ci++) {
         const col = cols[ci]; if (!col) continue;
         if (col.gap || !Number.isFinite(col.price)) { started = false; continue; }
-        const x = x0 + (ci + 0.5) * colW, y = priceToY(col.price, top, band, H);
-        if (started) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-        started = true;
+        const path = col.pricePath?.length ? col.pricePath : [col.price];
+        for (let pi = 0; pi < path.length; pi++) {
+          const p = path[pi]; if (p === undefined || !Number.isFinite(p)) continue;
+          const x = x0 + (ci + (pi + .5) / path.length) * colW, y = priceToY(p, top, band, H);
+          if (started) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+          started = true;
+        }
       }
       ctx.lineWidth = 1; ctx.strokeStyle = styles.getPropertyValue('--flow-text').trim(); ctx.stroke();
 
@@ -519,6 +544,17 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       const W = rect.width - AXIS_W, H = rect.height - AXIS_H;
       const tip = tooltipRef.current;
       if (!tip) return;
+      const px = clientX - rect.left, py = clientY - rect.top;
+      const hit = bubbleHits.filter(dot => Math.hypot(px - dot.x, py - dot.y) <= dot.radius + 4).sort((a, b) => Math.hypot(px - a.x, py - a.y) - Math.hypot(px - b.x, py - b.y))[0];
+      if (hit && px < W && py < H) {
+        const unit = controls.current.bubbleUnit, priceText = specRef.current ? formatPrice(hit.price, specRef.current) : hit.price.toFixed(2);
+        const buy = unit === 'USDT' ? hit.trade.buy : hit.trade.buyCoin ?? hit.trade.buy / hit.price;
+        const sell = unit === 'USDT' ? hit.trade.sell : hit.trade.sellCoin ?? hit.trade.sell / hit.price;
+        tip.style.display = 'block'; tip.style.whiteSpace = 'pre-line';
+        tip.style.left = `${Math.max(4, Math.min(px + 12, W - 210))}px`; tip.style.top = `${Math.max(4, Math.min(py - 12, H - 100))}px`;
+        tip.textContent = `${new Date(hit.time).toISOString().replace('T', ' ').replace('Z', ' UTC')}\nPrice ${priceText}\nAggressive Buy ${bubbleNumber(buy)} ${unit === 'USDT' ? 'USDT' : symbol.replace(/USDT$/, '')}\nAggressive Sell ${bubbleNumber(sell)} ${unit === 'USDT' ? 'USDT' : symbol.replace(/USDT$/, '')}\nTrades: ${hit.trade.count ?? 'unavailable'}`;
+        return;
+      }
       const c = controls.current, g = c.grouping, bs = buffer.bucket * g;
       const rows = Math.max(20, Math.round(view.current.rows));
       const band = rows * bs, top = view.current.center + band / 2;
@@ -597,6 +633,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       <label className="flex items-center gap-1.5 text-t-muted">Bubbles
         <input type="checkbox" checked={bubblesOn} onChange={e => setBubblesOn(e.target.checked)} aria-label="Toggle trade bubbles" className="accent-current" />
       </label>
+      <span role="group" aria-label="Bubble volume unit" className="flex items-center gap-1">{(['USDT', 'BTC'] as const).map(unit => <Button key={unit} variant="ghost" size="sm" aria-pressed={bubbleUnit === unit} onClick={() => selectUnit(unit)} className={`h-6 px-2 text-xs ${bubbleUnit === unit ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{unit === 'USDT' ? unit : coinLabel}</Button>)}</span>
       <Button variant="ghost" size="sm" onClick={center} className={`h-6 px-2 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-3" />Center</Button>
       <span className="flex items-center gap-1" role="group" aria-label="Go to time">
         <span className="text-t-muted">Go to</span>
@@ -646,6 +683,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         <label className="flex h-10 items-center justify-between gap-3 text-t-muted">Trade bubbles
           <input type="checkbox" checked={bubblesOn} onChange={e => setBubblesOn(e.target.checked)} aria-label="Toggle trade bubbles" className="size-5 accent-current" />
         </label>
+        <div role="group" aria-label="Bubble volume unit" className="grid grid-cols-2 gap-2">{(['USDT', 'BTC'] as const).map(unit => <Button key={unit} variant="ghost" aria-pressed={bubbleUnit === unit} onClick={() => selectUnit(unit)} className={`h-10 text-sm ${bubbleUnit === unit ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{unit === 'USDT' ? unit : coinLabel}</Button>)}</div>
       </div>
     </div>}
   </div>;

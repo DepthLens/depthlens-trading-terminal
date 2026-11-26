@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fillGaps, historyRange, loadRecorded, loadRecorderStatus, recordedEvery, snapshotToColumn, thinColumns } from '@/lib/heatmap-recorded';
+import { fillGaps, historyRange, loadRecorded, loadRecorderStatus, recordedEvery, snapshotToColumn, snapshotsToColumns, thinColumns } from '@/lib/heatmap-recorded';
 import type { Column } from '@/lib/heatmap-data';
 import { ROWS } from '@/lib/heatmap-data';
 
@@ -40,6 +40,31 @@ describe('authenticated history reads', () => {
 });
 
 describe('recorded heatmap history', () => {
+  const trades = { ts: '2026-11-26T00:00:00Z', source: 'binance', mid: 100, step: 1, base: 90, bids: [100], asks: [200], close: 103, high: 103, low: 100, trade_levels: [[100, 2, 1, 3, 0], [103, 0, 4, 2, 2]] as [number, number, number, number, number][], price_points: [[0, 100], [1, 101], [2, 103]] as [number, number][] };
+  it('restores exact buy/sell coin quantities, notional and trade count', () => {
+    const col = snapshotToColumn(trades, 10);
+    expect(col.trades.get(10)?.buy).toBe(200);
+    expect(col.trades.get(10)?.sell).toBe(512);
+    expect(col.trades.get(10)?.count).toBe(5);
+    expect(col.trades.get(10)?.buyCoin).toBe(2);
+    expect(col.trades.get(10)?.sellCoin).toBe(5);
+    expect(col.price).toBe(103);
+  });
+  it('places recorded trades at their real exchange seconds without repeating bubbles', () => {
+    const cols = snapshotsToColumns([trades], 1);
+    expect(cols).toHaveLength(5);
+    expect(cols.map(c => c.price)).toEqual([100, 101, 103, 103, 103]);
+    expect(cols.map(c => c.trades.size)).toEqual([1, 0, 1, 0, 0]);
+    const filled = fillGaps([], cols, Date.parse(trades.ts), Date.parse(trades.ts) + 9000).cols;
+    expect(filled.reduce((sum, c) => sum + [...c.trades.values()].reduce((n, t) => n + t.buy + t.sell, 0), 0)).toBe(712);
+  });
+  it('keeps trade prices inside longer-window columns and never invents missing depth', () => {
+    const cols = snapshotsToColumns([{ ...trades, bids: [], asks: [] }], 1, 30);
+    expect(cols).toHaveLength(1);
+    expect(cols[0]?.pricePath).toEqual([100, 101, 103]);
+    expect(cols[0]?.priceOnly).toBe(true);
+    expect(cols[0]?.data.every(value => value === 0)).toBe(true);
+  });
   it('uses 5s columns for 4h and thins longer windows to ≤2880 columns', () => {
     expect(recordedEvery(240)).toBe(5);
     expect(recordedEvery(1440)).toBe(30);

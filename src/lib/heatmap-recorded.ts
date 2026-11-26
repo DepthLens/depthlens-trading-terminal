@@ -1,8 +1,9 @@
 // Recorded BTCUSDT order book history (Binance USD-M) saved by the backend recorder every 5 seconds.
 // Read-only history fills short-window gaps and extends the 60-minute live buffer.
-import { ROWS, type Column } from './heatmap-data';
+import { ROWS, type Column, type HeatTrade } from './heatmap-data';
 
-export type RecordedSnapshot = { ts: string; source: string; mid: number; step: number; base: number; bids: number[]; asks: number[] };
+// Volumes are coin quantities; fifth entry is the exchange second offset within the 5s interval.
+export type RecordedSnapshot = { ts: string; source: string; mid: number; step: number; base: number; bids: number[]; asks: number[]; trade_levels?: [number, number, number, number, number][]; high?: number | null; low?: number | null; close?: number | null; price_points?: [number, number][] };
 export const RECORDED_SYMBOL = 'BTCUSDT';
 export const LONG_WINDOWS = [240, 1440, 10080] as const; // 4h, 24h, 7d
 const MAX_COLS = 2880;
@@ -13,7 +14,7 @@ export function recordedEvery(windowMin: number): number {
 }
 
 // Re-bin a 150-row snapshot (USDT notional per row) into the heatmap's own bucket grid.
-export function snapshotToColumn(s: RecordedSnapshot, bucket: number): Column {
+export function snapshotToColumn(s: RecordedSnapshot, bucket: number, second?: number): Column {
   const origin = Math.floor(s.mid / bucket) - ROWS / 2;
   const data = new Float32Array(ROWS);
   const n = Math.min(s.bids.length, s.asks.length);
@@ -23,7 +24,27 @@ export function snapshotToColumn(s: RecordedSnapshot, bucket: number): Column {
     const t = Math.floor((s.base + (i + 0.5) * s.step) / bucket) - origin;
     if (t >= 0 && t < ROWS) data[t] = (data[t] ?? 0) + v;
   }
-  return { time: Date.parse(s.ts), origin, data, trades: new Map(), price: s.mid, gap: false };
+  const trades = new Map<number, HeatTrade>();
+  for (const [price, buy, sell, count, sec] of s.trade_levels ?? []) {
+    if (second !== undefined && sec !== second) continue;
+    const key = Math.floor(price / bucket), hit = trades.get(key) ?? { buy: 0, sell: 0, count: 0, buyCoin: 0, sellCoin: 0 };
+    const old = hit.buy + hit.sell, added = price * (buy + sell);
+    hit.price = old + added > 0 ? ((hit.price ?? price) * old + price * added) / (old + added) : price;
+    hit.buy += buy * price; hit.sell += sell * price; hit.count = (hit.count ?? 0) + count;
+    hit.buyCoin = (hit.buyCoin ?? 0) + buy; hit.sellCoin = (hit.sellCoin ?? 0) + sell;
+    trades.set(key, hit);
+  }
+  // Responses may split the same second: last arrival owns that second's closing price.
+  const points = new Map(s.price_points ?? []);
+  const path = [...points].sort((a, b) => a[0] - b[0]).filter(([sec]) => second === undefined || sec <= second).map(([, price]) => price);
+  const price = path.at(-1) ?? (s.close === null || s.close === undefined ? s.mid : second === undefined ? s.close : NaN);
+  return { time: Date.parse(s.ts) + (second ?? 0) * 1000, origin, data, trades, price, gap: false, ...(n === 0 ? { priceOnly: true } : {}), ...(second === undefined && path.length ? { pricePath: path } : {}) };
+}
+
+export function snapshotsToColumns(rows: readonly RecordedSnapshot[], bucket: number, every = 5): Column[] {
+  return rows.flatMap(row => every <= 5 && (row.trade_levels?.length || row.price_points?.length)
+    ? Array.from({ length: 5 }, (_, second) => snapshotToColumn(row, bucket, second))
+    : [snapshotToColumn(row, bucket)]);
 }
 
 // Thin columns to one per `everySec` slot (keeps the first in each slot).
@@ -93,7 +114,8 @@ export function fillGaps(live: readonly Column[], recorded: readonly Column[], f
     while (j + 1 < rec.length) { const next = rec[j + 1]; if (!next || next.time > s * 1000) break; j++; }
     const hit = j >= 0 ? rec[j] : undefined;
     if (hit && s * 1000 - hit.time < 10000) {
-      out.push({ ...hit, time: s * 1000, trades: own?.trades ?? new Map(), price: own && Number.isFinite(own.price) ? own.price : hit.price, gap: false, priceOnly: false });
+      const exact = Math.floor(hit.time / 1000) === s;
+      out.push({ ...hit, time: s * 1000, trades: own?.trades.size ? own.trades : exact ? hit.trades : new Map(), price: own && Number.isFinite(own.price) ? own.price : hit.price, gap: false, priceOnly: hit.priceOnly ?? false });
       filled++;
       continue;
     }
