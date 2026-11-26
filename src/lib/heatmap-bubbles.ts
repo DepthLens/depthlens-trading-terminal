@@ -4,7 +4,7 @@ import type { HeatmapUnit } from './terminal-state';
 // A fixed notional scale makes live and recorded dots comparable across windows and units.
 export function bubbleRadius(notional: number, minimum: number): number {
   if (!(notional > 0) || notional < minimum) return 0;
-  return Math.min(24, Math.max(2, Math.sqrt(notional / 5000)));
+  return Math.min(18, Math.max(2, Math.sqrt(notional / 20000)));
 }
 export function dominantBubble(trade: HeatTrade): { buy: boolean; notional: number } {
   return { buy: trade.buy >= trade.sell, notional: trade.buy + trade.sell };

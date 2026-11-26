@@ -6,9 +6,10 @@ import { restoreHeatmapUnit } from '@/lib/terminal-state';
 describe('heatmap trade bubble rules', () => {
   it('uses square-root volume scaling, small retail dots and capped block sizes', () => {
     expect(bubbleRadius(5000, 0)).toBe(2);
-    expect(bubbleRadius(80000, 0)).toBe(4);
-    expect(bubbleRadius(320000, 0)).toBe(8);
-    expect(bubbleRadius(100000000, 0)).toBe(24);
+    expect(bubbleRadius(80000, 0)).toBe(2);
+    expect(bubbleRadius(320000, 0)).toBe(4);
+    expect(bubbleRadius(1280000, 0)).toBe(8);
+    expect(bubbleRadius(100000000, 0)).toBe(18);
   });
   it('preserves the minimum bubble filter', () => {
     expect(bubbleRadius(9999, 10000)).toBe(0);

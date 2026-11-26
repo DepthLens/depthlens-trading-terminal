@@ -493,8 +493,13 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         }
         // Glossy volumetric spheres: split buy/sell wedge, radial shading, specular highlight, dark rim, thin stems.
         const path = [...bubbleHits].sort((m, n) => m.time - n.time || m.x - n.x);
-        ctx.globalAlpha = .55; ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(235,240,245,.7)'; ctx.beginPath();
-        path.forEach((b, i) => { if (i) ctx.lineTo(b.x, b.y); else ctx.moveTo(b.x, b.y); }); if (path.length > 1) ctx.stroke();
+        // Trade path: green segment when price rises, red when it falls, drawn behind the spheres.
+        ctx.globalAlpha = .9; ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
+        for (let i = 1; i < path.length; i++) {
+          const a = path[i - 1]!, b = path[i]!;
+          ctx.strokeStyle = b.price > a.price ? cUp : b.price < a.price ? cDown : (b.trade.buy >= b.trade.sell ? cUp : cDown);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
         ctx.globalAlpha = 1;
         const order = [...bubbleHits].sort((m, n) => n.radius - m.radius);
         for (const { x, y, radius: r, trade: t } of order) {
@@ -504,9 +509,9 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
           const minor = buyMain ? 1 - share : share;
           if (minor > .02) { ctx.fillStyle = buyMain ? cDown : cUp; ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r + 1, -Math.PI / 2, -Math.PI / 2 + minor * Math.PI * 2); ctx.closePath(); ctx.fill(); }
           const shade = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
-          shade.addColorStop(0, 'rgba(255,255,255,.35)'); shade.addColorStop(.45, 'rgba(255,255,255,0)'); shade.addColorStop(.8, 'rgba(0,0,0,.25)'); shade.addColorStop(1, 'rgba(0,0,0,.6)');
+          shade.addColorStop(0, 'rgba(255,255,255,.3)'); shade.addColorStop(.5, 'rgba(255,255,255,0)'); shade.addColorStop(.85, 'rgba(0,0,0,.18)'); shade.addColorStop(1, 'rgba(0,0,0,.5)');
           ctx.fillStyle = shade; ctx.fillRect(x - r, y - r, r * 2, r * 2);
-          if (r >= 3) { const hl = ctx.createRadialGradient(x - r * .38, y - r * .42, 0, x - r * .38, y - r * .42, r * .45); hl.addColorStop(0, 'rgba(255,255,255,.9)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = hl; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
+          if (r >= 2) { const hl = ctx.createRadialGradient(x - r * .35, y - r * .4, 0, x - r * .35, y - r * .4, r * .42); hl.addColorStop(0, 'rgba(255,255,255,.95)'); hl.addColorStop(.35, 'rgba(255,255,255,.55)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = hl; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
           ctx.restore();
           ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r - .5, 0, Math.PI * 2); ctx.stroke();
         }
