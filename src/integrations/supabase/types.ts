@@ -349,6 +349,10 @@ export type Database = {
         Returns: undefined
       }
       ob_store_trades: { Args: { p_trades: Json }; Returns: undefined }
+      ob_trade_profile: {
+        Args: { p_bin: number; p_from: string; p_to: string }
+        Returns: Json
+      }
       redeem_beta_code: { Args: { _code: string }; Returns: boolean }
     }
     Enums: {

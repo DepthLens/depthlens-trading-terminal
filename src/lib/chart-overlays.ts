@@ -16,6 +16,8 @@ export class ProfilePrimitive implements ISeriesPrimitive<Time>, OverlayProbe {
   rows: ProfileRow[] = [];
   split = false;
   total = 0;
+  /** Optional net delta (buy - sell) text beside each row; only set when buy/sell are exact. */
+  delta = false;
   private request = () => {};
   // Measurements are diagnostic output only, never input to the renderer.
   private lastDraw: OverlaySample[] = [];
@@ -50,6 +52,7 @@ export class ProfilePrimitive implements ISeriesPrimitive<Time>, OverlayProbe {
           ctx.fillStyle = this.colors.up; ctx.fillRect(x, a, buy, height);
           ctx.fillStyle = this.colors.down; ctx.fillRect(x + buy, a, bar - buy, height);
         } else { ctx.fillStyle = this.colors.unsplit; ctx.fillRect(x, a, bar, height); }
+        if(this.delta&&this.split&&height>=6){const d=row.buy-row.sell,abs=Math.abs(d),txt=(d>=0?'+':'−')+(abs>=1e6?`${(abs/1e6).toFixed(1)}M`:abs>=1e3?`${(abs/1e3).toFixed(1)}K`:abs>=10?abs.toFixed(0):abs.toFixed(2));ctx.globalAlpha=row.inArea||isPoc?1:.6;ctx.font=`${Math.max(8,Math.min(11,Math.floor(height+1)))}px ui-monospace, monospace`;ctx.textBaseline='middle';ctx.fillStyle=d>=0?this.colors.up:this.colors.down;const right=this.settings.position==='right';ctx.textAlign=right?'right':'left';ctx.fillText(txt,right?mediaSize.width-width-4:width+4,a+height/2);this.lastDraw.push({name:'Volume Profile delta',price:row.high,drawnY:a});}
         if(isPoc){ctx.globalAlpha=1;ctx.strokeStyle=this.colors.poc;ctx.lineWidth=1;ctx.strokeRect(x+.5,a+.5,Math.max(0,bar-1),Math.max(0,height-1));this.lastDraw.push({name:'Volume Profile POC outline',price:row.high,drawnY:a});}
       }
       ctx.globalAlpha = 1;

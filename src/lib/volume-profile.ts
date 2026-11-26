@@ -1,11 +1,38 @@
 import type { TradeSource, LivePrice } from './live-price';
 import { profileRowSize } from './tool-layout';
+import { addTailTrade, isRecordedProfile } from './volume-profile-recorded';
 
-export type ProfileSettings = { range: 'Visible' | '4h' | '12h' | '24h' | '3d'; rows: 'Auto' | '50' | '100'; valueArea: number; split: boolean; position: 'right' | 'left'; opacity: number };
+export const PROFILE_RANGES = ['Visible','Today','Yesterday','Asia','London','New York','1h','4h','12h','24h','3d','Custom'] as const;
+export type ProfileRange = typeof PROFILE_RANGES[number];
+export const RANGE_LABEL: Record<ProfileRange,string> = { Visible:'Visible range', Today:'Today (00:00 UTC)', Yesterday:'Yesterday', Asia:'Asia session', London:'London session', 'New York':'New York session', '1h':'Last 1h', '4h':'Last 4h', '12h':'Last 12h', '24h':'Last 24h', '3d':'Last 3 days', Custom:'Custom' };
+export type ProfileSettings = { range: ProfileRange; rows: 'Auto' | '50' | '100'; valueArea: number; split: boolean; position: 'right' | 'left'; opacity: number; customFrom: string; customTo: string; delta: boolean; naked: boolean };
 export const PROFILE_KEY = 'depthlens.volume-profile.v1';
-export const PROFILE_DEFAULT: ProfileSettings = { range: 'Visible', rows: 'Auto', valueArea: 70, split: true, position: 'right', opacity: .55 };
+export const PROFILE_DEFAULT: ProfileSettings = { range: 'Visible', rows: 'Auto', valueArea: 70, split: true, position: 'right', opacity: .55, customFrom: '', customTo: '', delta: false, naked: false };
+const isoOrEmpty = (v: unknown) => typeof v === 'string' && Number.isFinite(Date.parse(v)) ? v : '';
 export function restoreProfile(raw: string | null): ProfileSettings {
-  try { const d = JSON.parse(raw ?? 'null'); return { range: ['Visible','4h','12h','24h','3d'].includes(d?.range) ? d.range : 'Visible', rows: ['Auto','50','100'].includes(d?.rows) ? d.rows : 'Auto', valueArea: Math.max(50, Math.min(90, Number(d?.valueArea) || 70)), split: d?.split !== false, position: d?.position === 'left' ? 'left' : 'right', opacity: Math.max(.1, Math.min(.9, Number(d?.opacity) || .55)) }; } catch { return { ...PROFILE_DEFAULT }; }
+  try { const d = JSON.parse(raw ?? 'null'); return { range: (PROFILE_RANGES as readonly string[]).includes(d?.range) ? d.range : 'Visible', rows: ['Auto','50','100'].includes(d?.rows) ? d.rows : 'Auto', valueArea: Math.max(50, Math.min(90, Number(d?.valueArea) || 70)), split: d?.split !== false, position: d?.position === 'left' ? 'left' : 'right', opacity: Math.max(.1, Math.min(.9, Number(d?.opacity) || .55)), customFrom: isoOrEmpty(d?.customFrom), customTo: isoOrEmpty(d?.customTo), delta: d?.delta === true, naked: d?.naked === true }; } catch { return { ...PROFILE_DEFAULT }; }
+}
+const DAY = 86400000, HOUR = 3600000;
+export const SESSIONS = { Asia: [0, 9], London: [7, 16], 'New York': [12, 21] } as const;
+// Time window [from,to] in ms for a period. Sessions use the most recent one that has started (UTC hours).
+export function periodRange(s: Pick<ProfileSettings,'range'|'customFrom'|'customTo'>, now: number, visible?: { from: number; to: number } | null): { from: number; to: number } {
+  const today = Math.floor(now / DAY) * DAY;
+  switch (s.range) {
+    case 'Visible': return { from: visible?.from ?? now, to: visible?.to ?? now };
+    case 'Today': return { from: today, to: now };
+    case 'Yesterday': return { from: today - DAY, to: today };
+    case 'Asia': case 'London': case 'New York': {
+      const [a, b] = SESSIONS[s.range]; let start = today + a * HOUR;
+      if (start > now) start -= DAY;
+      return { from: start, to: Math.min(now, start + (b - a) * HOUR) };
+    }
+    case 'Custom': {
+      const f = Date.parse(s.customFrom), t = Date.parse(s.customTo);
+      if (!Number.isFinite(f) || !Number.isFinite(t) || t <= f) return { from: today, to: now };
+      return { from: f, to: Math.min(t, now) };
+    }
+    default: return { from: now - ({ '1h': 1, '4h': 4, '12h': 12, '24h': 24, '3d': 72 } as const)[s.range] * HOUR, to: now };
+  }
 }
 export type VolumeCandle = { time: number; low: number; high: number; volume: number; buy: number | null };
 type LiveBucket = { time: number; price: number; volume: number; buy: number; receivedAt: number };
@@ -27,6 +54,8 @@ export function applyProfileDelta(rows: ProfileRow[], trade: ProfileDelta, from:
 }
 export function addProfileTrade(symbol: string, tick: LivePrice) {
   if (tick.source !== 'trade' || !tick.exchange || !tick.size || tick.size <= 0) return;
+  // Recorded BTCUSDT history is Binance; only Binance live trades may extend it.
+  if (tick.exchange === 'binance' && isRecordedProfile(symbol)) addTailTrade({ time: tick.time, price: tick.price, size: tick.size, buy: tick.side === 'Buy' ? tick.size : 0 });
   const e = entry(tick.exchange,symbol), receivedAt = tick.receivedAt ?? Date.now();
   const time = Math.floor(tick.time / 60000) * 60000, key = `${time}:${tick.price}`, old=e.live.get(key);
   if(old) {old.volume+=tick.size;old.buy+=tick.side==='Buy'?tick.size:0;old.receivedAt=receivedAt;}
