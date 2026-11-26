@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Search, X, Layers, Check, ChevronDown, UserRound, LogOut, List, ExternalLink, MoreHorizontal, ArrowLeftRight } from 'lucide-react';
+import { X, Layers, Check, ChevronDown, UserRound, LogOut, ExternalLink, MoreHorizontal, ArrowLeftRight } from 'lucide-react';
 import { PriceChart } from '@/components/PriceChart';
 import { Heatmap } from '@/components/Heatmap';
 import { DomLadder } from '@/components/DomLadder';
@@ -30,7 +30,8 @@ import { marketStream } from '@/lib/market-stream';
 import { LiveQuote, SourceSelect, useSourceMode, type TradeBridge } from '@/components/LiveQuote';
 import { useTerminalMobile } from '@/hooks/use-terminal-mobile';
 import { bybitListQuotes } from '@/lib/market-data';
-import { MarketList, QuoteChange } from '@/components/MarketList';
+import { QuoteChange } from '@/components/MarketList';
+import { PairsSelector } from '@/components/PairsSelector';
 import { FlowRadarGear, openRadarSettings } from '@/components/FlowRadarGear';
 import { BookDebug } from '@/components/BookDebug';
 import { ToolsPanel } from '@/components/ToolsPanel';
@@ -104,12 +105,6 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
   const [fxNote,setFxNote]=useState('');
   const mobile=useTerminalMobile();
   const [mode,changeMode]=useSourceMode();
-  const [showPairs,setShowPairs]=useState(false);
-  // Desktop pairs list is folded by default and unfolds over the chart with a 200ms slide/fade.
-  const [pairsOpen,setPairsOpen]=useState(false),[pairsShown,setPairsShown]=useState(false),[pairsLeaving,setPairsLeaving]=useState(false);
-  const pairsRef=useRef<HTMLElement>(null);
-  useEffect(()=>{if(pairsOpen){setPairsShown(true);setPairsLeaving(false);return;}if(!pairsShown)return;setPairsLeaving(true);const t=setTimeout(()=>{setPairsShown(false);setPairsLeaving(false);},200);return()=>clearTimeout(t);},[pairsOpen]);
-  useEffect(()=>{if(!pairsOpen)return;const down=(e:PointerEvent)=>{if(pairsRef.current&&!pairsRef.current.contains(e.target as Node))setPairsOpen(false);};const key=(e:KeyboardEvent)=>{if(e.key==='Escape')setPairsOpen(false);};document.addEventListener('pointerdown',down);window.addEventListener('keydown',key);return()=>{document.removeEventListener('pointerdown',down);window.removeEventListener('keydown',key);};},[pairsOpen]);
   const [listSource,setListSource]=useState<'binance'|'bybit'>('binance');
   const listSourceRef=useRef(listSource);listSourceRef.current=listSource;
   const lastQuoteAt=useRef(0);
@@ -153,7 +148,7 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
   const active=state.tabs.find(t=>t.symbol===state.active)??state.tabs[0]??{symbol:'BTCUSDT',minutes:1};
   useEffect(()=>{setShowCustom(false);setCustomError('');},[active.symbol,active.minutes]);
   const tabsRef=useRef(state.tabs);tabsRef.current=state.tabs;
-  const select=useCallback((symbol:string)=>{setShowPairs(false);setPairsOpen(false);setFxNote('');if(tabsRef.current.length>=10&&!tabsRef.current.some(t=>t.symbol===symbol)){setNotice('Maximum 10 tabs. Close a tab to open another pair.');return;}setNotice('');setState(s=>{const n=openPair(s,symbol);return forex&&isSpotFx(symbol)&&!s.tabs.some(t=>t.symbol===symbol)?{...n,tabs:n.tabs.map(t=>t.symbol===symbol?{...t,minutes:60}:t)}:n;});},[forex]);
+  const select=useCallback((symbol:string)=>{setFxNote('');if(tabsRef.current.length>=10&&!tabsRef.current.some(t=>t.symbol===symbol)){setNotice('Maximum 10 tabs. Close a tab to open another pair.');return;}setNotice('');setState(s=>{const n=openPair(s,symbol);return forex&&isSpotFx(symbol)&&!s.tabs.some(t=>t.symbol===symbol)?{...n,tabs:n.tabs.map(t=>t.symbol===symbol?{...t,minutes:60}:t)}:n;});},[forex]);
   const isFx=forex&&isSpotFx(active.symbol);
   const searchEnter=(e:React.KeyboardEvent<HTMLInputElement>)=>{if(!forex||e.key!=='Enter')return;const p=normalizePair(query);if(p){select(p);setQuery('');}};
   const tabSyms=state.tabs.map(t=>t.symbol).join(',');
@@ -202,9 +197,8 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
   return <div data-mobile={mobile||undefined} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text mobile:min-h-0 mobile:pt-[env(safe-area-inset-top)] mobile:pr-[env(safe-area-inset-right)] mobile:pb-[env(safe-area-inset-bottom)] mobile:pl-[env(safe-area-inset-left)]">
     {mobile?<header className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b border-t-border bg-t-panel px-2 py-1">
       <Link to="/" aria-label="DepthLens home" className="flex size-10 items-center justify-center"><img src={logo.url} alt="DepthLens logo" className="size-7 shrink-0 rounded-md" /></Link>
-      <div role="button" tabIndex={0} aria-label="Open pairs" onClick={e=>{if((e.target as HTMLElement).closest('select,button'))return;setShowPairs(true);}} className="flex min-w-0 cursor-pointer items-center overflow-hidden tabular-nums"><div className="flex min-w-0 flex-col leading-tight"><span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[11px] font-bold">{active.symbol}</span><span className="shrink-0 rounded border border-t-border px-1 text-[9px] font-semibold uppercase text-t-muted">{isFx?'FX':listSource==='bybit'?'Bybit':'Binance'}</span><ChevronDown className="size-3 shrink-0 text-t-muted"/></span><div className="flex min-w-0 items-center gap-2 whitespace-nowrap text-base font-bold">{isFx?<FxLast symbol={active.symbol} quotes={quotes} specs={listSpecs}/>:<LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge} bookEnabled={Boolean(state.tools['Heatmap'] || state.tools['DOM'])} profileEnabled={Boolean(state.tools['Volume Profile'])} mode={mode} onModeChange={changeMode} onSourceChange={src=>setListSource(src==='bybit'?'bybit':'binance')} compact/>}<span className="text-xs font-semibold"><QuoteChange symbol={active.symbol} quotes={quotes}/></span></div></div></div>
+      <div className="flex min-w-0 items-center overflow-hidden tabular-nums"><div className="flex min-w-0 flex-col leading-tight"><span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[11px] font-bold">{active.symbol}</span><span className="shrink-0 rounded border border-t-border px-1 text-[9px] font-semibold uppercase text-t-muted">{isFx?'FX':listSource==='bybit'?'Bybit':'Binance'}</span><ChevronDown className="size-3 shrink-0 text-t-muted"/></span><div className="flex min-w-0 items-center gap-2 whitespace-nowrap text-base font-bold">{isFx?<FxLast symbol={active.symbol} quotes={quotes} specs={listSpecs}/>:<LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge} bookEnabled={Boolean(state.tools['Heatmap'] || state.tools['DOM'])} profileEnabled={Boolean(state.tools['Volume Profile'])} mode={mode} onModeChange={changeMode} onSourceChange={src=>setListSource(src==='bybit'?'bybit':'binance')} compact/>}<span className="text-xs font-semibold"><QuoteChange symbol={active.symbol} quotes={quotes}/></span></div></div></div>
       <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`size-11 ${control}`} aria-label="More" title="More"><MoreHorizontal/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} data-mobile="" align="end" className="w-64 border-t-border bg-t-panel p-1 text-sm text-t-text">
-        <DropdownMenuItem onSelect={()=>setShowPairs(true)} className="min-h-11 focus:bg-t-border focus:text-t-text"><List/>Pairs<span className="ml-auto text-xs text-t-muted">{listPairs.length}</span></DropdownMenuItem>
         <div className="flex min-h-11 items-center justify-between gap-2 px-2" onKeyDown={e=>e.stopPropagation()}><span className="text-t-muted">Price source</span><SourceSelect mode={mode} onChange={changeMode} className="h-10 rounded border border-t-border bg-t-bg px-2 text-sm text-t-text"/></div>
         <DropdownMenuItem onSelect={()=>setShowProfile(true)} className="min-h-11 focus:bg-t-border focus:text-t-text"><UserRound/>Profile & subscriptions</DropdownMenuItem>
         <DropdownMenuItem asChild className="min-h-11 focus:bg-t-border focus:text-t-text"><Link to={forex?'/terminal':'/forex'}><ArrowLeftRight/>{forex?'Switch to Futures':'Switch to Forex'}</Link></DropdownMenuItem>
@@ -221,23 +215,7 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
     {toolsPanel}
     {showProfile&&<ProfileModal account={account} theme={state.theme} setTheme={setTheme} forex={forex} onClose={()=>setShowProfile(false)}/>}
 
-    {mobile&&showPairs&&<div className="fixed inset-0 z-50 flex flex-col bg-t-bg/70 pt-[max(1.5rem,env(safe-area-inset-top))]" onClick={()=>setShowPairs(false)}><div role="dialog" aria-modal="true" aria-label="Pairs" onClick={e=>e.stopPropagation()} className="tp-in-up flex min-h-0 flex-1 flex-col rounded-t-xl border-t border-t-border bg-t-panel pb-[env(safe-area-inset-bottom)]">
-      <div className="flex items-center justify-between px-3 pt-2"><h2 className="text-base font-semibold">Pairs <span className="text-xs font-normal text-t-muted">{listPairs.length} {forex?'forex & gold':'USDT futures'} · {listSource==='bybit'?'Bybit':'Binance'}</span></h2><Button variant="ghost" size="icon" className={`size-10 ${control}`} aria-label="Close pairs" onClick={()=>setShowPairs(false)}><X/></Button></div>
-      <div className="p-3"><div className="relative"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-t-muted"/><input aria-label="Search futures pairs" value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={searchEnter} placeholder={forex?'Search pair, e.g. EUR/AUD':'Search pairs'} className="h-10 w-full rounded-md border border-t-border bg-t-bg pl-9 pr-2 text-base outline-none focus:border-t-accent"/></div></div>
-      {listFailing&&<p role="alert" className="px-3 pb-2 text-xs text-t-warning">Pair prices are not updating. Retrying…</p>}
-      <MarketList pairs={listPairs} quotes={quotes} specs={listSpecs} query={query} active={active.symbol} status={pairStatus} select={select}/>
-    </div></div>}
     <div className="flex min-h-0 flex-1">
-      {!mobile&&<aside ref={pairsRef} className="relative z-30 flex w-44 shrink-0 flex-col border-r border-t-border bg-t-panel">
-        <div className="border-b border-t-border p-2"><div className="relative"><Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-t-muted"/><input aria-label="Search futures pairs" value={query} onFocus={()=>setPairsOpen(true)} onChange={e=>{setQuery(e.target.value);setPairsOpen(true);}} onKeyDown={e=>{if(e.key==='Escape'){setPairsOpen(false);e.currentTarget.blur();return;}searchEnter(e);}} placeholder={forex?'Search pair, e.g. EUR/AUD':'Search pairs'} className="h-9 w-full rounded-md border border-t-border bg-t-bg pl-8 pr-2 text-sm outline-none focus:border-t-accent"/></div></div>
-        <div className="flex flex-col gap-2 p-2"><div className="rounded-md border border-t-accent/40 bg-t-border/30 px-2 py-1.5"><span className="block truncate text-xs font-semibold">{active.symbol}</span><QuoteChange symbol={active.symbol} quotes={quotes}/></div>
-          <Button variant="ghost" size="sm" aria-expanded={pairsShown&&!pairsLeaving} onClick={()=>setPairsOpen(o=>!o)} className={`justify-between ${control}`}><span className="flex items-center gap-1.5"><List className="size-4"/>Pairs</span><span className="text-[10px]">{listPairs.length}</span></Button></div>
-        <div className="mt-auto border-t border-t-border px-2 py-2 text-[10px] text-t-muted"><span className={feedLive?'text-t-up':'text-t-down'}>● </span>{feedLive?'Binance Futures · Live':'Binance Futures · Reconnecting'}</div>
-        {pairsShown&&<div role="dialog" aria-label="Pairs" className={`${pairsLeaving?'pl-out':'pl-in'} absolute left-full top-0 flex h-full w-72 flex-col border-r border-t-border bg-t-panel shadow-2xl`}>
-          <div className="flex items-center justify-between px-3 py-2 text-[10px] uppercase text-t-muted"><span>{forex?'Forex & Gold':'USDT Futures'}</span><span className="flex items-center gap-1">{listPairs.length} pairs<Button variant="ghost" size="icon" aria-label="Close pairs" onClick={()=>setPairsOpen(false)} className={`size-6 ${control}`}><X className="size-3"/></Button></span></div>
-          <MarketList pairs={listPairs} quotes={quotes} specs={listSpecs} query={query} active={active.symbol} status={pairStatus} select={select}/>
-        </div>}
-      </aside>}
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-11 shrink-0 border-b border-t-border bg-t-panel mobile:h-12">
         <div role="tablist" aria-label="Open pairs" className="terminal-tabs flex min-w-0 flex-1 overflow-x-auto pt-1" onWheel={e=>{if(e.currentTarget.scrollWidth>e.currentTarget.clientWidth){e.currentTarget.scrollLeft+=e.deltaY||e.deltaX;}}}>
@@ -249,12 +227,14 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
             {(isFx?FX_TFS:TFS).map(t=><Button key={t.label} variant="ghost" size="sm" aria-pressed={active.minutes===t.min} onClick={()=>timeframe(t.min)} className={`h-10 shrink-0 px-3 text-sm ${active.minutes===t.min?'btn-accent':control}`}>{t.label}</Button>)}
             {!isFx&&<Button variant="ghost" size="sm" aria-expanded={showCustom} onClick={()=>{setCustom(String(active.minutes));setShowCustom(s=>!s);}} className={`h-10 shrink-0 text-sm ${!TFS.some(t=>t.min===active.minutes)?'bg-t-accent text-t-bg':control}`}>{!TFS.some(t=>t.min===active.minutes)?`${active.minutes}m · Custom`:'Custom'}<ChevronDown/></Button>}
           </div>
+          <div className="ml-1"><PairsSelector pairs={listPairs} quotes={quotes} specs={listSpecs} active={active.symbol} status={pairStatus} select={select} query={query} setQuery={setQuery} onEnter={searchEnter} forex={forex} mobile={mobile}/></div>
           <Button variant="ghost" size="icon" className="btn-accent mx-1 size-10 shrink-0" aria-label="Order flow tools" title="Order flow tools" aria-expanded={showFlowSheet} onClick={()=>setShowFlowSheet(true)}><Layers/></Button>
         </div>{showCustom&&<div className="shrink-0 border-b border-t-border px-2 py-1">{customForm}</div>}</>:<>
         <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-t-border px-2 py-2">
           {(isFx?FX_TFS:TFS).map(t=><Button key={t.label} variant="ghost" size="sm" aria-pressed={active.minutes===t.min} onClick={()=>timeframe(t.min)} className={`px-2.5 ${active.minutes===t.min?'btn-accent':control}`}>{t.label}</Button>)}
           {!isFx&&<Button variant="ghost" size="sm" aria-expanded={showCustom} onClick={()=>{setCustom(String(active.minutes));setShowCustom(s=>!s);}} className={!TFS.some(t=>t.min===active.minutes)?'bg-t-accent text-t-bg':control}>{!TFS.some(t=>t.min===active.minutes)?`${active.minutes}m · Custom`:'Custom'}<ChevronDown/></Button>}
-        <div className="flex shrink-0 items-center px-2">
+        <div className="flex shrink-0 items-center gap-2 px-2">
+        <PairsSelector pairs={listPairs} quotes={quotes} specs={listSpecs} active={active.symbol} status={pairStatus} select={select} query={query} setQuery={setQuery} onEnter={searchEnter} forex={forex} mobile={mobile}/>
         <Button variant="ghost" size="sm" aria-expanded={showFlowSheet} onClick={()=>setShowFlowSheet(true)} className="btn-accent gap-1.5 font-semibold tracking-wide"><Layers/>Order flow<ChevronDown className="opacity-70"/></Button>
         </div>
           {showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>}
