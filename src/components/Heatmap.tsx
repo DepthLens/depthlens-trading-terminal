@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { colorFor, COLUMN_MS, type Column, type HeatTrade } from '@/lib/heatmap-data';
 import { LONG_WINDOWS, RECORDED_SYMBOL, loadRetentionStats, recordedOldestMs, retentionLine, setRecordedOldest, type RetentionStats, buildNavColumns, fillGaps, historyRange, loadRecorded, loadRecordedPage, loadRecorderStatus, pageEvery, pageSpanMs, peekRecordedPage, recordedEvery, snapshotsToColumns, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
-import { bubbleNumber, bubbleRadius, dominantBubble } from '@/lib/heatmap-bubbles';
+import { bubbleBuyShare, bubbleNumber, bubbleRadius, dominantBubble } from '@/lib/heatmap-bubbles';
 import { DEFAULT_PRO, HEATMAP_PRO_KEY, restoreProSettings, scaleRange, scalePos, columnFlows, sessionProfile, replayAdvance, type ProSettings, type ColumnFlow } from '@/lib/heatmap-pro';
 import { MarkerEngine, type Marker } from '@/lib/heatmap-markers';
 import { AlertGate, DEFAULT_ALERTS, alertsKey, restoreAlerts, type AlertSettings } from '@/lib/heatmap-alerts';
@@ -491,15 +491,25 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
             bubbleHits.push(hit); lastAt.set(bucket, hit);
           }
         }
-        // Solid flat circles, ~85% opacity, no glow/outline; text inside large ones.
+        // Glossy volumetric spheres: split buy/sell wedge, radial shading, specular highlight, dark rim, thin stems.
+        const path = [...bubbleHits].sort((m, n) => m.time - n.time || m.x - n.x);
+        ctx.globalAlpha = .55; ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(235,240,245,.7)'; ctx.beginPath();
+        path.forEach((b, i) => { if (i) ctx.lineTo(b.x, b.y); else ctx.moveTo(b.x, b.y); }); if (path.length > 1) ctx.stroke();
+        ctx.globalAlpha = 1;
         const order = [...bubbleHits].sort((m, n) => n.radius - m.radius);
-        ctx.globalAlpha = .85; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
-        for (const { x, y, radius, trade: t } of order) {
-          const buyMain = t.buy >= t.sell;
-          ctx.fillStyle = buyMain ? cUp : cDown; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+        for (const { x, y, radius: r, trade: t } of order) {
+          const share = bubbleBuyShare(t), buyMain = share >= .5;
+          ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+          ctx.fillStyle = buyMain ? cUp : cDown; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+          const minor = buyMain ? 1 - share : share;
+          if (minor > .02) { ctx.fillStyle = buyMain ? cDown : cUp; ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r + 1, -Math.PI / 2, -Math.PI / 2 + minor * Math.PI * 2); ctx.closePath(); ctx.fill(); }
+          const shade = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+          shade.addColorStop(0, 'rgba(255,255,255,.35)'); shade.addColorStop(.45, 'rgba(255,255,255,0)'); shade.addColorStop(.8, 'rgba(0,0,0,.25)'); shade.addColorStop(1, 'rgba(0,0,0,.6)');
+          ctx.fillStyle = shade; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+          if (r >= 3) { const hl = ctx.createRadialGradient(x - r * .38, y - r * .42, 0, x - r * .38, y - r * .42, r * .45); hl.addColorStop(0, 'rgba(255,255,255,.9)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = hl; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
+          ctx.restore();
+          ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r - .5, 0, Math.PI * 2); ctx.stroke();
         }
-        ctx.globalAlpha = 1; ctx.fillStyle = styles.getPropertyValue('--flow-text').trim();
-        for (const { x, y, radius, trade: t } of order) if (radius >= 10 && t.buy + t.sell >= c.pro.bubbleText) ctx.fillText(compact(t.buy + t.sell), x, y + 3);
         ctx.restore();
       }
       Object.assign(canvas.dataset, { bubbles: String(bubbleHits.length), largeBubbles: String(bubbleHits.filter(dot => dot.radius >= 11).length) });
