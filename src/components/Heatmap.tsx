@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { Crosshair, Info, Settings2, X } from 'lucide-react';
+import { Crosshair, Info, Settings2, SlidersHorizontal, History, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { colorFor, percentile, COLUMN_MS, type Column, type HeatTrade } from '@/lib/heatmap-data';
+import { colorFor, COLUMN_MS, type Column, type HeatTrade } from '@/lib/heatmap-data';
 import { LONG_WINDOWS, RECORDED_RETENTION_MS, RECORDED_SYMBOL, buildNavColumns, fillGaps, historyRange, loadRecorded, loadRecordedPage, loadRecorderStatus, pageEvery, pageSpanMs, peekRecordedPage, recordedEvery, snapshotsToColumns, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
-import { bubbleBuyShare, bubbleNumber, bubbleRadius, bubbleVolume, dominantBubble } from '@/lib/heatmap-bubbles';
-import { DEFAULT_WALLS, HEATMAP_WALLS_KEY, WALL_FADES, WALL_INFO, WALL_MIN_TIMES, WALL_PERCENTILES, WALL_STATUS_LABEL, detectWalls, restoreWallSettings, wallAge, wallAlpha, wallWidth, type Wall, type WallSettings } from '@/lib/heatmap-walls';
+import { bubbleNumber, bubbleRadius, dominantBubble } from '@/lib/heatmap-bubbles';
+import { DEFAULT_PRO, HEATMAP_PRO_KEY, restoreProSettings, scaleRange, scalePos, columnFlows, sessionProfile, replayAdvance, type ProSettings, type ColumnFlow } from '@/lib/heatmap-pro';
+import { MarkerEngine, type Marker } from '@/lib/heatmap-markers';
+import { AlertGate, DEFAULT_ALERTS, alertsKey, restoreAlerts, type AlertSettings } from '@/lib/heatmap-alerts';
+import { heatTape } from '@/lib/heatmap-tape';
+import { HeatmapProPanel, ReplayBar, TimeSales, type ReplayState } from '@/components/HeatmapPro';
+import { DEFAULT_WALLS, HEATMAP_WALLS_KEY, WALL_FADES, WALL_INFO, WALL_MIN_TIMES, WALL_PERCENTILES, WALL_STATUS_LABEL, detectWalls, restoreWallSettings, wallAge, wallAlpha, wallThreshold, wallWidth, type Wall, type WallSettings } from '@/lib/heatmap-walls';
 import { HEATMAP_UNIT_KEY, restoreHeatmapUnit, type HeatmapUnit } from '@/lib/terminal-state';
 import { calibrateHeatmap, getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
 import { orderBook } from '@/lib/order-book';
@@ -13,7 +19,7 @@ import { niceStep, heatColumnWidth, heatFitRows, heatMaxRows, depthRowSize } fro
 import { toolDemoEnabled, demoHeatmap } from '@/lib/tool-demo';
 import type { TradeBridge } from '@/components/LiveQuote';
 
-const AXIS_W = 72, AXIS_H = 26;
+const AXIS_W = 72, AXIS_H = 26, COB_W = 92, SVP_W = 64;
 const WINDOWS = [5, 15, 30, 60] as const;
 const GROUPINGS = [1, 2, 5, 10] as const;
 const DEFAULT_ROWS = 200;
@@ -70,6 +76,21 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const [walls, setWalls] = useState<WallSettings>(DEFAULT_WALLS);
   useEffect(() => { try { setWalls(restoreWallSettings(localStorage.getItem(HEATMAP_WALLS_KEY))); } catch { /* unavailable browser storage */ } }, []);
   const updateWalls = (patch: Partial<WallSettings>) => setWalls(prev => { const next = { ...prev, ...patch }; if (!toolDemoEnabled()) { try { localStorage.setItem(HEATMAP_WALLS_KEY, JSON.stringify(next)); } catch { /* unavailable browser storage */ } } return next; });
+  const [pro, setPro] = useState<ProSettings>(DEFAULT_PRO);
+  useEffect(() => { try { setPro(restoreProSettings(localStorage.getItem(HEATMAP_PRO_KEY))); } catch { /* unavailable browser storage */ } }, []);
+  const updatePro = (patch: Partial<ProSettings>) => setPro(prev => { const next = { ...prev, ...patch }; if (!toolDemoEnabled()) { try { localStorage.setItem(HEATMAP_PRO_KEY, JSON.stringify(next)); } catch { /* unavailable browser storage */ } } return next; });
+  // Phones collapse ladder, lower panels and Time & Sales into toggles (off until tapped).
+  const [mob, setMob] = useState({ ladder: false, panels: false, tape: false });
+  const [showPro, setShowPro] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<AlertSettings>(DEFAULT_ALERTS);
+  useEffect(() => { let off = false; void import('@/integrations/supabase/client').then(({ supabase }) => supabase.auth.getSession()).then(({ data }) => { if (off) return; const id = data.session?.user.id ?? null; setUserId(id); try { setAlerts(restoreAlerts(localStorage.getItem(alertsKey(id)))); } catch { /* unavailable browser storage */ } }).catch(() => { /* signed-out or offline: guest alerts */ }); return () => { off = true; }; }, []);
+  const updateAlerts = (patch: Partial<AlertSettings>) => setAlerts(prev => { const next = { ...prev, ...patch }; try { localStorage.setItem(alertsKey(userId), JSON.stringify(next)); } catch { /* unavailable browser storage */ } return next; });
+  const replayRef = useRef<ReplayState>({ on: false, playing: false, speed: 20, start: 0, t: 0 });
+  const [replayOn, setReplayOn] = useState(false);
+  const replayApi = useRef<{ start: (t: number) => void; exit: () => void } | null>(null);
+  const tapeReplay = useRef<{ t: number; price: number; notional: number; coin: number; side: 'Buy' | 'Sell' }[] | null>(null);
+  const [layoutBox, setLayoutBox] = useState({ H: 0, panelsH: 0 });
   // Time navigation: end === null follows live; otherwise the view is paused at that absolute end time.
   const [live, setLive] = useState(true);
   const [navLoading, setNavLoading] = useState(false);
@@ -79,10 +100,11 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const rangeRef = useRef<HTMLSpanElement>(null);
   // Mutable view/drawing state; the rAF loop reads these refs so drawing never rerenders React.
   const view = useRef({ center: NaN, rows: DEFAULT_ROWS });
-  const controls = useRef({ intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit, walls });
-  controls.current = { intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit, walls };
+  const showLadder = mobile ? mob.ladder : pro.ladder, showPanels = mobile ? mob.panels : (pro.volume || pro.cvd || pro.imbalance), showTape = mobile ? mob.tape : pro.tape;
+  const controls = useRef({ intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit, walls, pro, alerts, showLadder, showPanels });
+  controls.current = { intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit, walls, pro, alerts, showLadder, showPanels };
   const specRef = useRef(spec); specRef.current = spec;
-  useEffect(() => { redrawRef.current?.(); }, [intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit, walls]);
+  useEffect(() => { redrawRef.current?.(); }, [intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit, walls, pro, showLadder, showPanels]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -101,7 +123,12 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     let buffer = fixture?.buffer ?? entry.buffer;
     let depthSpan = fixture?.span ?? entry.depthSpan;
     let fitted = Boolean(fixture), lastGrouping = controls.current.grouping;
-    let normValue = 1, normAt = 0, cacheKey = "", paintedTime = 0;
+    let lastCutKey = '', scaleLo = 0, scaleHi = 1, normAt = 0, cacheKey = "", paintedTime = 0, userAt = 0;
+    const layout = { W: 0, H: 0, panelsH: 0, ladderW: 0 };
+    const markerEngine = new MarkerEngine(); let markerKey = '', markerAt = 0;
+    let markerHits: { x: number; y: number; m: Marker }[] = [];
+    let flows: ColumnFlow[] = [], flowsKey = '', profile: ReturnType<typeof sessionProfile> = { bins: new Map(), poc: null, from: null }, profileAt = 0;
+    const gate = new AlertGate(), mountedAt = Date.now(); let alertMarkerAt = Date.now(), tapeAt = 0;
     off.width = 3600;
     let source = orderBook.debug().source;
     let stopped = false, hidden = document.hidden, frame = 0, dirty = true;
@@ -201,7 +228,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
 
     // Trades flow in through the bridge; every trade is aggregated immediately.
     const onTrade = (tick: { price: number; size?: number; side?: 'Buy' | 'Sell'; tradeCount?: number }) => {
-      if (!demo && tick.size !== undefined) buffer.trade(tick.price, tick.size, tick.side, tick.tradeCount);
+      if (!demo && tick.size !== undefined) { buffer.trade(tick.price, tick.size, tick.side, tick.tradeCount); heatTape.push({ t: Date.now(), price: tick.price, coin: tick.size, notional: tick.price * tick.size, side: tick.side ?? 'Buy' }); }
     };
     bridge.current.heat = onTrade;
 
@@ -261,7 +288,14 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const W = cssW - AXIS_W, H = cssH - AXIS_H;
+      const c0 = controls.current;
+      const cobW = mobileRef.current ? 62 : COB_W, svpW = mobileRef.current ? 40 : SVP_W;
+      const ladderW = c0.showLadder ? cobW + (c0.pro.svp ? svpW : 0) : 0;
+      const nPanels = c0.showPanels ? (mobileRef.current ? 3 : [c0.pro.volume, c0.pro.cvd, c0.pro.imbalance].filter(Boolean).length) : 0;
+      const panelsH = nPanels ? Math.min(Math.round(cssH * .45), c0.pro.panelH) : 0;
+      const W = cssW - AXIS_W - ladderW, H = cssH - AXIS_H - panelsH;
+      if (layout.H !== H || layout.panelsH !== panelsH) setLayoutBox({ H, panelsH });
+      Object.assign(layout, { W, H, panelsH, ladderW });
       const styles = getComputedStyle(canvas);
       const cBg = styles.getPropertyValue('--heat-bg').trim();
       const cMuted = styles.getPropertyValue('--heat-text').trim();
@@ -272,10 +306,17 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       ctx.fillStyle = cBg; ctx.fillRect(0, 0, cssW, cssH);
 
       const c = controls.current;
+      const dbg0 = orderBook.debug();
       if(lastGrouping!==c.grouping){view.current.rows=Math.max(20,view.current.rows*lastGrouping/c.grouping);lastGrouping=c.grouping;}
       const cols = windowColumns();
       const price = fixture ? demoPrice : bridge.current.latest?.price ?? cols.at(-1)?.price ?? NaN;
       if (!Number.isFinite(view.current.center)) { view.current.center = price; view.current.rows = heatFitRows(depthSpan || buffer.bucket * 150, buffer.bucket, c.grouping); }
+      // Auto-fit: keep the price inside the middle half and the fitted depth band filling the height (paused 10s after manual zoom/drag).
+      if (c.pro.autoFit && !navOn() && fitted && Number.isFinite(price) && Date.now() - userAt > 10000) {
+        const fitRows = heatFitRows(depthSpan || buffer.bucket * 150, buffer.bucket, c.grouping), halfBand = view.current.rows * buffer.bucket * c.grouping / 2;
+        if (Math.abs(price - view.current.center) > halfBand * .5) view.current.center = price;
+        if (Math.abs(view.current.rows - fitRows) > 1) view.current.rows = fitRows;
+      }
       const center = view.current.center;
       if (!cols.length || !Number.isFinite(center)) {
         ctx.fillStyle = cMuted; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
@@ -289,7 +330,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       const N = cols.length;
 
       // Sample a bounded histogram every five seconds, never on animation frames.
-      const scaleChanged = Date.now() - normAt >= 5000;
+      const cutKey = `${c.pro.lowCut}:${c.pro.highCut}:${rows}:${g}`;
+      const scaleChanged = Date.now() - normAt >= 5000 || cutKey !== lastCutKey; lastCutKey = cutKey;
       if (scaleChanged) {
         const values: number[] = [];
         const bookColumns=cols.filter(col=>!col.priceOnly&&!col.gap);
@@ -300,10 +342,10 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
             if (value > 0) values.push(value);
           }
         }
-        normValue = percentile(values, 98) || 1; normAt = Date.now();
+        const sr = scaleRange(values, c.pro.lowCut, c.pro.highCut); scaleLo = sr.lo; scaleHi = sr.hi; normAt = Date.now();
       }
-      const norm = normValue / Math.max(.05, c.intensity);
-      const key = `${top}:${rows}:${g}:${norm}:${c.windowMin}:${longVersion}`;
+      const norm = scaleHi;
+      const key = `${top}:${rows}:${g}:${scaleLo}:${scaleHi}:${c.intensity}:${c.pro.lowCut}:${c.pro.highCut}:${c.windowMin}:${longVersion}`;
       const rebuild = key !== cacheKey || scaleChanged || off.height !== rows;
       if (off.height !== rows) off.height = rows;
       const columnImage = offCtx.createImageData(1, rows);
@@ -314,8 +356,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         const slot = slotOf(col, ci);
         for (let r = 0; r < rows; r++) {
           const o = r * 4, value = buffer.groupedCell(col, Math.floor(top / buffer.bucket) - r * g, g);
-          const [rr, gg, bb] = colorFor(Math.sqrt(value / norm));
-          columnImage.data[o] = rr; columnImage.data[o + 1] = gg; columnImage.data[o + 2] = bb; columnImage.data[o + 3] = col.priceOnly ? 0 : col.gap ? 70 : value > 0 ? 255 : 0;
+          const [rr, gg, bb] = colorFor(scalePos(value, scaleLo, scaleHi, c.intensity));
+          columnImage.data[o] = rr; columnImage.data[o + 1] = gg; columnImage.data[o + 2] = bb; columnImage.data[o + 3] = col.priceOnly ? 0 : col.gap ? 70 : value > scaleLo * .25 ? 255 : 0;
         }
         offCtx.putImageData(columnImage, slot, 0);
       }
@@ -328,6 +370,12 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         ctx.drawImage(off, slot, 0, 1, rows, x0 + ci * colW, 0, colW, H);
       }
       // Wall lines: large resting orders that persisted, with Held / Pulled / Broken outcomes.
+      const xAt = (t: number) => {
+        if (!N || t <= (cols[0]?.time ?? 0)) return x0;
+        let a = 0, b = N - 1;
+        while (a < b) { const m = (a + b + 1) >> 1; if ((cols[m]?.time ?? 0) <= t) a = m; else b = m - 1; }
+        return x0 + (a + .5) * colW;
+      };
       const wallLabels: { y: number; text: string; color: string; alpha: number; peak: number }[] = [];
       const ws = c.walls, nowT = navOn() ? (cols.at(-1)?.time ?? Date.now()) : Date.now();
       if (ws.on) {
@@ -337,12 +385,6 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
           const r = detectWalls(cols, buffer.bucket, midIdx - half, midIdx + half, ws, nowT);
           wallList = r.walls; wallThr = r.threshold; wallKey = wk; wallAt = Date.now();
         }
-        const xAt = (t: number) => {
-          if (!N || t <= (cols[0]?.time ?? 0)) return x0;
-          let a = 0, b = N - 1;
-          while (a < b) { const m = (a + b + 1) >> 1; if ((cols[m]?.time ?? 0) <= t) a = m; else b = m - 1; }
-          return x0 + (a + .5) * colW;
-        };
         ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
         for (const w of wallList) {
           if ((w.status === 'pulled' && !ws.showPulled) || (w.status === 'broken' && !ws.showBroken)) continue;
@@ -363,12 +405,64 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         }
         ctx.restore(); ctx.setLineDash([]);
       }
+      // Markers (Pulled / Iceberg / Absorption): processed incrementally once per second, drawn per frame.
+      const pr = c.pro, anyMarker = pr.pulled || pr.iceberg || pr.absorption;
+      markerHits = [];
+      if (anyMarker) {
+        const stepMs = N > 1 ? Math.max(1000, ((cols.at(-1)?.time ?? 0) - (cols[0]?.time ?? 0)) / (N - 1)) : 1000;
+        const mk = `${buffer.bucket}:${c.windowMin}:${navOn()}:${pr.pulled}:${pr.iceberg}:${pr.absorption}`;
+        if (mk !== markerKey || (cols.at(-1)?.time ?? 0) < markerEngine.processedTo) { markerEngine.reset(); markerKey = mk; markerAt = 0; }
+        if (Date.now() - markerAt >= 1000) {
+          markerAt = Date.now();
+          const midIdx = Math.floor((top - band / 2) / buffer.bucket), half = Math.min(600, Math.ceil(band / buffer.bucket));
+          const thr = ws.on ? wallThr : wallThreshold(cols, midIdx - half, midIdx + half, 1);
+          markerEngine.process(cols, buffer.bucket, thr, pr, stepMs);
+        }
+        ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip(); ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+        const t0 = cols[0]?.time ?? 0, t1 = cols.at(-1)?.time ?? 0;
+        for (const m of markerEngine.markers) {
+          if (m.time < t0 || m.time > t1 || !pr[m.kind]) continue;
+          const x = xAt(m.time), y = priceToY(m.price, top, band, H);
+          if (y < -6 || y > H + 6 || x < 0) continue;
+          markerHits.push({ x, y, m });
+          ctx.globalAlpha = .95; ctx.lineWidth = 1; ctx.strokeStyle = cBg;
+          if (m.kind === 'pulled') { ctx.fillStyle = cMuted; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = cBg; ctx.fillText('P', x, y + 3); }
+          else if (m.kind === 'iceberg') { ctx.fillStyle = styles.getPropertyValue('--flow-text').trim(); ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+          else { const up = m.side === 'sell'; ctx.fillStyle = up ? cUp : cDown; ctx.beginPath(); if (up) { ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y + 5); ctx.lineTo(x - 6, y + 5); } else { ctx.moveTo(x, y + 6); ctx.lineTo(x + 6, y - 5); ctx.lineTo(x - 6, y - 5); } ctx.closePath(); ctx.fill(); ctx.stroke(); }
+        }
+        ctx.restore();
+      }
+      canvas.dataset['markers'] = markerHits.map(h => h.m.kind[0]).join('');
+      // Alerts (live only): once per wall/marker key every 5 minutes, toast plus optional browser notification.
+      const al = c.alerts;
+      if (!demo && !navOn() && (al.newWall || al.wallPulled || al.nearWall || al.iceberg || al.absorption) && Date.now() - mountedAt > 3000) {
+        const fire = (key: string, text: string) => {
+          if (!gate.allow(key, Date.now())) return;
+          toast(text, { description: 'Heatmap alert · context, not a signal' });
+          try { if (al.browser && typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification('DepthLens', { body: text }); } catch { /* notifications unavailable */ }
+          canvas.dataset['alerts'] = String(Number(canvas.dataset['alerts'] ?? 0) + 1);
+        };
+        const fmt = (p: number) => specRef.current ? formatPrice(p, specRef.current) : p.toFixed(2);
+        for (const w of wallList) {
+          const side = w.side === 'bid' ? 'Bid' : 'Ask';
+          if (al.newWall && w.status === 'active' && w.size >= al.wallSize && w.start >= mountedAt - 300000) fire(`wall:${w.index}`, `New ${side.toLowerCase()} wall ${compact(w.size)} at ${fmt(w.price)}`);
+          if (al.wallPulled && w.status === 'pulled' && (w.endedAt ?? 0) >= mountedAt) fire(`pulled:${w.index}`, `${side} wall pulled at ${fmt(w.price)} (${compact(w.peak)})`);
+          if (al.nearWall && w.status === 'active' && Number.isFinite(price) && Math.abs(price - w.price) / price * 100 <= al.nearPct) fire(`near:${w.index}`, `Price within ${al.nearPct}% of ${side.toLowerCase()} wall ${compact(w.size)} at ${fmt(w.price)}`);
+        }
+        for (const m of markerEngine.markers) {
+          if (m.time <= alertMarkerAt) continue;
+          if (m.kind === 'iceberg' && al.iceberg) fire(`iceberg:${m.index}`, `Iceberg at ${fmt(m.price)} · hidden ≈ ${compact(m.hidden ?? 0)} USDT`);
+          if (m.kind === 'absorption' && al.absorption) fire(`absorption:${m.index}`, `Absorption at ${fmt(m.price)} · buy ${compact(m.buy ?? 0)} / sell ${compact(m.sell ?? 0)}`);
+        }
+        alertMarkerAt = markerEngine.markers.at(-1)?.time ?? alertMarkerAt;
+      }
       Object.assign(canvas.dataset, { walls: String(wallLabels.length), wallStatuses: wallLabels.map(l => l.text.split(' · ')[2] ?? 'Active').join(',') });
       Object.assign(canvas.dataset, { rows: String(rows), bucket: String(buffer.bucket), depthSpan: String(depthSpan), columnWidth: String(colW), demo: String(demo), normalizationAt: String(normAt) });
       // Trade bubbles: radius ∝ sqrt(volume), green buyer / red seller aggressor.
       bubbleHits = [];
       if (c.bubblesOn) {
         ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+        const lastAt = new Map<number, (typeof bubbleHits)[number]>();
         for (let ci = Math.max(0, Math.floor(-x0 / colW)); ci < N; ci++) {
           const col = cols[ci]; if (!col) continue;
           if (col.gap) continue;
@@ -379,40 +473,26 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
             const executionPrice = t.price ?? (bucket + .5) * buffer.bucket;
             const y = priceToY(executionPrice, top, band, H);
             if (y < -radius || y > H + radius) continue;
-            bubbleHits.push({ x, y, radius, price: executionPrice, time: col.time, trade: t });
+            const prev = lastAt.get(bucket);
+            if (prev && x - prev.x < prev.radius + radius && Math.abs(prev.y - y) < Math.max(prev.radius, radius)) {
+              const m = prev.trade, tot = m.buy + m.sell + t.buy + t.sell;
+              const merged = { buy: m.buy + t.buy, sell: m.sell + t.sell, count: (m.count ?? 0) + (t.count ?? 0), buyCoin: (m.buyCoin ?? 0) + (t.buyCoin ?? 0), sellCoin: (m.sellCoin ?? 0) + (t.sellCoin ?? 0), price: ((prev.price * (m.buy + m.sell)) + executionPrice * (t.buy + t.sell)) / tot };
+              prev.trade = merged; prev.x = (prev.x + x) / 2; prev.radius = bubbleRadius(merged.buy + merged.sell, 0); prev.price = merged.price; prev.y = priceToY(merged.price, top, band, H);
+              continue;
+            }
+            const hit = { x, y, radius, price: executionPrice, time: col.time, trade: t as HeatTrade };
+            bubbleHits.push(hit); lastAt.set(bucket, hit);
           }
         }
-        // Thin stems link consecutive executions along the trade path.
-        ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1; ctx.beginPath();
-        for (let i = 1; i < bubbleHits.length; i++) {
-          const p = bubbleHits[i - 1]!, q = bubbleHits[i]!;
-          if (q.time === p.time) continue;
-          ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y);
-        }
-        ctx.stroke();
-        // Volumetric spheres: smaller drawn last so they stay visible on top of larger ones.
+        // Solid flat circles, ~85% opacity, no glow/outline; text inside large ones.
         const order = [...bubbleHits].sort((m, n) => n.radius - m.radius);
+        ctx.globalAlpha = .85; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
         for (const { x, y, radius, trade: t } of order) {
-          const share = bubbleBuyShare(t), buyMain = share >= .5, minor = buyMain ? 1 - share : share;
-          ctx.save(); ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.clip();
-          ctx.fillStyle = buyMain ? cUp : cDown; ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-          if (minor > .08 && radius >= 4) {
-            const start = Math.PI / 2 - minor * Math.PI, end = Math.PI / 2 + minor * Math.PI;
-            ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, radius, start, end); ctx.closePath();
-            ctx.fillStyle = buyMain ? cDown : cUp; ctx.fill();
-          }
-          const shade = ctx.createRadialGradient(x - radius * .32, y - radius * .35, radius * .05, x, y, radius);
-          shade.addColorStop(0, 'rgba(255,255,255,0.55)'); shade.addColorStop(.25, 'rgba(255,255,255,0.12)');
-          shade.addColorStop(.7, 'rgba(0,0,0,0.12)'); shade.addColorStop(1, 'rgba(0,0,0,0.6)');
-          ctx.fillStyle = shade; ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-          if (radius >= 5) {
-            const spec = ctx.createRadialGradient(x - radius * .35, y - radius * .4, 0, x - radius * .35, y - radius * .4, radius * .32);
-            spec.addColorStop(0, 'rgba(255,255,255,0.85)'); spec.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = spec; ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-          }
-          ctx.restore();
-          ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = .75; ctx.stroke();
+          const buyMain = t.buy >= t.sell;
+          ctx.fillStyle = buyMain ? cUp : cDown; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
         }
+        ctx.globalAlpha = 1; ctx.fillStyle = styles.getPropertyValue('--flow-text').trim();
+        for (const { x, y, radius, trade: t } of order) if (radius >= 10 && t.buy + t.sell >= c.pro.bubbleText) ctx.fillText(compact(t.buy + t.sell), x, y + 3);
         ctx.restore();
       }
       Object.assign(canvas.dataset, { bubbles: String(bubbleHits.length), largeBubbles: String(bubbleHits.filter(dot => dot.radius >= 11).length) });
@@ -433,6 +513,12 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       }
       ctx.lineWidth = 1; ctx.strokeStyle = styles.getPropertyValue('--flow-text').trim(); ctx.stroke();
 
+      if (navOn() && Date.now() - tapeAt >= 500) {
+        tapeAt = Date.now(); const out: NonNullable<typeof tapeReplay.current> = [];
+        for (let i = N - 1; i >= 0 && out.length < 150; i--) { const col = cols[i]; if (!col) continue;
+          for (const [k, t] of col.trades) { const p2 = t.price ?? (k + .5) * buffer.bucket; if (t.buy > 0) out.push({ t: col.time, price: p2, notional: t.buy, coin: t.buyCoin ?? t.buy / p2, side: 'Buy' }); if (t.sell > 0) out.push({ t: col.time, price: p2, notional: t.sell, coin: t.sellCoin ?? t.sell / p2, side: 'Sell' }); } }
+        tapeReplay.current = out;
+      } else if (!navOn()) tapeReplay.current = null;
       // Wall labels at the right edge of the plot; the biggest walls win when labels would overlap.
       if (wallLabels.length) {
         ctx.save(); ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
@@ -455,7 +541,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       if (!demo && !navOn() && dbg.bestAsk !== null) { const y = priceToY(dbg.bestAsk, top, band, H); if (y >= 0 && y <= H) { ctx.strokeStyle = cDown; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
 
       // Axes.
-      ctx.strokeStyle = cBorder; ctx.beginPath(); ctx.moveTo(W + 0.5, 0); ctx.lineTo(W + 0.5, H); ctx.moveTo(0, H + 0.5); ctx.lineTo(W, H + 0.5); ctx.stroke();
+      ctx.strokeStyle = cBorder; ctx.beginPath(); ctx.moveTo(W + 0.5, 0); ctx.lineTo(W + 0.5, H + panelsH); ctx.moveTo(0, H + 0.5); ctx.lineTo(W, H + 0.5); ctx.moveTo(0, H + panelsH + 0.5); ctx.lineTo(W, H + panelsH + 0.5); ctx.stroke();
       ctx.font = '10px sans-serif'; ctx.fillStyle = cMuted;
       const step = niceStep(band / 8);
       ctx.textAlign = 'left';
@@ -477,7 +563,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         const t = col.time;
         if (spaced ? ci % labelEvery !== 0 : (t % 60000 >= COLUMN_MS || Math.floor(t / 60000) % Math.max(1, Math.ceil((withDate ? 96 : 60) / (60 * colW))) !== 0)) continue;
         const d = new Date(t);
-        ctx.fillText(withDate ? stamp(t) : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, x0 + (ci + 0.5) * colW, H + 16);
+        ctx.fillText(withDate ? stamp(t) : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, x0 + (ci + 0.5) * colW, H + panelsH + 16);
       }
       // Visible range with date and time (DOM text, updated only when it changes).
       const rangeText = `${stamp(fromT)} – ${navOn() ? stamp(toT) : `${stamp(toT)} · live`}`;
@@ -507,8 +593,106 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       const lw = 120, lh = 6, lx = 10, ly = H - 14;
       for (let i = 0; i < lw; i++) { const [r, gg, bb] = colorFor(i / (lw - 1)); ctx.fillStyle = `rgb(${r},${gg},${bb})`; ctx.fillRect(lx + i, ly, 1, lh); }
       ctx.fillStyle = cMuted; ctx.textAlign = 'left';
-      ctx.fillText('0', lx, ly - 3);
+      ctx.fillText(compact(scaleLo), lx, ly - 3);
       ctx.textAlign = 'right'; ctx.fillText(`${compact(norm)} USDT`, lx + lw, ly - 3);
+
+      // ---- Right side: price-aligned order book ladder (COB) and session volume profile (SVP) ----
+      if (ladderW) {
+        const lx0 = W + AXIS_W, rowH = H / rows, topIdx = Math.floor(top / buffer.bucket);
+        ctx.fillStyle = cBg; ctx.fillRect(lx0, 0, ladderW, H + panelsH);
+        ctx.strokeStyle = cBorder; ctx.beginPath(); ctx.moveTo(lx0 + .5, 0); ctx.lineTo(lx0 + .5, H + panelsH); ctx.stroke();
+        let book: Column | undefined;
+        for (let i = N - 1; i >= 0; i--) { const cc = cols[i]; if (cc && !cc.gap && !cc.empty && !cc.priceOnly && cc.data.length) { book = cc; break; } }
+        const ref = book && Number.isFinite(book.price) ? book.price : price, pIdx = Math.floor(ref / buffer.bucket);
+        const live = !navOn() && !demo, bb = live ? dbg0.bestBid : null, ba = live ? dbg0.bestAsk : null;
+        const vals: number[] = []; let vmax = 0;
+        for (let r = 0; r < rows; r++) { const v = book ? buffer.groupedCell(book, topIdx - r * g, g) : 0; vals.push(v); vmax = Math.max(vmax, v); }
+        ctx.save(); ctx.beginPath(); ctx.rect(lx0, 0, ladderW, H); ctx.clip();
+        ctx.font = `${Math.max(8, Math.min(10, rowH - 1))}px sans-serif`; ctx.textAlign = 'right';
+        const showNums = rowH >= 9;
+        for (let r = 0; r < rows; r++) {
+          const v = vals[r] ?? 0, idx = topIdx - r * g, y = r * rowH;
+          const rowLow = idx - g + 1, isBid = idx < pIdx, isAsk = rowLow > pIdx;
+          const isPriceRow = pIdx >= rowLow && pIdx <= idx;
+          const bestRow = (bb !== null && Math.floor(bb / buffer.bucket) >= rowLow && Math.floor(bb / buffer.bucket) <= idx) || (ba !== null && Math.floor(ba / buffer.bucket) >= rowLow && Math.floor(ba / buffer.bucket) <= idx);
+          if (isPriceRow) { ctx.globalAlpha = .25; ctx.fillStyle = cMuted; ctx.fillRect(lx0, y, cobW, Math.max(1, rowH)); ctx.globalAlpha = 1; }
+          if (v > 0 && vmax > 0 && (isBid || isAsk)) {
+            const len = Math.max(1, (cobW - 4) * Math.sqrt(v / vmax));
+            ctx.globalAlpha = .7; ctx.fillStyle = isBid ? cUp : cDown; ctx.fillRect(lx0 + 2, y + (rowH > 3 ? .5 : 0), len, Math.max(1, rowH - (rowH > 3 ? 1 : 0)));
+            ctx.globalAlpha = 1;
+            if (showNums) { ctx.fillStyle = styles.getPropertyValue('--flow-text').trim(); ctx.fillText(compact(v), lx0 + cobW - 3, y + rowH / 2 + 3); }
+          }
+          if (bestRow) { ctx.strokeStyle = styles.getPropertyValue('--flow-text').trim(); ctx.lineWidth = 1; ctx.strokeRect(lx0 + 1.5, y + .5, cobW - 3, Math.max(1, rowH - 1)); }
+        }
+        canvas.dataset['ladderRows'] = String(rows); canvas.dataset['ladderRowH'] = rowH.toFixed(3);
+        if (c.pro.svp) {
+          const sx0 = lx0 + cobW;
+          if (Date.now() - profileAt >= 1000) {
+            profileAt = Date.now();
+            const pool = (cols.at(-1)?.time ?? 0) - (cols[0]?.time ?? 0) > (buffer.columns.at(-1)?.time ?? 0) - (buffer.columns[0]?.time ?? 0) ? cols : buffer.columns;
+            profile = sessionProfile(pool, buffer.bucket, navOn() ? (cols.at(-1)?.time ?? Date.now()) : Date.now());
+          }
+          const rowsV = new Array<number>(rows).fill(0);
+          for (const [k, v] of profile.bins) { const r = Math.floor((topIdx - k) / g); if (r >= 0 && r < rows) rowsV[r] = (rowsV[r] ?? 0) + v; }
+          const pocRow = profile.poc === null ? -1 : Math.floor((topIdx - profile.poc) / g);
+          const pmax = Math.max(1, ...rowsV);
+          ctx.strokeStyle = cBorder; ctx.beginPath(); ctx.moveTo(sx0 + .5, 0); ctx.lineTo(sx0 + .5, H); ctx.stroke();
+          for (let r = 0; r < rows; r++) {
+            const v = rowsV[r] ?? 0; if (!v) continue;
+            const y = r * rowH, len = Math.max(1, (svpW - 4) * v / pmax);
+            ctx.globalAlpha = r === pocRow ? 1 : .55; ctx.fillStyle = r === pocRow ? 'rgb(250,204,21)' : cMuted; ctx.fillRect(sx0 + 2, y + (rowH > 3 ? .5 : 0), len, Math.max(1, rowH - (rowH > 3 ? 1 : 0)));
+            ctx.globalAlpha = 1;
+            if (showNums && (r === pocRow || len > 24)) { ctx.fillStyle = styles.getPropertyValue('--flow-text').trim(); ctx.fillText(compact(v), sx0 + svpW - 3, y + rowH / 2 + 3); }
+          }
+          if (pocRow >= 0 && pocRow < rows) { ctx.strokeStyle = 'rgb(250,204,21)'; ctx.strokeRect(sx0 + 1.5, pocRow * rowH + .5, svpW - 3, Math.max(1, rowH - 1)); }
+          canvas.dataset['poc'] = profile.poc === null ? '' : String((profile.poc + .5) * buffer.bucket);
+        }
+        ctx.restore();
+        ctx.font = '9px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = cMuted;
+        ctx.globalAlpha = .9; ctx.fillStyle = cBg; ctx.fillRect(lx0 + 1, H - 13, ladderW - 2, 12); ctx.globalAlpha = 1; ctx.fillStyle = cMuted;
+        ctx.fillText(navOn() ? 'Book @ view time' : 'Book', lx0 + 3, H - 4);
+        if (c.pro.svp) ctx.fillText(profile.from !== null ? `SVP ${pad2(new Date(profile.from).getUTCHours())}:${pad2(new Date(profile.from).getUTCMinutes())}Z` : 'SVP —', lx0 + cobW + 3, H - 4);
+      }
+
+      // ---- Lower panels sharing the heatmap time axis: Volume, CVD, Order book imbalance ----
+      if (panelsH) {
+        const pr2 = c.pro, list = (mobileRef.current ? ['volume', 'cvd', 'imbalance'] : (['volume', 'cvd', 'imbalance'] as const).filter(k => pr2[k])) as ('volume' | 'cvd' | 'imbalance')[];
+        const fk = `${N}:${cols[0]?.time}:${cols.at(-1)?.time}:${pr2.imbPct}:${pr2.cvdSession}:${longVersion}`;
+        if (fk !== flowsKey) { flows = columnFlows(cols, buffer.bucket, pr2.imbPct, pr2.cvdSession); flowsKey = fk; }
+        const ph = panelsH / list.length, first = Math.max(0, Math.floor(-x0 / colW));
+        ctx.fillStyle = cBg; ctx.fillRect(0, H + 1, W + AXIS_W, panelsH - 1);
+        list.forEach((kind, pi) => {
+          const py0 = H + pi * ph, pTop = py0 + 12, pH = ph - 16;
+          ctx.strokeStyle = cBorder; ctx.beginPath(); ctx.moveTo(0, py0 + .5); ctx.lineTo(W + AXIS_W, py0 + .5); ctx.stroke();
+          ctx.save(); ctx.beginPath(); ctx.rect(0, py0, W, ph); ctx.clip();
+          let label = '', valueText = '';
+          if (kind === 'volume') {
+            let vmax = 0; for (let i = first; i < N; i++) { const f = flows[i]; if (f) vmax = Math.max(vmax, f.buy + f.sell); }
+            for (let i = first; i < N; i++) { const f = flows[i]; if (!f || !vmax) continue;
+              const x = x0 + i * colW, hb = pH * f.buy / vmax, hs = pH * f.sell / vmax, base = pTop + pH, bw = Math.max(1, colW - (colW > 3 ? 1 : 0));
+              ctx.fillStyle = cUp; ctx.fillRect(x, base - hb, bw, hb); ctx.fillStyle = cDown; ctx.fillRect(x, base - hb - hs, bw, hs); }
+            const lf = flows.at(-1); label = 'Volume (buy / sell)'; valueText = lf ? compact(lf.buy + lf.sell) : '';
+          } else {
+            const get = (f: ColumnFlow) => kind === 'cvd' ? f.cvd : f.imbalance;
+            let lo = kind === 'imbalance' ? -1 : Infinity, hi = kind === 'imbalance' ? 1 : -Infinity;
+            if (kind === 'cvd') for (let i = first; i < N; i++) { const f = flows[i]; if (f && !f.empty) { lo = Math.min(lo, f.cvd); hi = Math.max(hi, f.cvd); } }
+            if (!(hi > lo)) { lo = Math.min(lo, 0) - 1; hi = Math.max(hi, 0) + 1; }
+            const yOf = (v: number) => pTop + pH - (v - lo) / (hi - lo) * pH;
+            if (lo < 0 && hi > 0) { ctx.strokeStyle = cBorder; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(0, yOf(0)); ctx.lineTo(W, yOf(0)); ctx.stroke(); ctx.setLineDash([]); }
+            ctx.beginPath(); let on = false, last: number | null = null;
+            for (let i = first; i < N; i++) { const f = flows[i]; const v = f && !f.empty ? get(f) : null;
+              if (v === null || v === undefined) { on = false; continue; }
+              const x = x0 + (i + .5) * colW, y = yOf(v); if (on) ctx.lineTo(x, y); else ctx.moveTo(x, y); on = true; last = v; }
+            ctx.lineWidth = 1.25; ctx.strokeStyle = kind === 'cvd' ? styles.getPropertyValue('--flow-text').trim() : (last ?? 0) >= 0 ? cUp : cDown; ctx.stroke();
+            label = kind === 'cvd' ? `CVD${pr2.cvdSession ? ' (resets 00:00 UTC)' : ''}` : `Imbalance ±${pr2.imbPct}%`;
+            valueText = last === null ? '—' : kind === 'cvd' ? `${last < 0 ? '−' : ''}${compact(Math.abs(last))}` : last.toFixed(2);
+          }
+          ctx.restore();
+          ctx.font = '9px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = cMuted; ctx.fillText(label, 6, py0 + 10);
+          ctx.fillText(valueText, W + 6, py0 + 10);
+        });
+        canvas.dataset['panels'] = list.join(',');
+      }
 
       // Collecting hint until one minute of history exists.
       if (cols.length < 60) {
@@ -535,10 +719,22 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       dirty = true; schedule();
     };
     navApi.current = { goTo, goLive };
+    // Replay: moves the paused view end forward in time; every layer reads the same columns, so all stay in sync.
+    const replayTimer = setInterval(() => {
+      const r = replayRef.current;
+      if (!r.on || !r.playing) return;
+      const { t, done } = replayAdvance(r.t, 100, r.speed, Date.now() - 1000);
+      r.t = t; nav.current.end = t; dirty = true; schedule();
+      if (done) { r.playing = false; }
+    }, 100);
+    replayApi.current = {
+      start: (t0: number) => { const r = replayRef.current; r.on = true; r.playing = true; r.start = clampEnd(t0); r.t = r.start; heatTape.clear(); goTo(r.start); nav.current.end = r.start; },
+      exit: () => { const r = replayRef.current; r.on = false; r.playing = false; tapeReplay.current = null; goLive(); },
+    };
     // Positive dx (drag right) moves into the past; reaching the current time resumes live follow.
     const panTime = (dxPx: number) => {
       if (!dxPx) return;
-      const W = canvas.getBoundingClientRect().width - AXIS_W, w = controls.current.windowMin, step = navStep(w);
+      const W = layout.W || canvas.getBoundingClientRect().width - AXIS_W, w = controls.current.windowMin, step = navStep(w);
       const colW = heatColumnWidth(W, Math.round(w * 60 / step));
       const next = (nav.current.end ?? Date.now()) - (dxPx / colW) * step * 1000;
       if (next >= Date.now() - 500) { if (navOn()) goLive(); return; }
@@ -553,7 +749,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1;
       const sx = e.deltaX * unit, sy = e.deltaY * unit;
       if (e.shiftKey || Math.abs(sx) > Math.abs(sy)) { panTime(-(sx || sy)); return; }
-      if (!e.ctrlKey && e.clientX - rect.left <= rect.width - AXIS_W) {
+      if (!e.ctrlKey && e.clientX - rect.left <= (layout.W || rect.width - AXIS_W)) {
         wheelAcc += sy;
         if (Math.abs(wheelAcc) < 100 || Date.now() - wheelAt < 200) return;
         const list: number[] = [...WINDOWS, ...(recordedOn() ? LONG_WINDOWS : [])];
@@ -563,7 +759,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         if (next !== undefined && next !== controls.current.windowMin) setWindowMin(next);
         return;
       }
-      const H = rect.height - AXIS_H;
+      const H = layout.H || rect.height - AXIS_H; userAt = Date.now();
       const c = controls.current, bs = buffer.bucket * c.grouping;
       const band = view.current.rows * bs;
       const top = view.current.center + band / 2;
@@ -594,7 +790,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         touches.set(e.pointerId, e.clientY);
         if (touches.size === 2) {
           // Pinch zooms the price range (fingers apart = fewer rows = zoom in).
-          view.current.rows = Math.min(heatMaxRows(bridge.current.latest?.price ?? demoPrice, buffer.bucket, controls.current.grouping), Math.max(20, pinchRows * pinchStart / Math.max(10, spread())));
+          view.current.rows = Math.min(heatMaxRows(bridge.current.latest?.price ?? demoPrice, buffer.bucket, controls.current.grouping), Math.max(20, pinchRows * pinchStart / Math.max(10, spread()))); userAt = Date.now();
           dirty = true; schedule(); return;
         }
       }
@@ -605,7 +801,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
           axis = Math.abs(e.clientX - startX) > Math.abs(e.clientY - startY) ? 'time' : 'price';
         }
         if (axis === 'time') { panTime(e.clientX - lastX); lastX = e.clientX; return; }
-        const H = canvas.getBoundingClientRect().height - AXIS_H;
+        const H = layout.H || canvas.getBoundingClientRect().height - AXIS_H; userAt = Date.now();
         const c = controls.current, band = view.current.rows * buffer.bucket * c.grouping;
         view.current.center += ((e.clientY - lastY) / H) * band;
         lastY = e.clientY; dirty = true; schedule();
@@ -616,10 +812,24 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     // Hover (or tap) tooltip: price, date/time and resting size at that cell.
     const showTip = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect();
-      const W = rect.width - AXIS_W, H = rect.height - AXIS_H;
+      const W = layout.W || rect.width - AXIS_W, H = layout.H || rect.height - AXIS_H;
       const tip = tooltipRef.current;
       if (!tip) return;
       const px = clientX - rect.left, py = clientY - rect.top;
+      const mh = markerHits.find(h => Math.hypot(px - h.x, py - h.y) <= 8);
+      if (mh && px < W && py < H) {
+        const m = mh.m, pt = specRef.current ? formatPrice(m.price, specRef.current) : m.price.toFixed(2);
+        const extra = m.kind === 'iceberg' ? `\nTraded ${compact(m.size)} USDT · hidden ≈ ${compact(m.hidden ?? 0)} USDT` : m.kind === 'absorption' ? `\nAggressive buy ${compact(m.buy ?? 0)} / sell ${compact(m.sell ?? 0)} USDT` : `\nRemoved ≈ ${compact(m.size)} USDT`;
+        tip.style.display = 'block'; tip.style.whiteSpace = 'pre-line';
+        tip.style.left = `${Math.max(4, Math.min(px + 12, W - 240))}px`; tip.style.top = `${Math.max(4, Math.min(py - 12, H - 90))}px`;
+        tip.textContent = `${m.kind === 'pulled' ? 'P · Pulled' : m.kind === 'iceberg' ? '◆ Iceberg' : '▲ Absorption'} · ${pt} · ${stamp(m.time, true)}\n${m.detail}${extra}\nContext, not a signal.`;
+        return;
+      }
+      if (px < W && py > H && py < H + layout.panelsH && flows.length) {
+        const cols = windowColumns(), colW = heatColumnWidth(W, cols.length), ci = Math.floor((px - (W - cols.length * colW)) / colW), f = flows[ci];
+        if (f) { tip.style.display = 'block'; tip.style.whiteSpace = 'pre-line'; tip.style.left = `${Math.max(4, Math.min(px + 12, W - 200))}px`; tip.style.top = `${Math.max(4, py - 70)}px`;
+          tip.textContent = `${stamp(f.time, true)}\nBuy ${compact(f.buy)} · Sell ${compact(f.sell)} USDT\nCVD ${f.cvd < 0 ? '−' : ''}${compact(Math.abs(f.cvd))}\nImbalance ${f.imbalance === null ? '—' : f.imbalance.toFixed(2)}`; return; }
+      }
       const hit = bubbleHits.filter(dot => Math.hypot(px - dot.x, py - dot.y) <= dot.radius + 4).sort((a, b) => Math.hypot(px - a.x, py - a.y) - Math.hypot(px - b.x, py - b.y))[0];
       if (hit && px < W && py < H) {
         const unit = controls.current.bubbleUnit, priceText = specRef.current ? formatPrice(hit.price, specRef.current) : hit.price.toFixed(2);
@@ -669,7 +879,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointercancel', onUp);
-      redrawRef.current = null; centerRef.current = null; navApi.current = null;
+      redrawRef.current = null; centerRef.current = null; navApi.current = null; replayApi.current = null; clearInterval(replayTimer); replayRef.current.on = false; replayRef.current.playing = false;
       canvas.removeEventListener('pointerleave', onLeave);
       if (bridge.current.heat === onTrade) bridge.current.heat = null;
     };
@@ -693,8 +903,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     </div> : <>
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-t-border px-3 py-1.5 text-xs">
       <span className="font-semibold text-t-text">{symbol} · Heatmap</span>
-      <label className="flex items-center gap-1.5 text-t-muted">Intensity
-        <input type="range" min={0.2} max={3} step={0.1} value={intensity} onChange={e => setIntensity(Number(e.target.value))} aria-label="Intensity" className="h-1 w-24 accent-current" />
+      <label className="flex items-center gap-1.5 text-t-muted">Contrast
+        <input type="range" min={0.2} max={3} step={0.1} value={intensity} onChange={e => setIntensity(Number(e.target.value))} aria-label="Contrast" className="h-1 w-24 accent-current" />
       </label>
       <span className="flex items-center gap-1" role="group" aria-label="Time window">
         {[...WINDOWS, ...(recordedAvail ? LONG_WINDOWS : [])].map(w => <Button key={w} variant="ghost" size="sm" aria-pressed={windowMin === w} onClick={() => setWindowMin(w)} className={`h-6 px-2 text-xs ${windowMin === w ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{windowLabel(w)}</Button>)}
@@ -721,6 +931,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         <span title={WALL_INFO} aria-label={WALL_INFO} role="img" data-testid="wall-info" className="cursor-help"><Info className="size-3" /></span>
       </span>
       <Button variant="ghost" size="sm" onClick={center} className={`h-6 px-2 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-3" />Center</Button>
+      <Button variant="ghost" size="sm" aria-pressed={showPro} onClick={() => setShowPro(v => !v)} className={`h-6 px-2 text-xs ${showPro ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`} aria-label="Heatmap panels, markers and alerts"><SlidersHorizontal className="size-3" />Panels & alerts</Button>
+      <Button variant="ghost" size="sm" aria-pressed={replayOn} disabled={!recordedAvail && collected < 120} onClick={() => setReplayOn(v => { if (v) replayApi.current?.exit(); return !v; })} className={`h-6 px-2 text-xs ${replayOn ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}><History className="size-3" />Replay</Button>
       <span className="flex items-center gap-1" role="group" aria-label="Go to time">
         <span className="text-t-muted">Go to</span>
         {gotoInput('h-6 bg-t-panel px-1 text-xs')}
@@ -730,6 +942,13 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       <span className="basis-full text-[10px] text-t-muted tabular-nums"><span data-testid="history-kept">{retentionText}</span>{!recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL && <> · <span data-testid="recorded-only">Recorded history: BTCUSDT only</span></>}{recordedAvail && <> · <span data-testid="history-range">{historyText}</span></>}</span>
     </div>
     </>}
+    {mobile && <div className="flex h-9 shrink-0 items-center gap-1.5 overflow-x-auto border-b border-t-border px-2 text-xs" role="group" aria-label="Heatmap panels">
+      {([['ladder', 'Book'], ['panels', 'Panels'], ['tape', 'T&S']] as const).map(([k, label]) => <Button key={k} variant="ghost" size="sm" aria-pressed={mob[k]} onClick={() => setMob(m => ({ ...m, [k]: !m[k] }))} className={`h-7 px-2.5 text-xs ${mob[k] ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{label}</Button>)}
+      <Button variant="ghost" size="sm" aria-pressed={replayOn} disabled={!recordedAvail && collected < 120} onClick={() => setReplayOn(v => { if (v) replayApi.current?.exit(); return !v; })} className={`h-7 px-2.5 text-xs ${replayOn ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}><History className="size-3.5" />Replay</Button>
+    </div>}
+    {replayOn && <ReplayBar mobile={mobile} replayRef={replayRef} api={replayApi} minTime={Date.now() - (recordedAvail ? RECORDED_RETENTION_MS : collected * 1000)} onExit={() => { replayApi.current?.exit(); setReplayOn(false); }} />}
+    {!mobile && showPro && <div className="absolute right-2 top-full z-30 mt-1 max-h-[70vh] w-80 overflow-y-auto rounded-md border border-t-border bg-t-panel p-3 text-xs text-t-text shadow-lg" style={{ top: 0, marginTop: 44 }}><div className="mb-2 flex items-center justify-between"><span className="font-semibold">Panels, markers & alerts</span><Button variant="ghost" size="icon" className={`size-6 ${control}`} aria-label="Close panels and alerts" onClick={() => setShowPro(false)}><X className="size-3.5" /></Button></div><HeatmapProPanel pro={pro} update={updatePro} alerts={alerts} updateAlerts={updateAlerts} recordedNote={!recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL} signedIn={userId !== null} /></div>}
+    <div className="flex min-h-0 flex-1">
     <div className="relative min-h-0 flex-1">
       {toolDemoEnabled() && <span className="demo-watermark">DEMO DATA</span>}
       <canvas ref={canvasRef} className={`block size-full ${mobile ? 'touch-none' : ''}`} aria-label={`${symbol} order book heatmap`} />
@@ -741,6 +960,14 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       {recordedShown && <span data-testid="recorded-label" className="pointer-events-none absolute top-2 left-3 text-[10px] mobile:text-xs text-t-muted">{liveBinance ? 'Recorded history' : 'Recorded history: Binance BTCUSDT'}</span>}
       {admin && <span data-testid="recorder-status" className="pointer-events-none absolute top-6 left-3 text-[10px] text-t-muted tabular-nums">{status ? `Recorder: last ${status.last ? new Date(status.last).toLocaleTimeString('en-US', { hour12: false }) : '—'} · ${status.lastHour}/h · gaps>15s ${status.gaps} (max ${Math.round(status.maxGapSec)}s) · ${status.lastSource ?? '—'}` : 'Recorder: …'}</span>}
       {priceOnlyFrom !== null && <span data-testid="price-only-label" className="pointer-events-none absolute bottom-2 right-3 text-[10px] mobile:text-xs text-t-muted">Price and trades only.{priceOnlyFrom > 0 ? ` Order book colors start at ${new Date(priceOnlyFrom).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}</span>}
+      {layoutBox.panelsH > 0 && !mobile && <div role="separator" aria-label="Resize lower panels" aria-orientation="horizontal" className="absolute left-0 right-0 z-10 h-1.5 -translate-y-1/2 cursor-row-resize hover:bg-t-accent/40" style={{ top: layoutBox.H }}
+        onPointerDown={e => { const startY = e.clientY, startH = pro.panelH; const el = e.currentTarget; el.setPointerCapture(e.pointerId);
+          const move = (ev: PointerEvent) => setPro(p => ({ ...p, panelH: Math.min(400, Math.max(60, startH - (ev.clientY - startY))) }));
+          const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); setPro(p => { try { if (!toolDemoEnabled()) localStorage.setItem(HEATMAP_PRO_KEY, JSON.stringify(p)); } catch { /* unavailable browser storage */ } return p; }); };
+          el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); }} />}
+      {showTape && mobile && <div className="absolute inset-x-0 bottom-0 z-20 h-[42%] border-t border-t-border bg-t-panel"><TimeSales symbol={symbol} spec={spec} minSize={pro.tapeMin} bigSize={pro.tapeBig} replay={tapeReplay} onMin={v => updatePro({ tapeMin: v })} /></div>}
+    </div>
+    {showTape && !mobile && <div className="w-56 shrink-0 border-l border-t-border"><TimeSales symbol={symbol} spec={spec} minSize={pro.tapeMin} bigSize={pro.tapeBig} replay={tapeReplay} onMin={v => updatePro({ tapeMin: v })} /></div>}
     </div>
     {mobile && showSettings && <div className="fixed inset-0 z-50 flex flex-col justify-end bg-t-bg/70" onClick={() => setShowSettings(false)}>
       <div role="dialog" aria-modal="true" aria-label="Heatmap settings" onClick={e => e.stopPropagation()} className="max-h-[85dvh] space-y-4 overflow-y-auto rounded-t-xl border-t border-t-border bg-t-panel px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-sm text-t-text">
@@ -754,8 +981,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
           </div>
           {!live && liveButton('h-10 w-full text-sm')}
         </div>
-        <label className="flex h-10 items-center gap-3 text-t-muted">Intensity
-          <input type="range" min={0.2} max={3} step={0.1} value={intensity} onChange={e => setIntensity(Number(e.target.value))} aria-label="Intensity" className="h-10 flex-1 accent-current" />
+        <label className="flex h-10 items-center gap-3 text-t-muted">Contrast
+          <input type="range" min={0.2} max={3} step={0.1} value={intensity} onChange={e => setIntensity(Number(e.target.value))} aria-label="Contrast" className="h-10 flex-1 accent-current" />
         </label>
         <div className="space-y-1"><span className="text-t-muted">Time window</span><div className="grid grid-cols-4 gap-2" role="group" aria-label="Time window">
           {[...WINDOWS, ...(recordedAvail ? LONG_WINDOWS : [])].map(w => <Button key={w} variant="ghost" aria-pressed={windowMin === w} onClick={() => setWindowMin(w)} className={`h-10 text-sm ${windowMin === w ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{windowLabel(w)}</Button>)}
@@ -789,6 +1016,9 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
               <input type="checkbox" checked={walls.showBroken} onChange={e => updateWalls({ showBroken: e.target.checked })} aria-label="Show broken walls" className="size-5 accent-current" />
             </label>
           </>}
+        </div>
+        <div className="space-y-2 border-t border-t-border pt-3"><span className="font-semibold">Panels, markers & alerts</span>
+          <HeatmapProPanel mobile pro={pro} update={updatePro} alerts={alerts} updateAlerts={updateAlerts} recordedNote={!recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL} signedIn={userId !== null} />
         </div>
       </div>
     </div>}

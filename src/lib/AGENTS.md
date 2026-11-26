@@ -3,3 +3,4 @@
 - Short-TF Patterns: supplied atlas flow-radar-patterns.ts stays unchanged; flow-radar-pattern-layer.ts maps radar candles to native markers, no new traffic.
 - flow-radar-mtf.ts is the supplied file kept unchanged; FlowRadar fetches one REST kline set per needed interval (radar, chart, higher tfs) on the existing 30s poll so higher-timeframe results are placed only where they were known.
 - Heatmap wall detection/status rules live in browser-safe `heatmap-walls.ts` over Column arrays, so live and recorded history share one rule set; Heatmap.tsx re-detects at most once per second and only draws per frame.
+- Pro heatmap rules (colour scale, flows, SVP, replay step) live in browser-safe heatmap-pro.ts, markers in heatmap-markers.ts (incremental, 1 Hz), alerts in heatmap-alerts.ts and the tape ring in heatmap-tape.ts; Heatmap.tsx draws ladder/panels/markers on its single canvas so everything shares one time/price mapping and replay just moves the view end.

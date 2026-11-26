@@ -22,14 +22,17 @@ export function percentile(values: number[], p: number): number {
   return sorted[i]!;
 }
 
-// Dark navy → blue → cyan → white → yellow → orange.
+// Near-black navy → dark blue → blue → cyan → green → yellow → orange → red → near-white (biggest walls).
 const STOPS: [number, [number, number, number]][] = [
-  [0, [13, 20, 40]],
-  [0.2, [30, 58, 138]],
-  [0.42, [34, 211, 238]],
-  [0.62, [245, 245, 245]],
-  [0.82, [250, 204, 21]],
-  [1, [249, 115, 22]],
+  [0, [6, 10, 26]],
+  [0.12, [14, 30, 90]],
+  [0.26, [30, 90, 220]],
+  [0.4, [20, 200, 230]],
+  [0.53, [40, 210, 90]],
+  [0.66, [245, 225, 40]],
+  [0.78, [250, 150, 30]],
+  [0.9, [235, 45, 35]],
+  [1, [255, 240, 230]],
 ];
 export function colorFor(t: number): [number, number, number] {
   const x = Math.min(1, Math.max(0, t));
