@@ -1,6 +1,6 @@
 // Browser-safe heatmap buffer: one order book snapshot column per second, typed arrays, 60 minutes max.
 export type TradeSide = 'Buy' | 'Sell';
-export type Column = { time: number; origin: number; data: Float32Array; trades: Map<number, { buy: number; sell: number }>; price: number; gap: boolean; priceOnly?: boolean };
+export type Column = { time: number; origin: number; data: Float32Array; trades: Map<number, { buy: number; sell: number }>; price: number; gap: boolean; priceOnly?: boolean; empty?: boolean };
 export const COLUMN_MS = 1000;
 export const MAX_COLUMNS = 3600; // 60 minutes of one-second columns
 export const ROWS = 1024; // buckets per column, centered on the price at sample time

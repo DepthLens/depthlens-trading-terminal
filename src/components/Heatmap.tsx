@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { Crosshair, Settings2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { colorFor, percentile, COLUMN_MS, type Column } from '@/lib/heatmap-data';
-import { LONG_WINDOWS, RECORDED_SYMBOL, fillGaps, historyRange, loadRecorded, loadRecorderStatus, recordedEvery, snapshotToColumn, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
+import { LONG_WINDOWS, RECORDED_RETENTION_MS, RECORDED_SYMBOL, buildNavColumns, fillGaps, historyRange, loadRecorded, loadRecordedPage, loadRecorderStatus, pageEvery, pageSpanMs, peekRecordedPage, recordedEvery, snapshotToColumn, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
 import { calibrateHeatmap, getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
 import { orderBook } from '@/lib/order-book';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
@@ -15,6 +15,12 @@ const WINDOWS = [5, 15, 30, 60] as const;
 const GROUPINGS = [1, 2, 5, 10] as const;
 const DEFAULT_ROWS = 200;
 const windowLabel = (w: number) => w >= 1440 ? `${w / 1440 === 7 ? '7d' : `${w / 60}h`}` : w >= 120 ? `${w / 60}h` : `${w}m`;
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const JUMPS = [['−15m', 15 * 60000], ['−1h', 3600000], ['−4h', 4 * 3600000], ['−1d', 86400000]] as const;
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const stamp = (t: number, seconds = false) => { const d = new Date(t); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${pad2(d.getHours())}:${pad2(d.getMinutes())}${seconds ? `:${pad2(d.getSeconds())}` : ''}`; };
+const toLocalInput = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
 
 function compact(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
@@ -53,6 +59,13 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const [grouping, setGrouping] = useState<number>(1);
   const [minBubble, setMinBubble] = useState(10000);
   const [bubblesOn, setBubblesOn] = useState(true);
+  // Time navigation: end === null follows live; otherwise the view is paused at that absolute end time.
+  const [live, setLive] = useState(true);
+  const [navLoading, setNavLoading] = useState(false);
+  const [gotoValue, setGotoValue] = useState('');
+  const nav = useRef<{ end: number | null; pendingCenter: boolean }>({ end: null, pendingCenter: false });
+  const navApi = useRef<{ goTo: (end: number) => void; goLive: () => void } | null>(null);
+  const rangeRef = useRef<HTMLSpanElement>(null);
   // Mutable view/drawing state; the rAF loop reads these refs so drawing never rerenders React.
   const view = useRef({ center: NaN, rows: DEFAULT_ROWS });
   const controls = useRef({ intensity, windowMin, grouping, minBubble, bubblesOn });
@@ -87,6 +100,50 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     let longCols: Column[] = [], longKey = '', longAt = 0, longVersion = 0, shown = false, long = false;
     const recordedOn = () => !demo && (historySource ?? source) === 'binance' && symbol === RECORDED_SYMBOL;
     setRecordedAvail(recordedOn()); setRecordedShown(false); setHistoryError(null); setRange(null);
+    // ---- Time navigation state (paged recorded history + live buffer) ----
+    let navCols: Column[] = [], navKey = '', wheelAcc = 0, wheelAt = 0, lastRange = '';
+    const navPageCols = new Map<string, Column[]>(), navFailedAt = new Map<string, number>(), navPending = new Set<string>();
+    nav.current = { end: null, pendingCenter: false }; setLive(true); setNavLoading(false);
+    const navOn = () => nav.current.end !== null;
+    const oldestMs = () => recordedOn() ? Date.now() - RECORDED_RETENTION_MS : (buffer.columns[0]?.time ?? Date.now());
+    const clampEnd = (end: number) => Math.min(Date.now(), Math.max(oldestMs() + 60000, end));
+    const navStep = (w: number) => w <= 60 ? 1 : recordedEvery(w);
+    const requestPage = (every: number, p: number) => {
+      const k = `${every}:${p}`;
+      if (navPending.has(k) || Date.now() - (navFailedAt.get(k) ?? 0) < 10000) return;
+      navPending.add(k); setNavLoading(true);
+      void loadRecordedPage(every, p).then(() => { if (stopped) return; navKey = ''; setHistoryError(null); dirty = true; schedule(); })
+        .catch(error => { navFailedAt.set(k, Date.now()); if (!stopped) setHistoryError(error instanceof Error ? error.message : String(error)); })
+        .finally(() => { navPending.delete(k); if (!stopped && !navPending.size) setNavLoading(false); });
+    };
+    const recordedRange = (w: number, from: number, end: number): Column[] => {
+      const every = pageEvery(w), span = pageSpanMs(every), out: Column[] = [];
+      const first = Math.floor(from / span), last = Math.floor((end - 1) / span);
+      for (let p = first; p <= last; p++) {
+        const ck = `${every}:${p}:${buffer.bucket}`;
+        let pageCols = navPageCols.get(ck);
+        if (!pageCols) {
+          const rows = peekRecordedPage(every, p);
+          if (!rows) { requestPage(every, p); continue; }
+          pageCols = rows.map(r => snapshotToColumn(r, buffer.bucket)); navPageCols.set(ck, pageCols);
+          if (navPageCols.size > 24) { const o = navPageCols.keys().next().value; if (o !== undefined) navPageCols.delete(o); }
+        }
+        for (const c of pageCols) if (c.time >= from && c.time < end) out.push(c);
+      }
+      // Prefetch the next older page so dragging back stays fast.
+      if ((first - 1) * span >= Date.now() - RECORDED_RETENTION_MS && !peekRecordedPage(every, first - 1)) requestPage(every, first - 1);
+      return out;
+    };
+    const navColumns = (): readonly Column[] => {
+      const w = controls.current.windowMin, step = navStep(w);
+      const end = Math.floor((nav.current.end ?? Date.now()) / (step * 1000)) * step * 1000, from = end - w * 60000;
+      const k = `${w}:${end}:${buffer.bucket}`;
+      if (k === navKey) return navCols;
+      const rec = recordedOn() ? recordedRange(w, from, end) : [];
+      navCols = buildNavColumns(buffer.columns, rec, from, end, step); navKey = k; longVersion++;
+      if (nav.current.pendingCenter) { const lastCol = [...navCols].reverse().find(c => !c.empty && Number.isFinite(c.price)); if (lastCol) { view.current.center = lastCol.price; nav.current.pendingCenter = false; } }
+      return navCols;
+    };
     const requestHistory = (w: number, before: number) => {
       if (loading || (requestedWindow === w && Date.now() - recCheckedAt < 10000)) return;
       loading = true; requestedWindow = w; recCheckedAt = Date.now();
@@ -100,6 +157,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     };
     const windowColumns = (): readonly Column[] => {
       const w = controls.current.windowMin;
+      if (navOn()) { long = false; if (shown) { shown = false; setRecordedShown(false); } return navColumns(); }
       long = w > 60 && recordedOn();
       if (!long) {
         const liveCols = buffer.columns.slice(-Math.min(w, 60) * 60);
@@ -123,7 +181,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       if (shown !== rec.length > 0) { shown = rec.length > 0; setRecordedShown(shown); }
       return longCols;
     };
-    const slotOf = (col: Column, ci: number) => long ? ci : Math.floor(col.time / 1000) % 3600;
+    const slotOf = (col: Column, ci: number) => long || navOn() ? ci : Math.floor(col.time / 1000) % 3600;
 
     // Trades flow in through the bridge; every trade is aggregated immediately.
     const onTrade = (tick: { price: number; size?: number; side?: 'Buy' | 'Sell' }) => {
@@ -290,8 +348,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       // Best bid / ask thin lines.
       const dbg = orderBook.debug();
       ctx.lineWidth = 1;
-      if (!demo && dbg.bestBid !== null) { const y = priceToY(dbg.bestBid, top, band, H); if (y >= 0 && y <= H) { ctx.strokeStyle = cUp; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
-      if (!demo && dbg.bestAsk !== null) { const y = priceToY(dbg.bestAsk, top, band, H); if (y >= 0 && y <= H) { ctx.strokeStyle = cDown; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
+      if (!demo && !navOn() && dbg.bestBid !== null) { const y = priceToY(dbg.bestBid, top, band, H); if (y >= 0 && y <= H) { ctx.strokeStyle = cUp; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
+      if (!demo && !navOn() && dbg.bestAsk !== null) { const y = priceToY(dbg.bestAsk, top, band, H); if (y >= 0 && y <= H) { ctx.strokeStyle = cDown; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
 
       // Axes.
       ctx.strokeStyle = cBorder; ctx.beginPath(); ctx.moveTo(W + 0.5, 0); ctx.lineTo(W + 0.5, H); ctx.moveTo(0, H + 0.5); ctx.lineTo(W, H + 0.5); ctx.stroke();
@@ -305,14 +363,32 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         ctx.strokeStyle = cBorder; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W + 4, y); ctx.stroke();
       }
       ctx.textAlign = 'center';
-      const labelEvery = Math.max(1, Math.round(60 / Math.max(1, colW)));
-      for (let ci = 0; ci < N; ci++) {
+      // Time axis: minute ticks for one-second columns; spaced ticks (with the date on long or multi-day ranges) otherwise.
+      const spaced = long || (navOn() && c.windowMin > 60);
+      const firstVisible = Math.max(0, Math.floor(-x0 / colW));
+      const fromT = cols[firstVisible]?.time ?? firstTime, toT = cols.at(-1)?.time ?? firstTime;
+      const withDate = c.windowMin >= 240 || new Date(fromT).toDateString() !== new Date(toT).toDateString();
+      const labelEvery = Math.max(1, Math.round((withDate ? 96 : 60) / Math.max(1, colW)));
+      for (let ci = firstVisible; ci < N; ci++) {
         const col = cols[ci]; if (!col) continue;
         const t = col.time;
-        if (t % 60000 >= COLUMN_MS || ci % labelEvery !== 0) continue;
+        if (spaced ? ci % labelEvery !== 0 : (t % 60000 >= COLUMN_MS || Math.floor(t / 60000) % Math.max(1, Math.ceil((withDate ? 96 : 60) / (60 * colW))) !== 0)) continue;
         const d = new Date(t);
-        ctx.fillText(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, x0 + (ci + 0.5) * colW, H + 16);
+        ctx.fillText(withDate ? stamp(t) : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, x0 + (ci + 0.5) * colW, H + 16);
       }
+      // Visible range with date and time (DOM text, updated only when it changes).
+      const rangeText = `${stamp(fromT)} – ${navOn() ? stamp(toT) : `${stamp(toT)} · live`}`;
+      if (rangeText !== lastRange && rangeRef.current) { rangeRef.current.textContent = rangeText; lastRange = rangeText; }
+      // Times without any recorded data stay blank with a faint note.
+      ctx.save(); ctx.globalAlpha = 0.55; ctx.fillStyle = cMuted; ctx.font = '11px sans-serif';
+      for (let ci = firstVisible; ci < N;) {
+        if (!cols[ci]?.empty) { ci++; continue; }
+        let end = ci; while (end < N && cols[end]?.empty) end++;
+        const a = Math.max(0, x0 + ci * colW), b = x0 + end * colW;
+        if (b - a >= 90) ctx.fillText('No data recorded', (a + b) / 2, H / 2);
+        ci = end;
+      }
+      ctx.restore();
 
       // Price tag on the right axis, green/red by direction.
       if (Number.isFinite(price)) {
@@ -348,10 +424,42 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     if (recordedOn()) requestHistory(controls.current.windowMin, Date.now());
     schedule();
 
-    // Wheel zoom on the price axis (and plot), anchored at the cursor price.
+    const goTo = (end: number) => { nav.current.end = clampEnd(end); nav.current.pendingCenter = true; navKey = ''; setLive(false); dirty = true; schedule(); };
+    const goLive = () => {
+      nav.current.end = null; nav.current.pendingCenter = false; navKey = ''; longVersion++; setLive(true);
+      const p = fixture ? demoPrice : bridge.current.latest?.price;
+      if (p !== undefined && Number.isFinite(p)) view.current.center = p;
+      dirty = true; schedule();
+    };
+    navApi.current = { goTo, goLive };
+    // Positive dx (drag right) moves into the past; reaching the current time resumes live follow.
+    const panTime = (dxPx: number) => {
+      if (!dxPx) return;
+      const W = canvas.getBoundingClientRect().width - AXIS_W, w = controls.current.windowMin, step = navStep(w);
+      const colW = heatColumnWidth(W, Math.round(w * 60 / step));
+      const next = (nav.current.end ?? Date.now()) - (dxPx / colW) * step * 1000;
+      if (next >= Date.now() - 500) { if (navOn()) goLive(); return; }
+      if (!navOn()) setLive(false);
+      nav.current.end = clampEnd(next); dirty = true; schedule();
+    };
+
+    // Wheel: plot zooms time (window steps); price axis or pinch zooms price; Shift/sideways swipe scrolls time.
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1;
+      const sx = e.deltaX * unit, sy = e.deltaY * unit;
+      if (e.shiftKey || Math.abs(sx) > Math.abs(sy)) { panTime(-(sx || sy)); return; }
+      if (!e.ctrlKey && e.clientX - rect.left <= rect.width - AXIS_W) {
+        wheelAcc += sy;
+        if (Math.abs(wheelAcc) < 100 || Date.now() - wheelAt < 200) return;
+        const list: number[] = [...WINDOWS, ...(recordedOn() ? LONG_WINDOWS : [])];
+        const i = list.indexOf(controls.current.windowMin);
+        const next = list[Math.min(list.length - 1, Math.max(0, (i < 0 ? 1 : i) + (wheelAcc > 0 ? 1 : -1)))];
+        wheelAcc = 0; wheelAt = Date.now();
+        if (next !== undefined && next !== controls.current.windowMin) setWindowMin(next);
+        return;
+      }
       const H = rect.height - AXIS_H;
       const c = controls.current, bs = buffer.bucket * c.grouping;
       const band = view.current.rows * bs;
@@ -367,7 +475,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     canvas.addEventListener('wheel', onWheel, { passive: false });
 
     // Drag to pan the price range.
-    let dragging = false, lastY = 0;
+    let dragging = false, lastY = 0, lastX = 0, startX = 0, startY = 0, axis: '' | 'time' | 'price' = '';
     const touches = new Map<number, number>();
     let pinchStart = 0, pinchRows = 0;
     const spread = () => { const ys = [...touches.values()]; return Math.abs((ys[0] ?? 0) - (ys[1] ?? 0)); };
@@ -376,7 +484,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         touches.set(e.pointerId, e.clientY);
         if (touches.size === 2) { dragging = false; pinchStart = Math.max(10, spread()); pinchRows = view.current.rows; canvas.setPointerCapture(e.pointerId); return; }
       }
-      dragging = true; lastY = e.clientY; canvas.setPointerCapture(e.pointerId);
+      dragging = true; lastY = startY = e.clientY; lastX = startX = e.clientX; axis = ''; canvas.setPointerCapture(e.pointerId);
     };
     const onMove = (e: PointerEvent) => {
       if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
@@ -387,15 +495,25 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
           dirty = true; schedule(); return;
         }
       }
-      const rect = canvas.getBoundingClientRect();
-      const W = rect.width - AXIS_W, H = rect.height - AXIS_H;
       if (dragging) {
+        // Lock to one axis after 6px: sideways moves time, up/down moves price.
+        if (!axis) {
+          if (Math.hypot(e.clientX - startX, e.clientY - startY) < 6) return;
+          axis = Math.abs(e.clientX - startX) > Math.abs(e.clientY - startY) ? 'time' : 'price';
+        }
+        if (axis === 'time') { panTime(e.clientX - lastX); lastX = e.clientX; return; }
+        const H = canvas.getBoundingClientRect().height - AXIS_H;
         const c = controls.current, band = view.current.rows * buffer.bucket * c.grouping;
         view.current.center += ((e.clientY - lastY) / H) * band;
         lastY = e.clientY; dirty = true; schedule();
         return;
       }
-      // Hover tooltip: price, time and order size at that cell.
+      showTip(e.clientX, e.clientY);
+    };
+    // Hover (or tap) tooltip: price, date/time and resting size at that cell.
+    const showTip = (clientX: number, clientY: number) => {
+      const rect = canvas.getBoundingClientRect();
+      const W = rect.width - AXIS_W, H = rect.height - AXIS_H;
       const tip = tooltipRef.current;
       if (!tip) return;
       const c = controls.current, g = c.grouping, bs = buffer.bucket * g;
@@ -403,20 +521,24 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       const band = rows * bs, top = view.current.center + band / 2;
       const cols = windowColumns();
       const colW = heatColumnWidth(W, cols.length);
-      const ci = Math.floor((e.clientX - rect.left - (W - cols.length * colW)) / colW);
-      const r = Math.floor(((e.clientY - rect.top) / H) * rows);
+      const ci = Math.floor((clientX - rect.left - (W - cols.length * colW)) / colW);
+      const r = Math.floor(((clientY - rect.top) / H) * rows);
       const col = cols[ci];
-      if (!col || e.clientX - rect.left > W || e.clientY - rect.top > H || r < 0 || r >= rows) { tip.style.display = 'none'; return; }
+      if (!col || clientX - rect.left > W || clientY - rect.top > H || r < 0 || r >= rows) { tip.style.display = 'none'; return; }
       const rowTop = Math.floor((top - r * bs) / bs);
       const v = col.gap ? 0 : buffer.groupedCell(col, rowTop, g);
       const cellPrice = rowTop * bs;
-      const d = new Date(col.time);
       tip.style.display = 'block';
-      tip.style.left = `${Math.min(e.clientX - rect.left + 12, W - 150)}px`;
-      tip.style.top = `${Math.max(4, e.clientY - rect.top - 12)}px`;
-      tip.textContent = `${specRef.current ? formatPrice(cellPrice, specRef.current) : cellPrice.toFixed(2)} · ${d.toLocaleTimeString('en-US')} · ${col.gap ? 'gap' : `${compact(v)} USDT`}`;
+      tip.style.left = `${Math.max(4, Math.min(clientX - rect.left + 12, W - 190))}px`;
+      tip.style.top = `${Math.max(4, clientY - rect.top - 12)}px`;
+      const when = stamp(col.time, true);
+      tip.textContent = col.empty ? `${when} · No data recorded` : `${specRef.current ? formatPrice(cellPrice, specRef.current) : cellPrice.toFixed(2)} · ${when} · ${col.gap ? 'gap' : `resting ${compact(v)} USDT`}`;
     };
-    const onUp = (e: PointerEvent) => { touches.delete(e.pointerId); dragging = false; };
+    const onUp = (e: PointerEvent) => {
+      const tap = dragging && !axis && e.pointerType === 'touch';
+      touches.delete(e.pointerId); dragging = false;
+      if (tap) showTip(e.clientX, e.clientY);
+    };
     const onLeave = () => { if (tooltipRef.current) tooltipRef.current.style.display = 'none'; };
     canvas.addEventListener('pointerdown', onDown);
     canvas.addEventListener('pointermove', onMove);
@@ -433,7 +555,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointercancel', onUp);
-      redrawRef.current = null; centerRef.current = null;
+      redrawRef.current = null; centerRef.current = null; navApi.current = null;
       canvas.removeEventListener('pointerleave', onLeave);
       if (bridge.current.heat === onTrade) bridge.current.heat = null;
     };
@@ -441,9 +563,16 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
 
   const center = () => centerRef.current?.();
   const control = 'text-t-muted hover:bg-t-border/50 hover:text-t-text';
+  const availableMs = recordedAvail ? RECORDED_RETENTION_MS : collected * 1000;
+  const retentionText = recordedAvail ? `History kept: ${Math.round(RECORDED_RETENTION_MS / 86400000)} days` : 'History kept: 60 minutes (this browser)';
+  const nowMs = Date.now();
+  const pickTime = (value: string) => { setGotoValue(value); const t = new Date(value).getTime(); if (Number.isFinite(t)) navApi.current?.goTo(t + windowMin * 30000); };
+  const liveButton = (cls: string) => <Button size="sm" onClick={() => navApi.current?.goLive()} className={`${cls} bg-t-accent text-t-bg hover:bg-t-accent/90`} aria-label="Return to live">Live ▶</Button>;
+  const gotoInput = (cls: string) => <input type="datetime-local" value={gotoValue} min={toLocalInput(nowMs - availableMs)} max={toLocalInput(nowMs)} onChange={e => pickTime(e.target.value)} aria-label="Go to date and time" className={`${cls} rounded border border-t-border text-t-text [color-scheme:dark]`} />;
   return <div className={`heatmap-surface relative flex h-full w-full flex-col ${mobile || floating ? 'min-h-0' : 'min-h-80'}`} data-testid="heatmap">
     {mobile ? <div className="flex h-11 shrink-0 items-center gap-2 border-b border-t-border px-2 text-xs">
       <span className="min-w-0 flex-1 truncate font-semibold text-t-text">{symbol} · Heatmap · {windowLabel(windowMin)}</span>
+      {!live && liveButton('h-10 px-3 text-xs')}
       <Button variant="ghost" size="sm" onClick={center} className={`h-10 px-3 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-4" />Center</Button>
       <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)} className={`size-10 ${control}`} aria-label="Heatmap settings"><Settings2 /></Button>
     </div> : <>
@@ -465,12 +594,20 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         <input type="checkbox" checked={bubblesOn} onChange={e => setBubblesOn(e.target.checked)} aria-label="Toggle trade bubbles" className="accent-current" />
       </label>
       <Button variant="ghost" size="sm" onClick={center} className={`h-6 px-2 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-3" />Center</Button>
-      {recordedAvail && <span data-testid="history-range" className="basis-full text-[10px] text-t-muted tabular-nums">{historyText}</span>}
+      <span className="flex items-center gap-1" role="group" aria-label="Go to time">
+        <span className="text-t-muted">Go to</span>
+        {gotoInput('h-6 bg-t-panel px-1 text-xs')}
+        {JUMPS.map(([label, ms]) => <Button key={label} variant="ghost" size="sm" disabled={ms > availableMs} onClick={() => navApi.current?.goTo(Date.now() - ms)} className={`h-6 px-2 text-xs ${control}`}>{label}</Button>)}
+      </span>
+      {!live && liveButton('h-6 px-2 text-xs')}
+      <span className="basis-full text-[10px] text-t-muted tabular-nums"><span data-testid="history-kept">{retentionText}</span>{recordedAvail && <> · <span data-testid="history-range">{historyText}</span></>}</span>
     </div>
     </>}
     <div className="relative min-h-0 flex-1">
       {toolDemoEnabled() && <span className="demo-watermark">DEMO DATA</span>}
       <canvas ref={canvasRef} className={`block size-full ${mobile ? 'touch-none' : ''}`} aria-label={`${symbol} order book heatmap`} />
+      <span ref={rangeRef} data-testid="heatmap-range" className="pointer-events-none absolute top-2 right-[78px] text-[10px] tabular-nums text-t-muted" />
+      {navLoading && <span role="status" className="pointer-events-none absolute top-7 left-1/2 -translate-x-1/2 rounded bg-t-panel/95 px-2 py-0.5 text-[10px] mobile:text-xs text-t-muted">Loading history…</span>}
       <div ref={tooltipRef} data-testid="heatmap-tooltip" className="pointer-events-none absolute z-10 hidden rounded border border-t-border bg-t-panel/95 px-2 py-1 text-[10px] tabular-nums text-t-text" />
       {!toolDemoEnabled() && !recordedShown && collected < 60 && <span role="status" className="pointer-events-none absolute bottom-2 left-3 text-[10px] mobile:text-xs text-t-muted">● Collecting data… {(collected / 60).toFixed(1)} min</span>}
       {historyError && <span role="alert" className="pointer-events-none absolute bottom-8 left-3 right-3 rounded bg-t-panel/95 px-2 py-1 text-xs text-t-warning">History could not load: {historyError}</span>}
@@ -481,7 +618,15 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     {mobile && showSettings && <div className="fixed inset-0 z-50 flex flex-col justify-end bg-t-bg/70" onClick={() => setShowSettings(false)}>
       <div role="dialog" aria-modal="true" aria-label="Heatmap settings" onClick={e => e.stopPropagation()} className="space-y-4 rounded-t-xl border-t border-t-border bg-t-panel px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-sm text-t-text">
         <div className="flex items-center justify-between"><h2 className="font-semibold">Heatmap settings</h2><Button variant="ghost" size="icon" className={`size-10 ${control}`} aria-label="Close heatmap settings" onClick={() => setShowSettings(false)}><X /></Button></div>
+        <p data-testid="history-kept" className="text-xs text-t-muted">{retentionText}</p>
         {recordedAvail && <p data-testid="history-range" className="text-xs text-t-muted tabular-nums">{historyText}</p>}
+        <div className="space-y-1"><span className="text-t-muted">Go to</span>
+          {gotoInput('h-10 w-full bg-t-bg px-2 text-sm')}
+          <div className="grid grid-cols-4 gap-2" role="group" aria-label="Go to time">
+            {JUMPS.map(([label, ms]) => <Button key={label} variant="ghost" disabled={ms > availableMs} onClick={() => { navApi.current?.goTo(Date.now() - ms); setShowSettings(false); }} className={`h-10 text-sm ${control}`}>{label}</Button>)}
+          </div>
+          {!live && liveButton('h-10 w-full text-sm')}
+        </div>
         <label className="flex h-10 items-center gap-3 text-t-muted">Intensity
           <input type="range" min={0.2} max={3} step={0.1} value={intensity} onChange={e => setIntensity(Number(e.target.value))} aria-label="Intensity" className="h-10 flex-1 accent-current" />
         </label>

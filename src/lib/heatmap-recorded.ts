@@ -101,3 +101,84 @@ export function fillGaps(live: readonly Column[], recorded: readonly Column[], f
   }
   return { cols: out, filled };
 }
+
+// ---- Time navigation (paged history) ----
+// The backend cleanup job deletes snapshots older than 7 days.
+export const RECORDED_RETENTION_MS = 7 * 86400000;
+export const RECORDED_PAGE_ROWS = 1000;
+// Server thinning used while browsing back: 5s (the recording rate) up to 60 min windows, else the long-window rate.
+export const pageEvery = (windowMin: number) => windowMin <= 60 ? 5 : recordedEvery(windowMin);
+export const pageSpanMs = (every: number) => every * 1000 * RECORDED_PAGE_ROWS;
+
+// Fixed time pages so going back and forth reuses the same cache keys. Closed pages are kept (LRU, 160 pages);
+// pages touching the last minute expire after 30 seconds. Failures are never cached.
+const pages = new Map<string, { at: number; closed: boolean; rows: RecordedSnapshot[] }>();
+const inflight = new Map<string, Promise<RecordedSnapshot[]>>();
+let pageUser: string | null = null;
+const pageKey = (every: number, page: number) => `${every}:${page}`;
+export function peekRecordedPage(every: number, page: number, now = Date.now()): RecordedSnapshot[] | null {
+  const hit = pages.get(pageKey(every, page));
+  if (!hit) return null;
+  if (!hit.closed && now - hit.at >= 30000) return null;
+  pages.delete(pageKey(every, page)); pages.set(pageKey(every, page), hit); // refresh LRU order
+  return hit.rows;
+}
+export function loadRecordedPage(every: number, page: number): Promise<RecordedSnapshot[]> {
+  const k = pageKey(every, page);
+  const running = inflight.get(k);
+  if (running) return running;
+  const job = (async () => {
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { data: auth, error: authError } = await supabase.auth.getSession();
+    if (authError) throw new Error(authError.message);
+    if (!auth.session) throw new Error('Sign in to read recorded history');
+    if (pageUser !== auth.session.user.id) { pages.clear(); pageUser = auth.session.user.id; }
+    const span = pageSpanMs(every), from = page * span, to = from + span;
+    const { data, error } = await supabase.rpc('ob_history', { p_from: new Date(from).toISOString(), p_to: new Date(to).toISOString(), p_every: every }).range(0, RECORDED_PAGE_ROWS - 1);
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('History returned no response');
+    const rows = data as RecordedSnapshot[];
+    pages.set(k, { at: Date.now(), closed: to < Date.now() - 60000, rows });
+    while (pages.size > 160) { const oldest = pages.keys().next().value; if (oldest === undefined) break; pages.delete(oldest); }
+    return rows;
+  })().finally(() => inflight.delete(k));
+  inflight.set(k, job);
+  return job;
+}
+export function clearRecordedPages() { pages.clear(); inflight.clear(); pageUser = null; }
+
+// A time-linear grid of columns for a past range: one slot per `stepSec`. Live book columns win, then
+// recorded snapshots, then live price-only/gap columns. Slots with nothing stay `empty` (drawn blank,
+// labelled "No data recorded") so missing time is never filled with made-up liquidity.
+export function buildNavColumns(live: readonly Column[], recorded: readonly Column[], fromMs: number, toMs: number, stepSec: number): Column[] {
+  const step = Math.max(1, Math.round(stepSec)) * 1000;
+  const start = Math.floor(fromMs / step) * step, slots = Math.max(0, Math.ceil((toMs - start) / step));
+  const isBook = (c: Column | undefined) => !!c && !c.gap && !c.priceOnly && !c.empty;
+  const inRange = live.filter(c => c.time >= start && c.time < start + slots * step);
+  const base = step === 1000 ? fillGaps(inRange, recorded, start, start + slots * step - 1).cols : [];
+  const bySlot = new Map<number, Column>();
+  const put = (c: Column, rank: number, ranks: Map<number, number>) => {
+    const s = Math.floor((c.time - start) / step);
+    if (s < 0 || s >= slots) return;
+    const r = ranks.get(s);
+    if (r !== undefined && r <= rank) return;
+    ranks.set(s, rank); bySlot.set(s, c);
+  };
+  const ranks = new Map<number, number>();
+  if (step === 1000) for (const c of base) put(c, isBook(c) ? 0 : 2, ranks);
+  else {
+    for (const c of inRange) put(c, isBook(c) ? 0 : 2, ranks);
+    for (const c of recorded) put(c, 1, ranks);
+  }
+  const out: Column[] = [];
+  for (let s = 0; s < slots; s++) {
+    const time = start + s * step, c = bySlot.get(s);
+    out.push(c ? { ...c, time } : { time, origin: 0, data: new Float32Array(0), trades: new Map(), price: NaN, gap: false, empty: true });
+  }
+  // One-second holes right next to live book columns are sampling jitter, not missing history.
+  if (step === 1000) for (let s = 1; s < out.length; s++) {
+    const cur = out[s], prev = out[s - 1];
+    if (cur?.empty && prev && isBook(prev) && (isBook(out[s + 1]) || isBook(out[s + 2]))) out[s] = { ...prev, time: cur.time, trades: new Map() };
+  }
+  return out;
+}
