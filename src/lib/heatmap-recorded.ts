@@ -157,7 +157,7 @@ export const RECORDED_PAGE_ROWS = 1000;
 export const pageEvery = (windowMin: number) => windowMin <= 60 ? 5 : recordedEvery(windowMin);
 export const pageSpanMs = (every: number) => every * 1000 * RECORDED_PAGE_ROWS;
 
-// Fixed time pages so going back and forth reuses the same cache keys. Closed pages are kept (LRU, 160 pages);
+// Fixed time pages so going back and forth reuses the same cache keys. Closed pages are kept (LRU, 16 pages, bounding memory);
 // pages touching the last minute expire after 30 seconds. Failures are never cached.
 const pages = new Map<string, { at: number; closed: boolean; rows: RecordedSnapshot[] }>();
 const inflight = new Map<string, Promise<RecordedSnapshot[]>>();
@@ -186,7 +186,7 @@ export function loadRecordedPage(every: number, page: number): Promise<RecordedS
     if (!data) throw new Error('History returned no response');
     const rows = data as RecordedSnapshot[];
     pages.set(k, { at: Date.now(), closed: to < Date.now() - 60000, rows });
-    while (pages.size > 160) { const oldest = pages.keys().next().value; if (oldest === undefined) break; pages.delete(oldest); }
+    while (pages.size > 16) { const oldest = pages.keys().next().value; if (oldest === undefined) break; pages.delete(oldest); }
     return rows;
   })().finally(() => inflight.delete(k));
   inflight.set(k, job);

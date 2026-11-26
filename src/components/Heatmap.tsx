@@ -17,6 +17,7 @@ import { orderBook } from '@/lib/order-book';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 import { niceStep, heatColumnWidth, heatFitRows, heatMaxRows, depthRowSize } from '@/lib/tool-layout';
 import { toolDemoEnabled, demoHeatmap } from '@/lib/tool-demo';
+import { OFF_SLOTS, RecordedDecodeCache, capBubbles, paintSlots, viewSlots } from '@/lib/heatmap-view';
 import type { TradeBridge } from '@/components/LiveQuote';
 
 const AXIS_W = 72, AXIS_H = 26, COB_W = 92, SVP_W = 64;
@@ -130,13 +131,16 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     let buffer = fixture?.buffer ?? entry.buffer;
     let depthSpan = fixture?.span ?? entry.depthSpan;
     let fitted = Boolean(fixture), lastGrouping = controls.current.grouping;
-    let lastCutKey = '', scaleLo = 0, scaleHi = 1, normAt = 0, cacheKey = "", paintedTime = 0, userAt = 0;
+    let lastCutKey = '', scaleLo = 0, scaleHi = 1, normAt = 0, cacheKey = "", userAt = 0;
+    // What each offscreen slot currently shows, so only new or changed visible columns are painted.
+    const paintedTimes = new Float64Array(OFF_SLOTS).fill(NaN), paintedKind = new Uint8Array(OFF_SLOTS), paintedData: (Float32Array | null)[] = new Array(OFF_SLOTS).fill(null);
+    let lastDraw: { cols: readonly Column[]; colW: number; x0: number } = { cols: [], colW: 3, x0: 0 }, moreWork = false;
     const layout = { W: 0, H: 0, panelsH: 0, ladderW: 0 };
     const markerEngine = new MarkerEngine(); let markerKey = '', markerAt = 0;
     let markerHits: { x: number; y: number; m: Marker }[] = [];
-    let flows: ColumnFlow[] = [], flowsKey = '', profile: ReturnType<typeof sessionProfile> = { bins: new Map(), poc: null, from: null }, profileAt = 0;
+    let flows: ColumnFlow[] = [], flowAt = new Map<number, ColumnFlow>(), flowsAt = 0, flowsKey = '', profile: ReturnType<typeof sessionProfile> = { bins: new Map(), poc: null, from: null }, profileAt = 0;
     const gate = new AlertGate(), mountedAt = Date.now(); let alertMarkerAt = Date.now(), tapeAt = 0;
-    off.width = 3600;
+    off.width = OFF_SLOTS;
     let source = orderBook.debug().source;
     let stopped = false, hidden = document.hidden, frame = 0, dirty = true;
     let bubbleHits: { x: number; y: number; radius: number; price: number; time: number; trade: HeatTrade }[] = [];
@@ -144,15 +148,19 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     let wallList: Wall[] = [], wallThr = 0, wallKey = '', wallAt = 0;
     view.current = { center: NaN, rows: DEFAULT_ROWS };
     // Recorded history fills short gaps and extends long Binance BTCUSDT windows.
-    let recRows: RecordedSnapshot[] = [], recFor = 0, recCols: Column[] = [], recColsKey = '', loading = false, recCheckedAt = 0, requestedWindow = 0;
-    let longCols: Column[] = [], longKey = '', longAt = 0, longVersion = 0, shown = false, long = false;
+    let recRows: RecordedSnapshot[] = [], recFor = 0, recFirst = Infinity, loading = false, recCheckedAt = 0, requestedWindow = 0;
+    let shortCols: Column[] = [], shortKey = '', shown = false, long = false, lastRangeKey = '';
+    // Only visible slots (plus a small lookback margin) are built and decoded; logicalN is the full window's
+    // column count, which keeps the right-anchored column width exactly as before.
+    let logicalN = 0, stepMsCur = 1000;
+    const decodeCache = new RecordedDecodeCache(6000), DECODE_BUDGET = 400;
     // Recorded history is Binance BTCUSDT and loads whatever the live price source is.
     const recordedOn = () => !demo && symbol === RECORDED_SYMBOL;
     setLiveBinance((historySource ?? source) === 'binance');
     setRecordedAvail(recordedOn()); setRecordedShown(false); setHistoryError(null); setRange(null);
     // ---- Time navigation state (paged recorded history + live buffer) ----
-    let navCols: Column[] = [], navKey = '', wheelAcc = 0, wheelAt = 0, lastRange = '';
-    const navPageCols = new Map<string, Column[]>(), navFailedAt = new Map<string, number>(), navPending = new Set<string>();
+    let navCols: Column[] = [], navKey = '', navAt = 0, wheelAcc = 0, wheelAt = 0, lastRange = '';
+    const navFailedAt = new Map<string, number>(), navPending = new Set<string>();
     nav.current = { end: null, pendingCenter: false }; setLive(true); setNavLoading(false);
     const navOn = () => nav.current.end !== null;
     const oldestMs = () => recordedOn() ? recordedOldestMs() : (buffer.columns[0]?.time ?? Date.now());
@@ -166,31 +174,35 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         .catch(error => { navFailedAt.set(k, Date.now()); if (!stopped) setHistoryError(error instanceof Error ? error.message : String(error)); })
         .finally(() => { navPending.delete(k); if (!stopped && !navPending.size) setNavLoading(false); });
     };
-    const recordedRange = (w: number, from: number, end: number): Column[] => {
-      const every = pageEvery(w), span = pageSpanMs(every), out: Column[] = [];
+    // Columns for [from, end) from the fixed recorded pages, decoding only rows inside the range (a few hundred per frame).
+    const recordedRange = (w: number, from: number, end: number, budget: { left: number }): { cols: Column[]; complete: boolean } => {
+      const every = pageEvery(w), span = pageSpanMs(every), out: Column[] = [], expand = w <= 60;
       const first = Math.floor(from / span), last = Math.floor((end - 1) / span);
+      let complete = true;
       for (let p = first; p <= last; p++) {
-        const ck = `${every}:${p}:${buffer.bucket}`;
-        let pageCols = navPageCols.get(ck);
-        if (!pageCols) {
-          const rows = peekRecordedPage(every, p);
-          if (!rows) { requestPage(every, p); continue; }
-          pageCols = snapshotsToColumns(rows, buffer.bucket, every, w <= 60); navPageCols.set(ck, pageCols);
-          if (navPageCols.size > 24) { const o = navPageCols.keys().next().value; if (o !== undefined) navPageCols.delete(o); }
-        }
-        for (const c of pageCols) if (c.time >= from && c.time < end) out.push(c);
+        const ck = `${every}:${p}:${buffer.bucket}:${expand ? 1 : 0}`;
+        let rows = peekRecordedPage(every, p);
+        // An open page being refreshed keeps showing its previous rows until the new ones arrive.
+        if (!rows) { requestPage(every, p); rows = decodeCache.rowsOf(ck); if (!rows) continue; }
+        if (!decodeCache.collect(ck, rows, from, end, row => snapshotsToColumns([row], buffer.bucket, every, expand), budget, out)) complete = false;
       }
       // Prefetch the next older page so dragging back stays fast.
       if ((first - 1) * span >= recordedOldestMs() && !peekRecordedPage(every, first - 1)) requestPage(every, first - 1);
-      return out;
+      return { cols: out, complete };
     };
-    const navColumns = (): readonly Column[] => {
-      const w = controls.current.windowMin, step = navStep(w);
-      const end = Math.floor((nav.current.end ?? Date.now()) / (step * 1000)) * step * 1000, from = end - w * 60000;
-      const k = `${w}:${end}:${buffer.bucket}`;
-      if (k === navKey) return navCols;
-      const rec = recordedOn() ? recordedRange(w, from, end) : [];
-      navCols = buildNavColumns(buffer.columns, rec, from, end, step); navKey = k; longVersion++;
+    // Paused views and long live windows: a time-linear grid of only the visible slots plus margin.
+    const navColumns = (W: number): readonly Column[] => {
+      const w = controls.current.windowMin, step = navStep(w), stepMs = step * 1000, follow = !navOn();
+      const raw = nav.current.end ?? Date.now();
+      const end = (follow ? Math.ceil(raw / stepMs) : Math.floor(raw / stepMs)) * stepMs;
+      const total = Math.round(w * 60 / step), { build } = viewSlots(W, total);
+      logicalN = total; stepMsCur = stepMs;
+      const k = `${w}:${end}:${buffer.bucket}:${build}`;
+      if (k === navKey && !(follow && Date.now() - navAt >= 1000)) return navCols;
+      decodeCache.beginPass();
+      const from = end - build * stepMs, rec = recordedOn() ? recordedRange(w, from, end, { left: DECODE_BUDGET }) : { cols: [], complete: true };
+      navCols = buildNavColumns(buffer.columns, rec.cols, from, end, step); navKey = rec.complete ? k : ''; navAt = Date.now();
+      if (!rec.complete) moreWork = true;
       if (nav.current.pendingCenter) { const lastCol = [...navCols].reverse().find(c => !c.empty && Number.isFinite(c.price)); if (lastCol) { view.current.center = lastCol.price; nav.current.pendingCenter = false; } }
       return navCols;
     };
@@ -199,39 +211,51 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       loading = true; requestedWindow = w; recCheckedAt = Date.now();
       void loadRecorded(w, before).then(rows => {
         if (stopped || controls.current.windowMin !== w) return;
-        recRows = rows; recFor = w; recColsKey = ''; longKey = ''; longAt = 0; longVersion++;
+        if (rows !== recRows) decodeCache.drop('short:');
+        recRows = rows; recFor = w; shortKey = '';
+        recFirst = rows.reduce((m, r) => { const t = Date.parse(r.ts); return Number.isFinite(t) ? Math.min(m, t) : m; }, Infinity);
         setRange(historyRange(rows)); setHistoryError(null); dirty = true; schedule();
       }).catch(error => {
         if (!stopped && controls.current.windowMin === w) setHistoryError(error instanceof Error ? error.message : String(error));
       }).finally(() => { loading = false; });
     };
-    const windowColumns = (): readonly Column[] => {
+    const windowColumns = (W: number): readonly Column[] => {
       const w = controls.current.windowMin;
-      if (navOn()) { long = false; const cols = navColumns(); const hasRecorded = cols.some(c => c.recorded); if (shown !== hasRecorded) { shown = hasRecorded; setRecordedShown(shown); } return cols; }
-      long = w > 60 && recordedOn();
-      if (!long) {
-        const liveCols = buffer.columns.slice(-Math.min(w, 60) * 60);
-        // Binance BTCUSDT: fill holes (tab hidden, chart view, other pair) with the Supabase recording.
-        if (!recordedOn()) { if (shown) { shown = false; setRecordedShown(false); } return liveCols; }
-        if (requestedWindow !== w || Date.now() - recCheckedAt >= 10000) requestHistory(w, Date.now());
-        if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = snapshotsToColumns(recRows, buffer.bucket); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
-        const now = Date.now();
-        const { cols, filled } = recFor === w ? fillGaps(liveCols, recCols, now - w * 60000, now) : { cols: [...liveCols], filled: 0 };
-        if (shown !== filled > 0) { shown = filled > 0; setRecordedShown(shown); }
+      if (navOn() || (w > 60 && recordedOn())) {
+        long = !navOn();
+        const cols = navColumns(W);
+        const hasRecorded = cols.some(c => c.recorded); if (shown !== hasRecorded) { shown = hasRecorded; setRecordedShown(shown); }
+        if (long) {
+          // Settings "History" line describes the recorded part currently loaded for the view.
+          let a = Infinity, b = -Infinity, n = 0;
+          for (const c of cols) if (c.recorded) { a = Math.min(a, c.time); b = Math.max(b, c.time); n++; }
+          const rk = n ? `${a}:${b}:${n}` : '';
+          if (rk !== lastRangeKey) { lastRangeKey = rk; setRange(n ? { from: a, to: b, count: n } : null); }
+        }
         return cols;
       }
-      const k = `${w}:${buffer.bucket}`;
-      if (k === longKey && Date.now() - longAt < 5000) return longCols;
-      const firstLive = buffer.columns.find(c => !c.priceOnly && !c.gap)?.time ?? Date.now();
-      if (recFor !== w || Date.now() - recCheckedAt >= 10000) requestHistory(w, firstLive);
-      if (recColsKey !== `${recFor}:${buffer.bucket}:${recRows.length}`) { recCols = snapshotsToColumns(recRows, buffer.bucket, recordedEvery(w), false); recColsKey = `${recFor}:${buffer.bucket}:${recRows.length}`; }
-      const rec = recFor === w ? recCols.filter(c => c.time < firstLive) : [];
-      longCols = [...rec, ...thinColumns(buffer.columns.filter(c => c.time >= firstLive), recordedEvery(w))];
-      longKey = k; longAt = Date.now(); longVersion++;
-      if (shown !== rec.length > 0) { shown = rec.length > 0; setRecordedShown(shown); }
-      return longCols;
+      long = false; stepMsCur = 1000;
+      const liveCols = buffer.columns.slice(-Math.min(w, 60) * 60);
+      const liveOnly = () => { if (shown) { shown = false; setRecordedShown(false); } logicalN = liveCols.length; return liveCols.slice(-Math.max(1, viewSlots(W, logicalN).build)); };
+      if (!recordedOn()) return liveOnly();
+      // Binance BTCUSDT: fill holes (tab hidden, chart view, other pair) with the recording, visible part only.
+      if (requestedWindow !== w || Date.now() - recCheckedAt >= 10000) requestHistory(w, Date.now());
+      if (recFor !== w) return liveOnly();
+      const now = Date.now(), covered = Math.round((now - Math.max(now - w * 60000, recFirst)) / 1000);
+      logicalN = Math.max(liveCols.length, Number.isFinite(covered) ? covered : 0);
+      const { build } = viewSlots(W, logicalN);
+      const k = `${Math.floor(now / 1000)}:${buffer.bucket}:${recFor}:${recRows.length}:${build}:${liveCols.at(-1)?.time ?? 0}`;
+      if (k === shortKey) return shortCols;
+      const fromMs = Math.max(now - w * 60000, now - (build + 2) * 1000), rec: Column[] = [];
+      decodeCache.beginPass();
+      const complete = decodeCache.collect(`short:${recFor}:${buffer.bucket}`, recRows, fromMs - 10000, now + 1000, row => snapshotsToColumns([row], buffer.bucket), { left: DECODE_BUDGET }, rec);
+      const { cols, filled } = fillGaps(liveCols, rec, fromMs, now);
+      shortCols = cols.slice(-Math.max(1, build)); shortKey = complete ? k : '';
+      if (!complete) moreWork = true;
+      if (shown !== filled > 0) { shown = filled > 0; setRecordedShown(shown); }
+      return shortCols;
     };
-    const slotOf = (col: Column, ci: number) => long || navOn() ? ci : Math.floor(col.time / 1000) % 3600;
+    const slotOf = (col: Column) => ((Math.floor(col.time / stepMsCur) % OFF_SLOTS) + OFF_SLOTS) % OFF_SLOTS;
 
     // Trades flow in through the bridge; every trade is aggregated immediately.
     const onTrade = (tick: { price: number; size?: number; side?: 'Buy' | 'Sell'; tradeCount?: number }) => {
@@ -315,7 +339,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       const c = controls.current;
       const dbg0 = orderBook.debug();
       if(lastGrouping!==c.grouping){view.current.rows=Math.max(20,view.current.rows*lastGrouping/c.grouping);lastGrouping=c.grouping;}
-      const cols = windowColumns();
+      moreWork = false;
+      const cols = windowColumns(W);
       const price = fixture ? demoPrice : bridge.current.latest?.price ?? cols.at(-1)?.price ?? NaN;
       if (!Number.isFinite(view.current.center)) { view.current.center = price; view.current.rows = heatFitRows(depthSpan || buffer.bucket * 150, buffer.bucket, c.grouping); }
       // Auto-fit: keep the price inside the middle half and the fitted depth band filling the height (paused 10s after manual zoom/drag).
@@ -352,28 +377,29 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         const sr = scaleRange(values, c.pro.lowCut, c.pro.highCut); scaleLo = sr.lo; scaleHi = sr.hi; normAt = Date.now();
       }
       const norm = scaleHi;
-      const key = `${top}:${rows}:${g}:${scaleLo}:${scaleHi}:${c.intensity}:${c.pro.lowCut}:${c.pro.highCut}:${c.windowMin}:${longVersion}`;
-      const rebuild = key !== cacheKey || scaleChanged || off.height !== rows;
+      const topIdx0 = Math.floor(top / buffer.bucket), stepMs = stepMsCur;
+      const key = `${top}:${rows}:${g}:${scaleLo}:${scaleHi}:${c.intensity}:${c.pro.lowCut}:${c.pro.highCut}:${stepMs}:${buffer.bucket}`;
+      const rebuild = key !== cacheKey || off.height !== rows;
       if (off.height !== rows) off.height = rows;
-      const columnImage = offCtx.createImageData(1, rows);
       const firstTime = cols[0]?.time ?? 0;
-      if (rebuild) { offCtx.clearRect(0, 0, off.width, off.height); paintedTime = 0; }
-      for (let ci = 0; ci < N; ci++) {
-        const col = cols[ci]; if (!col || col.time <= paintedTime) continue;
-        const slot = slotOf(col, ci);
-        for (let r = 0; r < rows; r++) {
-          const o = r * 4, value = buffer.groupedCell(col, Math.floor(top / buffer.bucket) - r * g, g);
-          const [rr, gg, bb] = colorFor(scalePos(value, scaleLo, scaleHi, c.intensity));
-          columnImage.data[o] = rr; columnImage.data[o + 1] = gg; columnImage.data[o + 2] = bb; columnImage.data[o + 3] = col.priceOnly ? 0 : col.gap ? 70 : value > scaleLo * .25 ? 255 : 0;
-        }
-        offCtx.putImageData(columnImage, slot, 0);
-      }
-      paintedTime = cols.at(-1)?.time ?? firstTime; cacheKey = key;
-      ctx.imageSmoothingEnabled = false; offCtx.imageSmoothingEnabled = false;
-      const colW = heatColumnWidth(W, N), x0 = W - N * colW;
-      for (let ci = Math.max(0, Math.floor(-x0 / colW)); ci < N; ci++) {
+      if (rebuild) { offCtx.clearRect(0, 0, off.width, off.height); paintedTimes.fill(NaN); paintedData.fill(null); paintedKind.fill(0); }
+      const colW = viewSlots(W, logicalN).colW, x0 = W - N * colW, firstVis = Math.max(0, Math.floor(-x0 / colW));
+      // Paint only visible columns that are new or changed since the slot was last painted, in batched blits.
+      const todo: { slot: number; col: Column }[] = [];
+      for (let ci = firstVis; ci < N; ci++) {
         const col = cols[ci]; if (!col) continue;
-        const slot = slotOf(col, ci);
+        const slot = slotOf(col), kind = (col.gap ? 1 : 0) | (col.priceOnly ? 2 : 0) | (col.empty ? 4 : 0), data = col.empty ? null : col.data;
+        if (paintedTimes[slot] === col.time && paintedKind[slot] === kind && paintedData[slot] === data) continue;
+        paintedTimes[slot] = col.time; paintedKind[slot] = kind; paintedData[slot] = data;
+        todo.push({ slot, col });
+      }
+      paintSlots(offCtx, todo, rows, topIdx0, g, scaleLo, scaleHi, c.intensity);
+      cacheKey = key;
+      lastDraw = { cols, colW, x0 };
+      ctx.imageSmoothingEnabled = false; offCtx.imageSmoothingEnabled = false;
+      for (let ci = firstVis; ci < N; ci++) {
+        const col = cols[ci]; if (!col) continue;
+        const slot = slotOf(col);
         ctx.drawImage(off, slot, 0, 1, rows, x0 + ci * colW, 0, colW, H);
       }
       // Wall lines: large resting orders that persisted, with Held / Pulled / Broken outcomes.
@@ -491,6 +517,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
             bubbleHits.push(hit); lastAt.set(bucket, hit);
           }
         }
+        // Zoomed-out views can hold many trades: keep the largest so drawing stays light.
+        bubbleHits = capBubbles(bubbleHits);
         // Glossy volumetric spheres: split buy/sell wedge, radial shading, specular highlight, dark rim, thin stems.
         const path = [...bubbleHits].sort((m, n) => m.time - n.time || m.x - n.x);
         // Trade path: green segment when price rises, red when it falls, drawn behind the spheres.
@@ -522,7 +550,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       // Price line through per-second last trade prices.
       ctx.beginPath();
       let started = false;
-      for (let ci = 0; ci < N; ci++) {
+      for (let ci = Math.max(0, firstVis - 1); ci < N; ci++) {
         const col = cols[ci]; if (!col) continue;
         if (col.gap || !Number.isFinite(col.price)) { started = false; continue; }
         const path = col.pricePath?.length ? col.pricePath : [col.price];
@@ -583,7 +611,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       for (let ci = firstVisible; ci < N; ci++) {
         const col = cols[ci]; if (!col) continue;
         const t = col.time;
-        if (spaced ? ci % labelEvery !== 0 : (t % 60000 >= COLUMN_MS || Math.floor(t / 60000) % Math.max(1, Math.ceil((withDate ? 96 : 60) / (60 * colW))) !== 0)) continue;
+        if (spaced ? (ci + logicalN - N) % labelEvery !== 0 : (t % 60000 >= COLUMN_MS || Math.floor(t / 60000) % Math.max(1, Math.ceil((withDate ? 96 : 60) / (60 * colW))) !== 0)) continue;
         const d = new Date(t);
         ctx.fillText(withDate ? stamp(t) : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, x0 + (ci + 0.5) * colW, H + panelsH + 16);
       }
@@ -679,8 +707,13 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       // ---- Lower panels sharing the heatmap time axis: Volume, CVD, Order book imbalance ----
       if (panelsH) {
         const pr2 = c.pro, list = (mobileRef.current ? ['volume', 'cvd', 'imbalance'] : (['volume', 'cvd', 'imbalance'] as const).filter(k => pr2[k])) as ('volume' | 'cvd' | 'imbalance')[];
-        const fk = `${N}:${cols[0]?.time}:${cols.at(-1)?.time}:${pr2.imbPct}:${pr2.cvdSession}:${longVersion}`;
-        if (fk !== flowsKey) { flows = columnFlows(cols, buffer.bucket, pr2.imbPct, pr2.cvdSession); flowsKey = fk; }
+        const fk = `${N}:${cols[0]?.time}:${cols.at(-1)?.time}:${pr2.imbPct}:${pr2.cvdSession}`;
+        // Flows cover only the built columns and refresh at most four times per second; drawing looks them up by time.
+        if (fk !== flowsKey) {
+          if (Date.now() - flowsAt >= 250 || !flows.length) { flows = columnFlows(cols, buffer.bucket, pr2.imbPct, pr2.cvdSession); flowAt = new Map(flows.map(f => [f.time, f])); flowsKey = fk; flowsAt = Date.now(); }
+          else moreWork = true;
+        }
+        const flowOf = (i: number) => { const col = cols[i]; return col ? flowAt.get(col.time) : undefined; };
         const ph = panelsH / list.length, first = Math.max(0, Math.floor(-x0 / colW));
         ctx.fillStyle = cBg; ctx.fillRect(0, H + 1, W + AXIS_W, panelsH - 1);
         list.forEach((kind, pi) => {
@@ -689,20 +722,20 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
           ctx.save(); ctx.beginPath(); ctx.rect(0, py0, W, ph); ctx.clip();
           let label = '', valueText = '';
           if (kind === 'volume') {
-            let vmax = 0; for (let i = first; i < N; i++) { const f = flows[i]; if (f) vmax = Math.max(vmax, f.buy + f.sell); }
-            for (let i = first; i < N; i++) { const f = flows[i]; if (!f || !vmax) continue;
+            let vmax = 0; for (let i = first; i < N; i++) { const f = flowOf(i); if (f) vmax = Math.max(vmax, f.buy + f.sell); }
+            for (let i = first; i < N; i++) { const f = flowOf(i); if (!f || !vmax) continue;
               const x = x0 + i * colW, hb = pH * f.buy / vmax, hs = pH * f.sell / vmax, base = pTop + pH, bw = Math.max(1, colW - (colW > 3 ? 1 : 0));
               ctx.fillStyle = cUp; ctx.fillRect(x, base - hb, bw, hb); ctx.fillStyle = cDown; ctx.fillRect(x, base - hb - hs, bw, hs); }
-            const lf = flows.at(-1); label = 'Volume (buy / sell)'; valueText = lf ? compact(lf.buy + lf.sell) : '';
+            const lf = flowOf(N - 1); label = 'Volume (buy / sell)'; valueText = lf ? compact(lf.buy + lf.sell) : '';
           } else {
             const get = (f: ColumnFlow) => kind === 'cvd' ? f.cvd : f.imbalance;
             let lo = kind === 'imbalance' ? -1 : Infinity, hi = kind === 'imbalance' ? 1 : -Infinity;
-            if (kind === 'cvd') for (let i = first; i < N; i++) { const f = flows[i]; if (f && !f.empty) { lo = Math.min(lo, f.cvd); hi = Math.max(hi, f.cvd); } }
+            if (kind === 'cvd') for (let i = first; i < N; i++) { const f = flowOf(i); if (f && !f.empty) { lo = Math.min(lo, f.cvd); hi = Math.max(hi, f.cvd); } }
             if (!(hi > lo)) { lo = Math.min(lo, 0) - 1; hi = Math.max(hi, 0) + 1; }
             const yOf = (v: number) => pTop + pH - (v - lo) / (hi - lo) * pH;
             if (lo < 0 && hi > 0) { ctx.strokeStyle = cBorder; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(0, yOf(0)); ctx.lineTo(W, yOf(0)); ctx.stroke(); ctx.setLineDash([]); }
             ctx.beginPath(); let on = false, last: number | null = null;
-            for (let i = first; i < N; i++) { const f = flows[i]; const v = f && !f.empty ? get(f) : null;
+            for (let i = first; i < N; i++) { const f = flowOf(i); const v = f && !f.empty ? get(f) : null;
               if (v === null || v === undefined) { on = false; continue; }
               const x = x0 + (i + .5) * colW, y = yOf(v); if (on) ctx.lineTo(x, y); else ctx.moveTo(x, y); on = true; last = v; }
             ctx.lineWidth = 1.25; ctx.strokeStyle = kind === 'cvd' ? styles.getPropertyValue('--flow-text').trim() : (last ?? 0) >= 0 ? cUp : cDown; ctx.stroke();
@@ -717,11 +750,13 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       }
 
       // Collecting hint until one minute of history exists.
-      if (cols.length < 60) {
+      if (logicalN < 60) {
         ctx.fillStyle = cMuted; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(`Collecting data… ${(cols.length / 60).toFixed(1)} min`, W / 2, 18);
+        ctx.fillText(`Collecting data… ${(logicalN / 60).toFixed(1)} min`, W / 2, 18);
       }
-      if (!mobileRef.current) schedule();
+      // Unfinished decoding continues on the next frame instead of blocking this one.
+      if (moreWork) dirty = true;
+      if (!mobileRef.current || moreWork) schedule();
     };
     const schedule = () => { if (!frame && !stopped) frame = requestAnimationFrame(draw); };
     // Redraw at least once per second (new column) and on every control change.
@@ -730,12 +765,12 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     const pulse = setInterval(() => { if (mobileRef.current && ++pulses % 2) return; dirty = true; schedule(); }, COLUMN_MS);
     centerRef.current = () => { view.current.center = fixture ? demoPrice : bridge.current.latest?.price ?? NaN; view.current.rows = heatFitRows(depthSpan || buffer.bucket * 150, buffer.bucket, controls.current.grouping); dirty = true; schedule(); };
     redrawRef.current = () => { dirty = true; schedule(); };
-    if (recordedOn()) requestHistory(controls.current.windowMin, Date.now());
+    if (recordedOn() && controls.current.windowMin <= 60) requestHistory(controls.current.windowMin, Date.now());
     schedule();
 
     const goTo = (end: number) => { nav.current.end = clampEnd(end); nav.current.pendingCenter = true; navKey = ''; setLive(false); dirty = true; schedule(); };
     const goLive = () => {
-      nav.current.end = null; nav.current.pendingCenter = false; navKey = ''; longVersion++; setLive(true);
+      nav.current.end = null; nav.current.pendingCenter = false; navKey = ''; setLive(true);
       const p = fixture ? demoPrice : bridge.current.latest?.price;
       if (p !== undefined && Number.isFinite(p)) view.current.center = p;
       dirty = true; schedule();
@@ -847,8 +882,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         tip.textContent = `${m.kind === 'pulled' ? 'P · Pulled' : m.kind === 'iceberg' ? '◆ Iceberg' : '▲ Absorption'} · ${pt} · ${stamp(m.time, true)}\n${m.detail}${extra}\nContext, not a signal.`;
         return;
       }
-      if (px < W && py > H && py < H + layout.panelsH && flows.length) {
-        const cols = windowColumns(), colW = heatColumnWidth(W, cols.length), ci = Math.floor((px - (W - cols.length * colW)) / colW), f = flows[ci];
+      if (px < W && py > H && py < H + layout.panelsH && flowAt.size) {
+        const { cols, colW, x0 } = lastDraw, ci = Math.floor((px - x0) / colW), col = cols[ci], f = col ? flowAt.get(col.time) : undefined;
         if (f) { tip.style.display = 'block'; tip.style.whiteSpace = 'pre-line'; tip.style.left = `${Math.max(4, Math.min(px + 12, W - 200))}px`; tip.style.top = `${Math.max(4, py - 70)}px`;
           tip.textContent = `${stamp(f.time, true)}\nBuy ${compact(f.buy)} · Sell ${compact(f.sell)} USDT\nCVD ${f.cvd < 0 ? '−' : ''}${compact(Math.abs(f.cvd))}\nImbalance ${f.imbalance === null ? '—' : f.imbalance.toFixed(2)}`; return; }
       }
@@ -865,9 +900,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       const c = controls.current, g = c.grouping, bs = buffer.bucket * g;
       const rows = Math.max(20, Math.round(view.current.rows));
       const band = rows * bs, top = view.current.center + band / 2;
-      const cols = windowColumns();
-      const colW = heatColumnWidth(W, cols.length);
-      const ci = Math.floor((clientX - rect.left - (W - cols.length * colW)) / colW);
+      const { cols, colW, x0 } = lastDraw;
+      const ci = Math.floor((clientX - rect.left - x0) / colW);
       const r = Math.floor(((clientY - rect.top) / H) * rows);
       const col = cols[ci];
       if (!col || clientX - rect.left > W || clientY - rect.top > H || r < 0 || r >= rows) { tip.style.display = 'none'; return; }
