@@ -87,6 +87,8 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const [pro, setPro] = useState<ProSettings>(DEFAULT_PRO);
   useEffect(() => { try { setPro(restoreProSettings(localStorage.getItem(HEATMAP_PRO_KEY))); } catch { /* unavailable browser storage */ } }, []);
   const updatePro = (patch: Partial<ProSettings>) => setPro(prev => { const next = { ...prev, ...patch }; if (!toolDemoEnabled()) { try { localStorage.setItem(HEATMAP_PRO_KEY, JSON.stringify(next)); } catch { /* unavailable browser storage */ } } return next; });
+  // The Tools panel edits Wall lines / Time & Sales / panel switches in storage and announces it; re-read so both stay in sync.
+  useEffect(() => { const sync = () => { try { setWalls(restoreWallSettings(localStorage.getItem(HEATMAP_WALLS_KEY))); setPro(restoreProSettings(localStorage.getItem(HEATMAP_PRO_KEY))); } catch { /* unavailable browser storage */ } }; window.addEventListener('depthlens-heatmap-settings', sync); return () => window.removeEventListener('depthlens-heatmap-settings', sync); }, []);
   // Phones collapse ladder, lower panels and Time & Sales into toggles (off until tapped).
   const [mob, setMob] = useState({ ladder: false, panels: false, tape: false });
   const [showPro, setShowPro] = useState(false);
@@ -943,7 +945,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
 
   const center = () => centerRef.current?.();
   const control = 'text-t-muted hover:bg-t-border/50 hover:text-t-text';
-  useEffect(() => { if (symbol !== RECORDED_SYMBOL && windowMin > 60) setWindowMin(60); }, [symbol, windowMin]);
+  useEffect(() => { if (symbol !== RECORDED_SYMBOL && windowMin > 60) setWindowMin(60); else if (windowMin > 240) setWindowMin(240); }, [symbol, windowMin]);
   const nowMsAvail = Date.now();
   const availableMs = recordedAvail ? nowMsAvail - recordedOldestMs(nowMsAvail) : collected * 1000;
   const retentionText = recordedAvail ? (retention ? retentionLine(retention) : 'History kept: loading…') : 'History kept: 60 minutes (this browser)';

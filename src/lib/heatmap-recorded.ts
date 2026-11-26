@@ -5,7 +5,7 @@ import { ROWS, type Column, type HeatTrade } from './heatmap-data';
 // Volumes are coin quantities; fifth entry is the exchange second offset within the 5s interval.
 export type RecordedSnapshot = { ts: string; source: string; mid: number; step: number; base: number; bids: number[]; asks: number[]; trade_levels?: [number, number, number, number, number][]; high?: number | null; low?: number | null; close?: number | null; price_points?: [number, number][] };
 export const RECORDED_SYMBOL = 'BTCUSDT';
-export const LONG_WINDOWS = [240, 1440, 10080] as const; // 4h, 24h, 7d
+export const LONG_WINDOWS = [240] as const; // 4h only; older days via scroll-back and Go to
 const MAX_COLS = 2880;
 
 // Seconds between columns so a window never needs more than MAX_COLS columns (min 5s, the recording rate).
