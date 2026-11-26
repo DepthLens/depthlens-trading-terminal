@@ -125,8 +125,33 @@ export function fillGaps(live: readonly Column[], recorded: readonly Column[], f
 }
 
 // ---- Time navigation (paged history) ----
-// The backend cleanup job deletes snapshots older than 7 days.
+// Fallback browse-back span until the real oldest recorded time is known. The backend keeps whole UTC days
+// until the 400 MB budget is reached (oldest day removed first), so the real span comes from ob_retention_stats.
 export const RECORDED_RETENTION_MS = 7 * 86400000;
+let oldestRecorded: number | null = null;
+export const setRecordedOldest = (ms: number | null) => { oldestRecorded = ms !== null && Number.isFinite(ms) ? ms : null; };
+export const recordedOldestMs = (now = Date.now()) => oldestRecorded ?? now - RECORDED_RETENTION_MS;
+
+export type RetentionStats = { first: string | null; last: string | null; bytes: number; budget: number; perDay: number | null; oldestRemovedDay: string | null; warning: string | null };
+export async function loadRetentionStats(): Promise<RetentionStats | null> {
+  const { supabase } = await import('@/integrations/supabase/client');
+  const { data: auth } = await supabase.auth.getSession();
+  if (!auth.session) throw new Error('Sign in to read history status');
+  const { data, error } = await supabase.rpc('ob_retention_stats' as never);
+  if (error) throw new Error(error.message);
+  return data as RetentionStats | null;
+}
+const dayLabel = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+export function retentionLine(s: RetentionStats, now = Date.now()): string {
+  const mb = (b: number) => Math.round(b / 1e6);
+  if (!s.first) return `History kept: none yet · Data ${mb(s.bytes)} MB of ${mb(s.budget)} MB`;
+  const firstDay = Math.floor(Date.parse(s.first) / 86400000), today = Math.floor(now / 86400000);
+  const days = Math.max(1, today - firstDay + 1);
+  const fit = s.perDay && s.perDay > 0 ? ` · Approx. ${Math.floor(s.budget / s.perDay)} days fit at current rate` : '';
+  const removed = s.oldestRemovedDay ? ` · Oldest day removed: ${dayLabel(s.oldestRemovedDay)}` : '';
+  const warn = s.warning ? ` · Warning: ${s.warning}` : '';
+  return `History kept: ${dayLabel(s.first)} – today (${days} day${days === 1 ? '' : 's'}) · Data ${mb(s.bytes)} MB of ${mb(s.budget)} MB${fit}${removed}${warn}`;
+}
 export const RECORDED_PAGE_ROWS = 1000;
 // Server thinning used while browsing back: 5s (the recording rate) up to 60 min windows, else the long-window rate.
 export const pageEvery = (windowMin: number) => windowMin <= 60 ? 5 : recordedEvery(windowMin);

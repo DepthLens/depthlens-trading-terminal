@@ -3,7 +3,7 @@ import { Crosshair, Info, Settings2, SlidersHorizontal, History, X } from 'lucid
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { colorFor, COLUMN_MS, type Column, type HeatTrade } from '@/lib/heatmap-data';
-import { LONG_WINDOWS, RECORDED_RETENTION_MS, RECORDED_SYMBOL, buildNavColumns, fillGaps, historyRange, loadRecorded, loadRecordedPage, loadRecorderStatus, pageEvery, pageSpanMs, peekRecordedPage, recordedEvery, snapshotsToColumns, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
+import { LONG_WINDOWS, RECORDED_SYMBOL, loadRetentionStats, recordedOldestMs, retentionLine, setRecordedOldest, type RetentionStats, buildNavColumns, fillGaps, historyRange, loadRecorded, loadRecordedPage, loadRecorderStatus, pageEvery, pageSpanMs, peekRecordedPage, recordedEvery, snapshotsToColumns, thinColumns, type RecordedSnapshot, type RecorderStatus } from '@/lib/heatmap-recorded';
 import { bubbleNumber, bubbleRadius, dominantBubble } from '@/lib/heatmap-bubbles';
 import { DEFAULT_PRO, HEATMAP_PRO_KEY, restoreProSettings, scaleRange, scalePos, columnFlows, sessionProfile, replayAdvance, type ProSettings, type ColumnFlow } from '@/lib/heatmap-pro';
 import { MarkerEngine, type Marker } from '@/lib/heatmap-markers';
@@ -64,6 +64,13 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     const tick = () => { void loadRecorderStatus().then(value => { if (!stopped) setStatus(value); }).catch(error => { if (!stopped) setHistoryError(error instanceof Error ? error.message : String(error)); }); };
     tick(); const t = setInterval(tick, 30000); return () => { stopped = true; clearInterval(t); };
   }, [admin]);
+  const [retention, setRetention] = useState<RetentionStats | null>(null);
+  useEffect(() => {
+    if (symbol !== RECORDED_SYMBOL || toolDemoEnabled()) return;
+    let stopped = false;
+    const tick = () => { void loadRetentionStats().then(v => { if (stopped || !v) return; setRetention(v); setRecordedOldest(v.first ? Date.parse(v.first) : null); }).catch(() => { /* status line falls back to generic text */ }); };
+    tick(); const t = setInterval(tick, 300000); return () => { stopped = true; clearInterval(t); };
+  }, [symbol]);
   const [intensity, setIntensity] = useState(1);
   const [windowMin, setWindowMin] = useState<number>(15);
   const [grouping, setGrouping] = useState<number>(1);
@@ -148,7 +155,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     const navPageCols = new Map<string, Column[]>(), navFailedAt = new Map<string, number>(), navPending = new Set<string>();
     nav.current = { end: null, pendingCenter: false }; setLive(true); setNavLoading(false);
     const navOn = () => nav.current.end !== null;
-    const oldestMs = () => recordedOn() ? Date.now() - RECORDED_RETENTION_MS : (buffer.columns[0]?.time ?? Date.now());
+    const oldestMs = () => recordedOn() ? recordedOldestMs() : (buffer.columns[0]?.time ?? Date.now());
     const clampEnd = (end: number) => Math.min(Date.now(), Math.max(oldestMs() + 60000, end));
     const navStep = (w: number) => w <= 60 ? 1 : recordedEvery(w);
     const requestPage = (every: number, p: number) => {
@@ -174,7 +181,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         for (const c of pageCols) if (c.time >= from && c.time < end) out.push(c);
       }
       // Prefetch the next older page so dragging back stays fast.
-      if ((first - 1) * span >= Date.now() - RECORDED_RETENTION_MS && !peekRecordedPage(every, first - 1)) requestPage(every, first - 1);
+      if ((first - 1) * span >= recordedOldestMs() && !peekRecordedPage(every, first - 1)) requestPage(every, first - 1);
       return out;
     };
     const navColumns = (): readonly Column[] => {
@@ -888,8 +895,9 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const center = () => centerRef.current?.();
   const control = 'text-t-muted hover:bg-t-border/50 hover:text-t-text';
   useEffect(() => { if (symbol !== RECORDED_SYMBOL && windowMin > 60) setWindowMin(60); }, [symbol, windowMin]);
-  const availableMs = recordedAvail ? RECORDED_RETENTION_MS : collected * 1000;
-  const retentionText = recordedAvail ? `History kept: up to ${Math.round(RECORDED_RETENTION_MS / 86400000)} days (storage capped)` : 'History kept: 60 minutes (this browser)';
+  const nowMsAvail = Date.now();
+  const availableMs = recordedAvail ? nowMsAvail - recordedOldestMs(nowMsAvail) : collected * 1000;
+  const retentionText = recordedAvail ? (retention ? retentionLine(retention) : 'History kept: loading…') : 'History kept: 60 minutes (this browser)';
   const nowMs = Date.now();
   const pickTime = (value: string) => { setGotoValue(value); const t = new Date(value).getTime(); if (Number.isFinite(t)) navApi.current?.goTo(t + windowMin * 30000); };
   const liveButton = (cls: string) => <Button size="sm" onClick={() => navApi.current?.goLive()} className={`${cls} bg-t-accent text-t-bg hover:bg-t-accent/90`} aria-label="Return to live">Live ▶</Button>;
@@ -946,7 +954,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       {([['ladder', 'Book'], ['panels', 'Panels'], ['tape', 'T&S']] as const).map(([k, label]) => <Button key={k} variant="ghost" size="sm" aria-pressed={mob[k]} onClick={() => setMob(m => ({ ...m, [k]: !m[k] }))} className={`h-7 px-2.5 text-xs ${mob[k] ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{label}</Button>)}
       <Button variant="ghost" size="sm" aria-pressed={replayOn} disabled={!recordedAvail && collected < 120} onClick={() => setReplayOn(v => { if (v) replayApi.current?.exit(); return !v; })} className={`h-7 px-2.5 text-xs ${replayOn ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}><History className="size-3.5" />Replay</Button>
     </div>}
-    {replayOn && <ReplayBar mobile={mobile} replayRef={replayRef} api={replayApi} minTime={Date.now() - (recordedAvail ? RECORDED_RETENTION_MS : collected * 1000)} onExit={() => { replayApi.current?.exit(); setReplayOn(false); }} />}
+    {replayOn && <ReplayBar mobile={mobile} replayRef={replayRef} api={replayApi} minTime={recordedAvail ? recordedOldestMs() : Date.now() - collected * 1000} onExit={() => { replayApi.current?.exit(); setReplayOn(false); }} />}
     {!mobile && showPro && <div className="absolute right-2 top-full z-30 mt-1 max-h-[70vh] w-80 overflow-y-auto rounded-md border border-t-border bg-t-panel p-3 text-xs text-t-text shadow-lg" style={{ top: 0, marginTop: 44 }}><div className="mb-2 flex items-center justify-between"><span className="font-semibold">Panels, markers & alerts</span><Button variant="ghost" size="icon" className={`size-6 ${control}`} aria-label="Close panels and alerts" onClick={() => setShowPro(false)}><X className="size-3.5" /></Button></div><HeatmapProPanel pro={pro} update={updatePro} alerts={alerts} updateAlerts={updateAlerts} recordedNote={!recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL} signedIn={userId !== null} /></div>}
     <div className="flex min-h-0 flex-1">
     <div className="relative min-h-0 flex-1">
