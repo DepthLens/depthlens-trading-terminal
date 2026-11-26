@@ -1,6 +1,6 @@
 export type ConnectionSource = 'binance' | 'bybit';
 export type ConnectionSnapshot = { source: string; state: string; openSockets: number; lastError: string; lastMessageAt: number | null; failures: number; connectedAt: number | null };
-type Options = { exchange?: ConnectionSource; purpose?: 'active' | 'markets' | 'book'; subscription?: object; onFailure?: (failures: number) => void };
+type Options = { exchange?: ConnectionSource; purpose?: 'active' | 'markets' | 'book' | 'footprint'; subscription?: object; onFailure?: (failures: number) => void };
 type Entry = { key: string; url: string; socket?: WebSocket; stopped: boolean; timer?: ReturnType<typeof setTimeout>; idle?: ReturnType<typeof setTimeout>; failures: number; state: string; lastError: string; lastMessageAt: number | null; connectedAt: number | null; stop: (reason: string) => void };
 type Topic = { receive: (data: any) => void; connection: (open: boolean) => void };
 

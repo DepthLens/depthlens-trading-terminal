@@ -3,7 +3,7 @@ import { Settings, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { GROUPS, buildCandle, since, type FootprintSettings } from '@/lib/footprint-data';
-import { footprintTail, peekFootprint } from '@/lib/footprint-store';
+import { footprintLiveExchange, footprintTail, peekFootprint } from '@/lib/footprint-store';
 import { baseTicks, ensurePages, isRecordedFootprint, pagesFor, recordedCandle, recordingStartMs } from '@/lib/footprint-recorded';
 import type { TradeSource } from '@/lib/live-price';
 
@@ -19,7 +19,7 @@ export function FootprintSettingsPanel({ settings, onChange, onClose, mobile, th
     const group = Math.max(1, Math.round(rowSize / tick));
     const recStart = recordingStartMs(), useRec = isRecordedFootprint(symbol) && recStart !== null && start >= recStart;
     const rec = async () => {
-      const args = { start, minutes, tick, group, ratio: settings.ratio, unit: 'coin' as const, recStart, tail: footprintTail(source, symbol) };
+      const args = { start, minutes, tick, group, ratio: settings.ratio, unit: 'coin' as const, recStart, tail: footprintTail(footprintLiveExchange(source, symbol), symbol) };
       let r = recordedCandle(args);
       if (r.kind === 'loading') { await ensurePages(tick, baseTicks(minutes), pagesFor(start, start + ms, baseTicks(minutes))); r = recordedCandle(args); }
       return r.kind === 'ok' ? r.candle : null;

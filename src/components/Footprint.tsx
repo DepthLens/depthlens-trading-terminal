@@ -3,7 +3,7 @@ import type { CandlestickSeriesOptions } from 'lightweight-charts';
 import { clusterRowTicks, FOOTPRINT_FIT_SPACING, buildCandle, formatVolume, since, type FootprintSettings } from '@/lib/footprint-data';
 import { shouldFitFootprint } from '@/lib/tool-layout';
 import { toolDemoEnabled, demoFootprint } from '@/lib/tool-demo';
-import { backfillFootprint, footprintStore, footprintTail } from '@/lib/footprint-store';
+import { backfillFootprint, binanceFootprintFeed, footprintLiveExchange, footprintStore, footprintTail } from '@/lib/footprint-store';
 import { baseTicks, effectiveGroup, ensurePages, ensureRecordingStart, isRecordedFootprint, pagesFor, recordedCandle, recordedError, recordingStartMs } from '@/lib/footprint-recorded';
 import { FootprintPrimitive, type FootprintBar } from '@/lib/footprint-overlay';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
@@ -24,6 +24,11 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
     api.chart.timeScale().applyOptions({ barSpacing: FOOTPRINT_FIT_SPACING, rightOffset: 2 });
     api.chart.timeScale().scrollToRealTime();
   }, [chartRef, source, symbol, minutes, revision]);
+  // Recorded BTCUSDT candles are Binance: keep the forming candle on Binance trades even when Auto picked Bybit.
+  useEffect(() => {
+    if (source === 'binance' || !isRecordedFootprint(symbol) || toolDemoEnabled()) return;
+    return binanceFootprintFeed(symbol, spec.minMove);
+  }, [source, symbol, spec.minMove]);
   const noteRef = useRef<HTMLDivElement>(null), hintRef = useRef<HTMLDivElement>(null), tipRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const api = chartRef.current, host = hostRef.current, note = noteRef.current, hint = hintRef.current, tip = tipRef.current;
@@ -58,7 +63,7 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
       if (recorded) group = effectiveGroup(group, baseTicks(minutes));
       const bars: FootprintBar[] = [];
       let loading = 0, before = 0, need: number[] = [];
-      const tail = recorded ? footprintTail(source, symbol) : { start: null, trades: [] };
+      const liveEx = footprintLiveExchange(source, symbol), tail = recorded ? footprintTail(liveEx, symbol) : { start: null, trades: [] };
       for (let i = lo; i <= hi; i++) {
         const d = data[i]; if (!d || !('high' in d)) continue;
         const time = Number(d.time);
@@ -81,9 +86,9 @@ export function Footprint({ chartRef, hostRef, source, symbol, settings, spec, m
       const first = since(store);
       const live = `Footprint data since ${first === null ? '—' : new Date(first).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} · Real trades from ${SOURCE_NAME[source]} only`;
       note.textContent = recorded
-        ? `Source: recorded trades (Binance BTCUSDT) from ${recStart === null ? '…' : utcTime(recStart)}${source !== 'binance' ? ` · live candle: ${SOURCE_NAME[source]}` : ''}${loading ? ' · Loading recorded footprint…' : ''}${before ? ' · Older candles: not recorded' : ''}`
+        ? `Source: recorded trades (Binance BTCUSDT) from ${recStart === null ? '…' : utcTime(recStart)}${liveEx === 'binance' ? ' · Live candle: Binance' : ` · Live candle: ${SOURCE_NAME[liveEx]} (different exchange, not comparable)`}${loading ? ' · Loading recorded footprint…' : ''}${before ? ' · Older candles: not recorded' : ''}`
         : `${isRecordedFootprint(symbol) && err && !demo ? `Recorded footprint unavailable (${err}) · ` : ''}Source: live · ${live}`;
-      Object.assign(note.dataset, { group: String(group), auto: String(settings.grouping === 'Auto'), rowSize: String(+(group * spec.minMove).toPrecision(10)), since: first === null ? '' : String(first), candles: String(bars.filter(b => b.fp.coverage !== 'none').length), partial: String(bars.filter(b => b.fp.coverage === 'partial').length), source, recorded: String(recorded), recStart: recStart === null ? '' : String(recStart), loading: String(loading), notRecorded: String(before) });
+      Object.assign(note.dataset, { group: String(group), auto: String(settings.grouping === 'Auto'), rowSize: String(+(group * spec.minMove).toPrecision(10)), since: first === null ? '' : String(first), candles: String(bars.filter(b => b.fp.coverage !== 'none').length), partial: String(bars.filter(b => b.fp.coverage === 'partial').length), source, liveSource: recorded ? liveEx : source, recorded: String(recorded), recStart: recStart === null ? '' : String(recStart), loading: String(loading), notRecorded: String(before) });
       primitive.refresh();
     };
     const schedule = () => { clearTimeout(timer); timer = setTimeout(() => { timer = undefined; recalculate(); }, 200); };

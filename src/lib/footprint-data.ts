@@ -137,3 +137,23 @@ export function autoRowTicks(avgRange: number, tick: number) {
   const max = Math.max(1, Math.floor(avgRange / 6 / tick + 1e-9));
   return Math.max(1, Math.min(max, Math.round(avgRange / 12 / tick)));
 }
+/** Below this bar spacing the zoomed-out footprint draws delta-coloured bodies instead of per-level bars. */
+export const FOOTPRINT_NARROW_SPACING = 16;
+export type FootprintZoom = 'detail' | 'levels' | 'bodies';
+/** Zoom level of the footprint: numbers (detail), per-level delta bars (levels) or delta-coloured bodies. */
+export function footprintZoomMode(spacing: number): FootprintZoom {
+  return spacing >= FOOTPRINT_DETAIL_SPACING ? 'detail' : spacing >= FOOTPRINT_NARROW_SPACING ? 'levels' : 'bodies';
+}
+/** Colour strength 0.25–1 for a delta relative to the largest visible absolute delta. */
+export function deltaStrength(delta: number, maxAbs: number) {
+  if (!(maxAbs > 0) || !Number.isFinite(delta)) return .25;
+  return .25 + .75 * Math.min(1, Math.abs(delta) / maxAbs);
+}
+/** Recorded BTCUSDT candles are Binance, so the forming candle stays on Binance whenever its trades are fresh
+ * (or its dedicated feed is still connecting); only then does it fall back to the active exchange. */
+export function liveCandleExchange(active: 'binance' | 'bybit', binanceLastAt: number | null, feedStartedAt: number | null, now: number): 'binance' | 'bybit' {
+  if (active === 'binance') return 'binance';
+  if (binanceLastAt !== null && now - binanceLastAt < 10000) return 'binance';
+  if (feedStartedAt !== null && now - feedStartedAt < 10000) return 'binance';
+  return active;
+}

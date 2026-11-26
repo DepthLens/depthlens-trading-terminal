@@ -1,11 +1,10 @@
 import type { ISeriesPrimitive, IPrimitivePaneView, Time } from 'lightweight-charts';
 import type { OverlayChart, OverlayProbe, OverlaySample, Palette } from './chart-overlays';
-import { FOOTPRINT_DETAIL_SPACING, formatVolume, rowImbalance, type FootprintCandle, type FootprintSettings } from './footprint-data';
+import { deltaStrength, footprintZoomMode, formatVolume, rowImbalance, type FootprintCandle, type FootprintSettings } from './footprint-data';
 
 import { emptyFootprintColumn } from './tool-layout';
 
 export type FootprintBar = { time: number; open: number; close: number; high: number; low: number; fp: FootprintCandle };
-const rgba = (rgb: string, a: number) => rgb.replace('rgb(', 'rgba(').replace(')', `,${a.toFixed(3)})`);
 
 // Only prices/times/volumes are renderer inputs; samples are diagnostic output, never reused.
 export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe {
@@ -32,8 +31,12 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
   private views: IPrimitivePaneView[] = [{ zOrder: () => 'normal', renderer: () => ({ draw: target => target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
     this.lastDraw = []; this.outside = 0;
     const ts = this.api.chart.timeScale(), spacing = ts.options().barSpacing, w = this.cellWidth(), s = this.settings, c = this.colors;
-    const detailed = spacing >= FOOTPRINT_DETAIL_SPACING && !this.hidden;
-    let texts = 0, cells = 0, imbalances = 0, emptyColumns = 0, stacked = 0;
+    const zoom = this.hidden ? 'bodies' : footprintZoomMode(spacing), detailed = zoom === 'detail';
+    let texts = 0, cells = 0, imbalances = 0, emptyColumns = 0, stacked = 0, levels = 0, dots = 0;
+    // Zoomed out: colour strength is relative to the largest visible candle delta; the delta row collects per candle.
+    let maxDelta = 0;
+    if (!detailed) for (const b of this.bars) if (b.fp.rows.length) maxDelta = Math.max(maxDelta, Math.abs(b.fp.ask - b.fp.bid));
+    const deltaRow: { x: number; delta: number }[] = [];
     ctx.save();
     const range = ts.getVisibleLogicalRange(), data = this.api.series.data();
     const cached = new Map(this.bars.map(bar => [bar.time, bar]));
@@ -50,9 +53,29 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
       if (hi === null || lo === null || open === null || close === null) continue;
       const hasData = bar.fp.rows.length > 0, cluster = detailed && hasData;
       const left = x - w / 2, candleX = cluster ? left + 3 : x, bodyW = cluster || (detailed&&!hasData) ? 4 : Math.max(1, Math.min(spacing * .6, 20));
-      ctx.globalAlpha = 1; ctx.strokeStyle = ctx.fillStyle = bar.close >= bar.open ? c.up : c.down;
-      ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(candleX, hi); ctx.lineTo(candleX, lo); ctx.stroke();
-      ctx.fillRect(candleX - bodyW / 2, Math.min(open, close), bodyW, Math.max(1, Math.abs(close - open)));
+      if (detailed || !hasData) {
+        ctx.globalAlpha = 1; ctx.strokeStyle = ctx.fillStyle = bar.close >= bar.open ? c.up : c.down;
+        ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(candleX, hi); ctx.lineTo(candleX, lo); ctx.stroke();
+        ctx.fillRect(candleX - bodyW / 2, Math.min(open, close), bodyW, Math.max(1, Math.abs(close - open)));
+      } else {
+        const delta = bar.fp.ask - bar.fp.bid;
+        deltaRow.push({ x, delta });
+        if (zoom === 'levels') levels += this.drawLevels(ctx, bar, x, w, hi, lo, mediaSize.height);
+        else {
+          // Narrow: body coloured by candle delta (stronger for bigger delta), thin wick, yellow POC dot.
+          const color = delta >= 0 ? c.up : c.down;
+          ctx.globalAlpha = .8; ctx.strokeStyle = color; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(x, hi); ctx.lineTo(x, lo); ctx.stroke();
+          ctx.globalAlpha = deltaStrength(delta, maxDelta); ctx.fillStyle = color;
+          ctx.fillRect(x - bodyW / 2, Math.min(open, close), bodyW, Math.max(1, Math.abs(close - open)));
+          const pocRow = s.poc ? bar.fp.rows.find(r => r.row === bar.fp.poc) : undefined;
+          const py = pocRow ? this.api.series.priceToCoordinate(Math.min(bar.high, Math.max(bar.low, (pocRow.low + pocRow.high) / 2))) : null;
+          if (py !== null) {
+            ctx.globalAlpha = 1; ctx.fillStyle = c.poc; ctx.beginPath(); ctx.arc(x, py, Math.max(1.5, Math.min(3, spacing * .22)), 0, Math.PI * 2); ctx.fill(); dots++;
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
       if (bar.fp.note === 'not-recorded' && spacing >= 40 && !this.hidden && hi > 14) {
         ctx.save(); ctx.globalAlpha = .45; ctx.font = '9px ui-monospace,monospace'; ctx.fillStyle = c.muted; ctx.textBaseline = 'bottom';
         const label = 'not recorded'; ctx.fillText(label, x - this.measure(ctx, label) / 2, hi - 3, Math.max(20, w)); ctx.restore();
@@ -61,11 +84,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
         if(emptyFootprintColumn(spacing,hasData)&&!this.hidden){emptyColumns++;ctx.save();ctx.globalAlpha=.28;ctx.strokeStyle=c.muted;ctx.setLineDash([3,3]);ctx.strokeRect(left+.5,hi+.5,w-1,Math.max(1,lo-hi-1));ctx.restore();this.lastDraw.push({name:'Footprint no-data column',price:bar.high,drawnY:hi});if(w>=100&&lo-hi>18){ctx.font='10px ui-monospace,monospace';ctx.fillStyle=c.muted;ctx.textBaseline='middle';ctx.fillText('No footprint data',left+7,(hi+lo)/2,w-14);}}
         continue;
       }
-      if (!cluster) {
-        ctx.fillStyle = rgba(bar.fp.ask >= bar.fp.bid ? c.up : c.down, .18);
-        ctx.fillRect(left, hi, w, Math.max(0, lo - hi));
-        continue;
-      }
+      if (!cluster) continue;
       const cellLeft = left + 9, cellW = w - 9;
       const rows = bar.fp.rows.filter(r => r.bid + r.ask > 0 && r.high > bar.low && r.low < bar.high);
       const peak = Math.max(1e-12, ...rows.map(r => r.bid + r.ask));
@@ -125,10 +144,46 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time>, OverlayProbe 
         }
       }
     }
+    // Delta row under the chart: numbers when columns are wide enough, coloured mini-bars when narrow.
+    if (!detailed && s.totals && deltaRow.length) {
+      const mid = mediaSize.height - 14, barW = Math.max(1, Math.min(spacing * .6, 12));
+      ctx.font = '10px ui-monospace, monospace'; ctx.textBaseline = 'middle';
+      for (const { x, delta } of deltaRow) {
+        ctx.fillStyle = delta >= 0 ? c.up : c.down;
+        if (spacing >= 48) { const label = `${delta >= 0 ? '+' : ''}${formatVolume(delta)}`; ctx.globalAlpha = 1; ctx.fillText(label, x - this.measure(ctx, label) / 2, mid, spacing - 4); }
+        else { const h = Math.max(1, 9 * (maxDelta > 0 ? Math.abs(delta) / maxDelta : 0)); ctx.globalAlpha = deltaStrength(delta, maxDelta); ctx.fillRect(x - barW / 2, delta >= 0 ? mid - h : mid, barW, h); }
+      }
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
-    Object.assign(this.api.host.dataset, { footprintEmpty: String(emptyColumns), footprintOutside: String(this.outside), footprintTexts: String(texts), footprintCells: String(cells), footprintImbalances: String(imbalances), footprintStacked: String(stacked), footprintSpacing: String(spacing) });
+    Object.assign(this.api.host.dataset, { footprintMode: zoom, footprintLevels: String(levels), footprintDots: String(dots), footprintDeltaRow: String(!detailed && s.totals ? deltaRow.length : 0), footprintEmpty: String(emptyColumns), footprintOutside: String(this.outside), footprintTexts: String(texts), footprintCells: String(cells), footprintImbalances: String(imbalances), footprintStacked: String(stacked), footprintSpacing: String(spacing) });
   }) }) }];
   paneViews() { return this.views; }
+  /** Medium zoom: thin per-level bars inside high–low, coloured by level delta (strength by size), yellow POC tick, thin wick. */
+  private drawLevels(ctx: CanvasRenderingContext2D, bar: FootprintBar, x: number, w: number, hi: number, lo: number, height: number) {
+    const c = this.colors;
+    ctx.globalAlpha = .7; ctx.strokeStyle = bar.close >= bar.open ? c.up : c.down; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, hi); ctx.lineTo(x, lo); ctx.stroke();
+    const rows = bar.fp.rows.filter(r => r.bid + r.ask > 0 && r.high > bar.low && r.low < bar.high);
+    let peak = 1e-12, peakDelta = 1e-12;
+    for (const r of rows) { peak = Math.max(peak, r.bid + r.ask); peakDelta = Math.max(peakDelta, Math.abs(r.ask - r.bid)); }
+    let drawn = 0;
+    for (const row of rows) {
+      const topP = Math.min(row.high, bar.high), bottomP = Math.max(row.low, bar.low);
+      const y1 = this.api.series.priceToCoordinate(topP), y2 = this.api.series.priceToCoordinate(bottomP);
+      if (y1 === null || y2 === null || y2 <= y1 || y2 < 0 || y1 > height) continue;
+      if (y1 < hi - 1 || y2 > lo + 1) this.outside++;
+      if (this.lastDraw.length < 24) this.lastDraw.push({ name: 'Footprint within high/low', price: topP, drawnY: y1 });
+      const delta = row.ask - row.bid, barW = w * Math.max(.15, (row.bid + row.ask) / peak), h = Math.max(1, Math.min(y2 - y1 - 1, (y2 - y1) * .7));
+      ctx.globalAlpha = deltaStrength(delta, peakDelta); ctx.fillStyle = delta >= 0 ? c.up : c.down;
+      ctx.fillRect(x - barW / 2, (y1 + y2) / 2 - h / 2, barW, h); drawn++;
+    }
+    const pocRow = this.settings.poc ? rows.find(r => r.row === bar.fp.poc) : undefined;
+    const py = pocRow ? this.api.series.priceToCoordinate((Math.min(pocRow.high, bar.high) + Math.max(pocRow.low, bar.low)) / 2) : null;
+    if (py !== null) { ctx.globalAlpha = 1; ctx.fillStyle = c.poc; ctx.fillRect(x - Math.max(3, w * .35), py - 1, Math.max(6, w * .7), 2); }
+    ctx.globalAlpha = 1;
+    return drawn;
+  }
   at(x: number, y: number) {
     const ts = this.api.chart.timeScale(), half = this.cellWidth() / 2;
     for (const bar of this.bars) {

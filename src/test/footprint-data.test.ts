@@ -86,3 +86,29 @@ describe('footprint auto row size', () => {
   it('never goes below one tick', () => { expect(autoRowTicks(0.3, 0.1)).toBe(1); expect(autoRowTicks(0, 0.1)).toBe(1); });
   it('never exceeds one sixth of the average range', () => { expect(autoRowTicks(0.65, 0.1) * 0.1).toBeLessThanOrEqual(0.65 / 6 + 1e-9); });
 });
+
+describe('zoomed-out footprint and live candle exchange', () => {
+  it('shows numbers from 70px, level bars from 16px and coloured bodies below 16px', async () => {
+    const { footprintZoomMode } = await import('@/lib/footprint-data');
+    expect(footprintZoomMode(110)).toBe('detail');
+    expect(footprintZoomMode(70)).toBe('detail');
+    expect(footprintZoomMode(69)).toBe('levels');
+    expect(footprintZoomMode(16)).toBe('levels');
+    expect(footprintZoomMode(15)).toBe('bodies');
+  });
+  it('makes bigger deltas stronger', async () => {
+    const { deltaStrength } = await import('@/lib/footprint-data');
+    expect(deltaStrength(-100, 100)).toBe(1);
+    expect(deltaStrength(0, 100)).toBe(.25);
+    expect(deltaStrength(50, 100)).toBeCloseTo(.625);
+  });
+  it('keeps the BTCUSDT live candle on Binance under Auto, and falls back only when Binance is unavailable', async () => {
+    const { liveCandleExchange } = await import('@/lib/footprint-data');
+    const now = 1_000_000;
+    expect(liveCandleExchange('bybit', now - 500, now - 60000, now)).toBe('binance');
+    expect(liveCandleExchange('bybit', null, now - 2000, now)).toBe('binance');
+    expect(liveCandleExchange('bybit', now - 30000, now - 60000, now)).toBe('bybit');
+    expect(liveCandleExchange('bybit', null, null, now)).toBe('bybit');
+    expect(liveCandleExchange('binance', null, null, now)).toBe('binance');
+  });
+});

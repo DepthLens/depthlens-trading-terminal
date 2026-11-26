@@ -1,5 +1,6 @@
 // Module-level footprint buffers keyed by source:symbol, persisted to IndexedDB every 10 s.
-import { addLiveTrade, addSegment, addTrade, createStore, isCovered, lastGap, mergeSegments, prune, DAY, type FootprintStore } from './footprint-data';
+import { addLiveTrade, addSegment, addTrade, createStore, isCovered, lastGap, liveCandleExchange, mergeSegments, prune, DAY, type FootprintStore } from './footprint-data';
+import { marketStream } from './market-stream';
 import type { LivePrice, TradeSource } from './live-price';
 import { isRecordedFootprint, type TailTrade } from './footprint-recorded';
 
@@ -49,6 +50,9 @@ export function footprintStore(source: TradeSource, symbol: string, tick: number
 export function peekFootprint(source: TradeSource, symbol: string) { return stores.get(`${source}:${symbol}`) ?? null; }
 export function addFootprintTrade(symbol: string, tick: LivePrice, minMove: number) {
   if (!tick.exchange || tick.size === undefined || !tick.side) return;
+  // The active feed and the dedicated Binance footprint feed can overlap briefly; aggTrade IDs keep each trade once.
+  if (tick.exchange === 'binance' && tick.tradeId !== undefined && isRecordedFootprint(symbol) && markSeen(`binance:${symbol}`, tick.tradeId, tick.time)) return;
+  if (isRecordedFootprint(symbol)) liveAt.set(`${tick.exchange}:${symbol}`, Date.now());
   addLiveTrade(footprintStore(tick.exchange, symbol, minMove), tick.time, tick.price, tick.size, tick.side === 'Sell');
   if (isRecordedFootprint(symbol)) addTail(`${tick.exchange}:${symbol}`, { time: tick.time, price: tick.price, size: tick.size, sell: tick.side === 'Sell' });
 }
@@ -66,6 +70,60 @@ function addTail(key: string, t: TailTrade) {
     while (i < tail.trades.length && ((tail.trades[i]?.time ?? 0) < cut || tail.trades.length - i > TAIL_MAX)) i++;
     tail.trades.splice(0, i); tail.start = Math.max(tail.start, cut);
   }
+}
+const seenIds = new Map<string, Map<string, number>>(), liveAt = new Map<string, number>(), feedStarted = new Map<string, number>();
+function markSeen(key: string, id: string, time: number) {
+  let ids = seenIds.get(key); if (!ids) { ids = new Map(); seenIds.set(key, ids); }
+  if (ids.has(id)) return true;
+  ids.set(id, time);
+  if (ids.size > TAIL_MAX * 1.2) for (const [k, t] of ids) { if (t < time - TAIL_MS - 60000) ids.delete(k); else break; }
+  return false;
+}
+/** Exchange whose trades build the BTCUSDT forming candle next to recorded (Binance) candles. */
+export function footprintLiveExchange(active: TradeSource, symbol: string, now = Date.now()): TradeSource {
+  return liveCandleExchange(active, liveAt.get(`binance:${symbol}`) ?? null, feedStarted.get(symbol) ?? null, now);
+}
+/** While the active price source is not Binance, the recorded symbol's forming candle still needs Binance trades:
+ * one dedicated aggTrade socket through the connection manager, plus a one-off REST fill of the last 90 s. */
+export function binanceFootprintFeed(symbol: string, minMove: number) {
+  const lower = symbol.toLowerCase(), abort = new AbortController();
+  feedStarted.set(symbol, Date.now());
+  const stop = marketStream(`wss://fstream.binance.com/market/stream?streams=${lower}@aggTrade`, message => {
+    const d = message?.data ?? message;
+    if (!d || d.e !== 'aggTrade' || d.s !== symbol) return;
+    const price = Number(d.p), time = Number(d.T), size = Number(d.q);
+    if (!(price > 0) || !Number.isFinite(time) || !(size > 0)) return;
+    addFootprintTrade(symbol, { price, time, direction: 0, size, side: d.m ? 'Sell' : 'Buy', exchange: 'binance', source: 'trade', ...(d.a === undefined ? {} : { tradeId: String(d.a) }) }, minMove);
+  }, undefined, { exchange: 'binance', purpose: 'footprint' });
+  void fillBinanceTail(symbol, abort.signal);
+  return () => { abort.abort(); stop(); feedStarted.delete(symbol); };
+}
+async function fillBinanceTail(symbol: string, signal: AbortSignal) {
+  if (Date.now() < pausedUntil) return;
+  const key = `binance:${symbol}`, prior = tails.get(key);
+  const priorStart = prior?.start ?? null, priorLast = prior?.trades.at(-1)?.time ?? null;
+  const startedAt = Date.now(), from = startedAt - 90000;
+  let url = `https://fapi.binance.com/fapi/v1/aggTrades?symbol=${symbol}&startTime=${from}&limit=1000`;
+  try {
+    for (let page = 0; page < 4; page++) {
+      const r = await fetch(url, { signal });
+      if (r.status === 429 || r.status === 418) { pausedUntil = Date.now() + 60000; return; }
+      if (!r.ok) return;
+      const list = await r.json();
+      if (!Array.isArray(list) || !list.length || signal.aborted) break;
+      for (const t of list) {
+        const time = Number(t.T), price = Number(t.p), size = Number(t.q);
+        if (!(price > 0) || !(size > 0) || !Number.isFinite(time) || markSeen(key, String(t.a), time)) continue;
+        addTail(key, { time, price, size, sell: t.m === true });
+      }
+      if (list.length < 1000 || Number(list.at(-1).T) >= startedAt) break;
+      url = `https://fapi.binance.com/fapi/v1/aggTrades?symbol=${symbol}&fromId=${Number(list.at(-1).a) + 1}&limit=1000`;
+    }
+    const tail = tails.get(key); if (!tail || signal.aborted) return;
+    tail.trades.sort((a, b) => a.time - b.time);
+    // Contiguous since the older start only if the previous tail reaches into the filled window.
+    tail.start = priorStart !== null && priorLast !== null && priorLast >= from ? Math.min(priorStart, from) : from;
+  } catch { /* honest partial candle: the tail start stays at the first live trade */ }
 }
 export function footprintTail(source: TradeSource, symbol: string): { start: number | null; trades: readonly TailTrade[] } {
   const tail = tails.get(`${source}:${symbol}`);
