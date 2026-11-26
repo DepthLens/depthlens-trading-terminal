@@ -35,3 +35,4 @@
 - Forex: only server fns call Twelve Data, each via `fx_take_call` (shared free limit); browsers read `forex_candles`.
 - Auth gate: `src/routes/_authenticated/`; beta/admin changes only via SQL functions so users can't self-escalate.
 - Forex terminal reuses TerminalView (forex prop) with its own storage keys; forex-terminal.ts owns pair kinds/tabs. XAUUSDT uses the normal Binance tools; spot pairs show ForexChart (forex_candles) and an honest unavailable card, never fake data.
+- Heatmap time navigation builds a time-linear grid via browser-safe `buildNavColumns` from the live buffer plus fixed-size recorded pages (`loadRecordedPage`, cached, failures never cached); empty slots stay blank so missing history is never invented.
