@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X, Layers, Check, ChevronDown, UserRound, LogOut, ExternalLink, MoreHorizontal, ArrowLeftRight, SlidersHorizontal } from 'lucide-react';
+import { X, Layers, Check, ChevronDown, UserRound, LogOut, ExternalLink, MoreHorizontal, ArrowLeftRight, Pencil } from 'lucide-react';
 import { PriceChart } from '@/components/PriceChart';
 import { Heatmap } from '@/components/Heatmap';
 import { DomLadder } from '@/components/DomLadder';
@@ -215,8 +215,10 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
     'Flow Radar':resetRadar,
   };
   const editSections:EditSection[]=showEdit?editTools(state.tools).filter(id=>editReset[id]&&(id!=='Footprint'||activeSpec)).map(id=>({id,name:editNames[id]??id,body:editBody(id),reset:editReset[id]!})):[];
-  const editButton=mobile?<Button variant="ghost" size="icon" className="btn-accent mr-1 size-10 shrink-0" aria-label="Edit tool settings" title="Edit tool settings" aria-expanded={showEdit} onClick={()=>setShowEdit(o=>!o)}><SlidersHorizontal/></Button>:<Button variant="ghost" size="sm" aria-expanded={showEdit} onClick={()=>setShowEdit(o=>!o)} className="btn-accent gap-1.5 font-semibold tracking-wide"><SlidersHorizontal/>Edit<ChevronDown className="opacity-70"/></Button>;
-  const editPanel=<EditPanel open={showEdit} onClose={()=>setShowEdit(false)} mobile={mobile} theme={state.theme} button={editButton} sections={editSections} disabledReason={isFx?FX_UNAVAILABLE:null}/>;
+  const editButton=mobile?<Button variant="ghost" size="icon" className="btn-accent mr-1 size-10 shrink-0" aria-label="Edit tool settings" title="Edit tool settings" aria-expanded={showEdit} onClick={()=>setShowEdit(o=>!o)}><Pencil/></Button>:<Button variant="ghost" size="sm" aria-expanded={showEdit} onClick={()=>setShowEdit(o=>!o)} className="btn-accent gap-1.5 font-semibold tracking-wide"><Pencil/>Edit<ChevronDown className="opacity-70"/></Button>;
+  const hasEditTools=editTools(state.tools).length>0;
+  useEffect(()=>{if(!hasEditTools)setShowEdit(false);},[hasEditTools]);
+  const editPanel=!hasEditTools?null:<EditPanel open={showEdit} onClose={()=>setShowEdit(false)} mobile={mobile} theme={state.theme} button={editButton} sections={editSections} disabledReason={isFx?FX_UNAVAILABLE:null}/>;
   const customForm=showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs mobile:h-10 mobile:text-sm"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90 mobile:h-10">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>;
   return <div data-mobile={mobile||undefined} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text mobile:min-h-0 mobile:pt-[env(safe-area-inset-top)] mobile:pr-[env(safe-area-inset-right)] mobile:pb-[env(safe-area-inset-bottom)] mobile:pl-[env(safe-area-inset-left)]">
     {mobile?<header className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b border-t-border bg-t-panel px-2 py-1">
