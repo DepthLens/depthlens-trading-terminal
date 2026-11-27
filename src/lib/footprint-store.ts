@@ -85,7 +85,16 @@ export function footprintLiveExchange(active: TradeSource, symbol: string, now =
 }
 /** While the active price source is not Binance, the recorded symbol's forming candle still needs Binance trades:
  * one dedicated aggTrade socket through the connection manager, plus a one-off REST fill of the last 90 s. */
+// Footprint and CVD share one feed per symbol (reference counted), so both tools never open two sockets.
+const sharedFeeds = new Map<string, { users: number; stop: () => void }>();
 export function binanceFootprintFeed(symbol: string, minMove: number) {
+  let feed = sharedFeeds.get(symbol);
+  if (!feed) { feed = { users: 0, stop: openBinanceFeed(symbol, minMove) }; sharedFeeds.set(symbol, feed); }
+  feed.users++;
+  let done = false;
+  return () => { if (done) return; done = true; const f = sharedFeeds.get(symbol); if (f && --f.users <= 0) { sharedFeeds.delete(symbol); f.stop(); } };
+}
+function openBinanceFeed(symbol: string, minMove: number) {
   const lower = symbol.toLowerCase(), abort = new AbortController();
   feedStarted.set(symbol, Date.now());
   const stop = marketStream(`wss://fstream.binance.com/market/stream?streams=${lower}@aggTrade`, message => {

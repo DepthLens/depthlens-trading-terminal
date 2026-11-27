@@ -317,6 +317,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      ob_cvd: { Args: { p_from: string; p_to: string }; Returns: Json }
       ob_fire: { Args: { p_source: string; p_ts: string }; Returns: undefined }
       ob_footprint: {
         Args: { p_bin: number; p_from: string; p_to: string }

@@ -1,7 +1,10 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import { BaselineSeries, CandlestickSeries, HistogramSeries, LineStyle, type AutoscaleInfo, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
 import type { ProfileChart } from './VolumeProfile';
-import { buildCvd, cvdPaneHeight, formatCvd, type CvdBar, type CvdSettings } from '@/lib/cvd-data';
+import { aggregateDeltas, buildCvd, cvdPaneHeight, formatCvd, type CvdBar, type CvdSettings, type DeltaBar } from '@/lib/cvd-data';
+import { cvdLiveCutoff, cvdPagesFor, cvdRecordedError, ensureCvdPages, isRecordedCvd, joinCvdBars, mergeRecordedCvd, peekCvdPage } from '@/lib/cvd-recorded';
+import { ensureRecordingStart, recordingStartMs } from '@/lib/footprint-recorded';
+import { binanceFootprintFeed, footprintLiveExchange, footprintTail, peekFootprint } from '@/lib/footprint-store';
 import { cvdData, loadBinanceCvd, loadBybitCvd, subscribeCvd } from '@/lib/cvd-store';
 import { CvdResetPrimitive, checkPaneAlignment } from '@/lib/cvd-pane';
 
@@ -14,6 +17,11 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
   const refreshRef = useRef<(()=>void)|null>(null), sizeRef = useRef<(()=>void)|null>(null);
   useEffect(()=>{ refreshRef.current?.(); },[settings.anchor,settings.unit]);
   useEffect(()=>{ sizeRef.current?.(); },[settings.height]);
+  // BTCUSDT: the forming candle needs Binance trades even when Auto picks Bybit (shared with Footprint, one socket).
+  useEffect(()=>{
+    if(!isRecordedCvd(symbol)||source==='binance')return;
+    return binanceFootprintFeed(symbol,peekFootprint('binance',symbol)?.tick??.1);
+  },[symbol,source]);
   useEffect(()=>{
     const api=chartRef.current, host=hostRef.current, legend=legendRef.current, note=noteRef.current;
     if(!api||api.disposed||!host||!legend||!note)return;
@@ -33,7 +41,8 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
     series.createPriceLine({price:0,color:api.colors.muted,lineStyle:LineStyle.Dashed,lineWidth:1,axisLabelVisible:false});
     const marks=new CvdResetPrimitive(chart,api.colors.muted);pane.attachPrimitive(marks);
     let disposed=false,frame=0,hoverTime:number|null=null, visibleFrom=-Infinity, rebasing:ReturnType<typeof setTimeout>|undefined;
-    let rows:CvdBar[]=[],dragged=false,lastHeight=0;
+    let rows:CvdBar[]=[],dragged=false,lastHeight=0,loadFrom=Date.now();
+    const recorded=()=>{const start=recordingStartMs();return isRecordedCvd(symbol)&&start!==null?{start}:null;};
     const position=()=>{
       if(disposed||api.disposed)return;
       const element=pane.getHTMLElement();if(!element||!host.parentElement)return;
@@ -60,7 +69,20 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
     };
     const render=()=>{
       frame=0;if(disposed||api.disposed)return;
-      const data=cvdData(source,symbol,minutes,settings.mode==='Candles');
+      let data=cvdData(source,symbol,minutes,settings.mode==='Candles'),recordedNote='';
+      const rec=recorded();
+      if(rec){
+        const older=cvdData('binance',symbol,minutes,settings.mode==='Candles'),now=Date.now();
+        const from=Math.max(rec.start,loadFrom),list=cvdPagesFor(from,now).map(peekCvdPage);
+        const live=footprintLiveExchange(source,symbol,now);
+        const merged=mergeRecordedCvd({from:rec.start,now,pages:list,cutoff:cvdLiveCutoff(list.filter((p):p is NonNullable<typeof p>=>!!p),now),trades:footprintTail(live,symbol).trades});
+        const at=(t:number)=>new Date(t).toISOString().slice(11,16);
+        if(merged){
+          const bars:DeltaBar[]=joinCvdBars(older.bars,aggregateDeltas(merged,minutes),rec.start,minutes);
+          data={...older,bars,error:'',first:bars[0]?.time??null};
+          recordedNote=`Source: recorded trades (Binance BTCUSDT) from ${at(rec.start)} UTC · ${live==='binance'?'Live candle: Binance':'Live candle: Bybit (different exchange, not comparable)'}${visibleFrom<rec.start||loadFrom<rec.start?` · before ${at(rec.start)}: not recorded (Binance candle totals)`:''}`;
+        }else recordedNote=cvdRecordedError()??'Loading recorded trades…';
+      }
       rows=buildCvd(data.bars,settingsRef.current.anchor,settingsRef.current.unit,visibleFrom);
       const times=new Map(rows.map(b=>[b.time/1000,b]));
       // Whitespace at candle times keeps sparse real Bybit history on the shared grid.
@@ -69,12 +91,25 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
       else if(series.seriesType()==='Histogram') (series as ISeriesApi<'Histogram'>).setData(all.map(time=>{const b=times.get(time);return b?{time:time as UTCTimestamp,value:b.delta,color:b.delta>=0?api.colors.up:api.colors.down}:{time:time as UTCTimestamp};}));
       else (series as ISeriesApi<'Baseline'>).setData(all.map(time=>{const b=times.get(time);return b?{time:time as UTCTimestamp,value:b.close}:{time:time as UTCTimestamp};}));
       marks.setBars(rows);showLegend();position();
-      note.textContent=source==='bybit'?`CVD since ${data.first===null?'—':new Date(data.first).toISOString().slice(11,16)} (Bybit has no taker history)${data.error?' · '+data.error:''}`:data.error||(!rows.length?'Loading CVD history…':data.limited?'CVD · Loaded history limit (6 pages)':'');
+      note.textContent=recordedNote||(source==='bybit'?`CVD since ${data.first===null?'—':new Date(data.first).toISOString().slice(11,16)} (Bybit has no taker history)${data.error?' · '+data.error:''}`:data.error||(!rows.length?'Loading CVD history…':data.limited?'CVD · Loaded history limit (6 pages)':''));
+      legend.dataset['recorded']=recordedNote?'1':'';
       legend.dataset['source']=source;legend.dataset['rows']=String(rows.length);legend.dataset['pages']=String(data.pages);
       host.dataset['cvdHeight']=String(pane.getHeight());
     };
     const schedule=()=>{if(!frame&&!disposed)frame=requestAnimationFrame(render);};
     const load=()=>{
+      if(isRecordedCvd(symbol)){
+        const visible=chart.timeScale().getVisibleRange(),from=visible?Number(visible.from)*1000:Date.now();
+        const s=settingsRef.current;loadFrom=s.anchor==='Daily UTC'?Math.floor(from/86400000)*86400000:s.anchor==='Weekly'?Math.floor((from-4*86400000)/(7*86400000))*7*86400000+4*86400000:from;
+        void ensureRecordingStart().then(start=>{
+          if(disposed)return;schedule();
+          if(start!==null)void ensureCvdPages(cvdPagesFor(Math.max(start,loadFrom),Date.now())).then(schedule);
+          // Older candles (before the recording) keep Binance candle totals.
+          if(start===null||loadFrom<start||source==='binance')void loadBinanceCvd(symbol,minutes,loadFrom).then(schedule);
+          if(start===null&&source==='bybit')void loadBybitCvd(symbol).then(schedule);
+        });
+        return;
+      }
       if(source==='bybit'){void loadBybitCvd(symbol).then(schedule);return;}
       const visible=chart.timeScale().getVisibleRange();
       const from=visible?Number(visible.from)*1000:Date.now();
@@ -96,11 +131,13 @@ export function Cvd({ chartRef, hostRef, symbol, minutes, source, settings, mobi
     chart.subscribeCrosshairMove(crosshair);chart.timeScale().subscribeVisibleLogicalRangeChange(viewport);
     const observer=new ResizeObserver(()=>{position();if(pane.getHeight()<90)pane.setHeight(90);});observer.observe(host);
     const unsubscribe=subscribeCvd(schedule);
+    // Recorded mode: repaint the forming candle from live Binance trades once a second and refresh the open page.
+    const ticker=isRecordedCvd(symbol)?setInterval(()=>{schedule();const start=recordingStartMs();if(start!==null)void ensureCvdPages(cvdPagesFor(Math.max(start,Date.now()-60000),Date.now())).then(schedule);},1000):undefined;
     const alignment=()=>checkPaneAlignment(chart);
     (window as Window&{checkPaneAlignment?:typeof alignment}).checkPaneAlignment=alignment;
     size();load();schedule();if(range)chart.timeScale().setVisibleLogicalRange(range);viewport();
     return()=>{
-      disposed=true;cancelAnimationFrame(frame);clearTimeout(rebasing);unsubscribe();observer.disconnect();host.removeEventListener('pointerdown',down);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('pointermove',move);refreshRef.current=null;sizeRef.current=null;
+      disposed=true;clearInterval(ticker);cancelAnimationFrame(frame);clearTimeout(rebasing);unsubscribe();observer.disconnect();host.removeEventListener('pointerdown',down);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('pointermove',move);refreshRef.current=null;sizeRef.current=null;
       const w=window as Window&{checkPaneAlignment?:typeof alignment};if(w.checkPaneAlignment===alignment)delete w.checkPaneAlignment;
       host.parentElement?.style.removeProperty('--cvd-h');
       if(!api.disposed){chart.clearCrosshairPosition();chart.unsubscribeCrosshairMove(crosshair);chart.timeScale().unsubscribeVisibleLogicalRangeChange(viewport);pane.detachPrimitive(marks);chart.removePane(pane.paneIndex());chart.priceScale('right',0).applyOptions({minimumWidth:oldMin});}
