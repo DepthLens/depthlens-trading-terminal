@@ -538,11 +538,10 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         ctx.globalAlpha = 1;
         const order = [...bubbleHits].sort((m, n) => n.radius - m.radius);
         for (const { x, y, radius: r, trade: t } of order) {
-          const share = bubbleBuyShare(t), buyMain = share >= .5;
+          const share = bubbleBuyShare(t);
           ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
-          ctx.fillStyle = buyMain ? cUp : cDown; ctx.fillRect(x - r, y - r, r * 2, r * 2);
-          const minor = buyMain ? 1 - share : share;
-          if (minor > .02) { ctx.fillStyle = buyMain ? cDown : cUp; ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r + 1, -Math.PI / 2, -Math.PI / 2 + minor * Math.PI * 2); ctx.closePath(); ctx.fill(); }
+          ctx.fillStyle = cDown; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+          if (share > .02) { ctx.fillStyle = cUp; ctx.fillRect(x - r, y - r, r * 2, r * 2 * Math.min(1, share)); }
           const shade = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
           shade.addColorStop(0, 'rgba(255,255,255,.3)'); shade.addColorStop(.5, 'rgba(255,255,255,0)'); shade.addColorStop(.85, 'rgba(0,0,0,.18)'); shade.addColorStop(1, 'rgba(0,0,0,.5)');
           ctx.fillStyle = shade; ctx.fillRect(x - r, y - r, r * 2, r * 2);

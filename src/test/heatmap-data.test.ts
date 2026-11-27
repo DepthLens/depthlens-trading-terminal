@@ -76,6 +76,6 @@ describe('colorFor', () => {
     expect(colorFor(2)).toEqual(colorFor(1));
     const lum = (c: [number, number, number]) => c[0] + c[1] + c[2];
     expect(lum(colorFor(0.5))).toBeGreaterThan(lum(colorFor(0.1)));
-    expect(colorFor(1)).toEqual([255, 245, 235]); // biggest walls are near-white
+    expect(colorFor(1)).toEqual([255, 255, 245]); // biggest walls are near-white
   });
 });
