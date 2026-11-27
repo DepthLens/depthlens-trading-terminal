@@ -26,6 +26,42 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_logs: {
+        Row: {
+          action: string
+          admin_email: string
+          admin_id: string
+          at: string
+          id: number
+          new_value: string | null
+          old_value: string | null
+          target_email: string | null
+          target_id: string | null
+        }
+        Insert: {
+          action: string
+          admin_email: string
+          admin_id: string
+          at?: string
+          id?: never
+          new_value?: string | null
+          old_value?: string | null
+          target_email?: string | null
+          target_id?: string | null
+        }
+        Update: {
+          action?: string
+          admin_email?: string
+          admin_id?: string
+          at?: string
+          id?: never
+          new_value?: string | null
+          old_value?: string | null
+          target_email?: string | null
+          target_id?: string | null
+        }
+        Relationships: []
+      }
       beta_codes: {
         Row: {
           active: boolean
@@ -130,6 +166,47 @@ export type Database = {
           last_run?: string
         }
         Relationships: []
+      }
+      memberships: {
+        Row: {
+          activated_by: string | null
+          ends_at: string | null
+          note: string | null
+          plan: string
+          starts_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activated_by?: string | null
+          ends_at?: string | null
+          note?: string | null
+          plan?: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activated_by?: string | null
+          ends_at?: string | null
+          note?: string | null
+          plan?: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ob_recorder_requests: {
         Row: {
@@ -286,21 +363,35 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      admin_list_users: {
+      admin_list_members: {
         Args: never
         Returns: {
-          beta_access: boolean
           created_at: string
+          display_name: string
           email: string
+          ends_at: string
           id: string
           is_admin: boolean
+          last_sign_in: string
+          note: string
+          plan: string
+          starts_at: string
+          status: string
           verified: boolean
         }[]
       }
-      admin_set_beta: {
-        Args: { _on: boolean; _user: string }
+      admin_membership_action: {
+        Args: {
+          _action: string
+          _days?: number
+          _ends_at?: string
+          _note?: string
+          _plan?: string
+          _user: string
+        }
         Returns: undefined
       }
+      expire_memberships: { Args: never; Returns: number }
       fx_take_call: {
         Args: {
           _day_cap?: number
@@ -317,6 +408,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin: { Args: never; Returns: boolean }
       ob_cvd: { Args: { p_from: string; p_to: string }; Returns: Json }
       ob_fire: { Args: { p_source: string; p_ts: string }; Returns: undefined }
       ob_footprint: {
