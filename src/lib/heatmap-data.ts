@@ -71,6 +71,8 @@ export class HeatmapBuffer {
     }
     this.bucket = bucket;
   }
+  // Drop every column (used only when a broken saved row size is recalibrated).
+  clear() { this.cols = []; this.pending = new Map(); this.pendingPrice = NaN; }
   index(price: number) { return Math.floor(price / this.bucket); }
   trade(price: number, size: number, side: TradeSide | undefined, count = 1) {
     if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(size) || size <= 0) return;

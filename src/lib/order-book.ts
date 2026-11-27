@@ -52,9 +52,19 @@ export class OrderBookManager {
   private bybitUpdate: number | null = null;
   private fetching = false;
   private updates: number[] = [];
+  // Source chosen by the live price feed, and an optional per-symbol book exchange override (Heatmap BTCUSDT
+  // keeps the Binance book so live columns match the recorded Binance history whatever Auto picks).
+  private wanted: ConnectionSource | null = null;
+  private prefer: { symbol: string; source: ConnectionSource } | null = null;
   setActive(symbol: string, source: ConnectionSource | null) { this.configure(symbol, source, this.enabled); }
-  setEnabled(enabled: boolean) { this.configure(this.symbol, this.source, enabled); }
-  configure(symbol: string, source: ConnectionSource | null, enabled: boolean) {
+  setEnabled(enabled: boolean) { this.configure(this.symbol, this.wanted, enabled); }
+  preferSource(symbol: string, source: ConnectionSource | null) {
+    this.prefer = source && symbol ? { symbol, source } : null;
+    this.configure(this.symbol, this.wanted, this.enabled);
+  }
+  configure(symbol: string, wanted: ConnectionSource | null, enabled: boolean) {
+    this.wanted = wanted;
+    const source = symbol && this.prefer?.symbol === symbol ? this.prefer.source : wanted;
     if (symbol === this.symbol && source === this.source && enabled === this.enabled) return;
     this.stop(); this.symbol = symbol; this.source = source; this.enabled = enabled;
     if (!enabled || !source || !symbol) return;
@@ -94,7 +104,7 @@ export class OrderBookManager {
     this.generation++; this.unsubscribe?.(); this.unsubscribe = undefined;
     this.request?.abort(); clearTimeout(this.retry); this.fetching = false; this.connected = false; this.reset();
   }
-  dispose() { this.stop(); this.enabled = false; this.source = null; this.symbol = ''; }
+  dispose() { this.stop(); this.enabled = false; this.source = null; this.wanted = null; this.prefer = null; this.symbol = ''; }
   private changed(b: Levels, a: Levels) {
     this.bids.apply(b); this.asks.apply(a);
     const now = Date.now(); this.updates.push(now);

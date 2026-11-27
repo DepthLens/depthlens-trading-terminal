@@ -87,4 +87,13 @@ it('aborts the old snapshot request and ignores its response after ten pair swit
   for (let i = 0; i < 10; i++) book.setActive(i % 2 ? 'DOGEUSDT' : 'BTCUSDT', 'bybit');
   expect(signal?.aborted).toBe(true);
   resolve?.(snapshot()); await settle(); expect(book.debug()).toMatchObject({ state: 'Resyncing', bidLevels: 0 });
+});it('Heatmap BTCUSDT keeps the Binance book while the price source is Bybit, and returns to Bybit after', () => {
+  book.configure('BTCUSDT', 'bybit', true);
+  book.preferSource('BTCUSDT', 'binance');
+  expect(book.debug().source).toBe('binance');
+  expect(transport.subscribe.mock.calls.at(-1)?.slice(0, 2)).toEqual(['binance', 'btcusdt@depth@100ms']);
+  book.setActive('BTCUSDT', 'bybit'); expect(book.debug().source).toBe('binance');
+  book.setActive('ETHUSDT', 'bybit'); expect(book.debug().source).toBe('bybit');
+  book.setActive('BTCUSDT', 'bybit'); book.preferSource('BTCUSDT', null);
+  expect(book.debug().source).toBe('bybit');
 });

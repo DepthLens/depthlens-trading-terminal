@@ -57,6 +57,23 @@ async function restoreAndBackfill(k: string, source: HeatSource, symbol: string,
   await backfill(source, symbol, entry.buffer);
 }
 
+// Liquidity band the heatmap fits to: the nearest `levels` price levels on each side of the book. Far-away
+// resting orders that diff streams add over time (or levels an exchange never deletes) must not widen it.
+export const MAX_DEPTH_SPAN_RATIO = .02;
+export function bookDepthSpan(bids: Iterable<number>, asks: Iterable<number>, price: number, levels = 1000): number {
+  const b = [...bids].filter(p => p > 0 && p <= price).sort((x, y) => y - x);
+  const a = [...asks].filter(p => p >= price).sort((x, y) => x - y);
+  const lo = b[Math.min(b.length, levels) - 1], hi = a[Math.min(a.length, levels) - 1];
+  if (lo === undefined || hi === undefined || !(price > 0)) return 0;
+  return Math.min(hi - lo, price * MAX_DEPTH_SPAN_RATIO);
+}
+// A saved calibration wider than the cap came from a broken band; the entry recalibrates from the live book.
+export function dropInsaneCalibration(entry: Entry, price: number): boolean {
+  if (!entry.calibrated || !(price > 0) || entry.depthSpan <= price * MAX_DEPTH_SPAN_RATIO * 1.01) return false;
+  entry.calibrated = false; entry.depthSpan = 0; entry.buffer.clear();
+  return true;
+}
+
 export function calibrateHeatmap(source: HeatSource, symbol: string, entry: Entry, depthSpan: number, tick: number) {
   if (!entry.restored || entry.calibrated || !(depthSpan > 0)) return;
   entry.depthSpan = depthSpan; entry.buffer.configureBucket(depthRowSize(depthSpan, tick)); entry.calibrated = true;

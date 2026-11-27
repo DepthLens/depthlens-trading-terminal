@@ -14,7 +14,7 @@ import { heatmapUi } from '@/lib/heatmap-ui';
 import { HEATMAP_VIEW_DEFAULT } from '@/lib/edit-panel';
 import { DEFAULT_WALLS, HEATMAP_WALLS_KEY, WALL_STATUS_LABEL, detectWalls, restoreWallSettings, wallAge, wallAlpha, wallThreshold, wallWidth, type Wall, type WallSettings } from '@/lib/heatmap-walls';
 import { HEATMAP_UNIT_KEY, restoreHeatmapUnit, type HeatmapUnit } from '@/lib/terminal-state';
-import { calibrateHeatmap, getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
+import { bookDepthSpan, calibrateHeatmap, dropInsaneCalibration, getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
 import { orderBook } from '@/lib/order-book';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 import { niceStep, heatColumnWidth, heatFitRows, heatMaxRows, depthRowSize } from '@/lib/tool-layout';
@@ -112,6 +112,13 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   controls.current = { intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit, walls, pro, alerts, showLadder, showPanels };
   const specRef = useRef(spec); specRef.current = spec;
   useEffect(() => { redrawRef.current?.(); }, [intensity, windowMin, grouping, minBubble, bubblesOn, bubbleUnit, walls, pro, showLadder, showPanels]);
+
+  // BTCUSDT history is recorded from Binance, so the live book stays on Binance too (whatever Auto picks for the price).
+  useEffect(() => {
+    if (symbol !== RECORDED_SYMBOL || toolDemoEnabled()) return;
+    orderBook.preferSource(symbol, 'binance');
+    return () => orderBook.preferSource(symbol, null);
+  }, [symbol]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -273,17 +280,17 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       // Keep recording the book while the tab is hidden; only drawing pauses. Mark a gap only when the book is not synced.
       if (dbg.enabled && dbg.state === 'Synced') {
         const bids = orderBook.bids.levels, asks = orderBook.asks.levels;
-        let low = Infinity, high = -Infinity;
-        for (const p of bids.keys()) low = Math.min(low, p);
-        for (const p of asks.keys()) high = Math.max(high, p);
+        if (dropInsaneCalibration(entry, price)) fitted = false;
         const wasCalibrated=entry.calibrated;
-        calibrateHeatmap(source as HeatSource, symbol, entry, high - low, specRef.current?.minMove ?? .01);
+        if (!entry.calibrated) calibrateHeatmap(source as HeatSource, symbol, entry, bookDepthSpan(bids.keys(), asks.keys(), price), specRef.current?.minMove ?? .01);
         if (!entry.calibrated) return;
         depthSpan = entry.depthSpan;
         if(!fitted||!wasCalibrated){view.current.center=price;view.current.rows=heatFitRows(depthSpan,buffer.bucket,controls.current.grouping);fitted=true;}
         buffer.sample(Date.now(), bids, asks, price);
       }
-      else if (hidden) buffer.markGap(Date.now(), price);
+      // Unsynced seconds (resync/reconnect) become marked gaps so the time grid stays continuous;
+      // recorded history fills them for BTCUSDT and nothing is invented elsewhere.
+      else if (hidden || (dbg.enabled && entry.calibrated)) buffer.markGap(Date.now(), price);
       else return;
       setCollected(buffer.columns.length);
       setRecordedAvail(recordedOn());

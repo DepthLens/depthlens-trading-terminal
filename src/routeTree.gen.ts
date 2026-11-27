@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as PressureRouteImport } from './routes/pressure'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ZzcheckRouteImport } from './routes/zzcheck'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedForexRouteImport } from './routes/_authenticated/forex'
 import { Route as AuthenticatedTerminalRouteImport } from './routes/_authenticated/terminal'
@@ -50,6 +51,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ZzcheckRoute = ZzcheckRouteImport.update({
+  id: '/zzcheck',
+  path: '/zzcheck',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/pressure': typeof PressureRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/zzcheck': typeof ZzcheckRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/forex': typeof AuthenticatedForexRoute
   '/terminal': typeof AuthenticatedTerminalRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/pressure': typeof PressureRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/zzcheck': typeof ZzcheckRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/forex': typeof AuthenticatedForexRoute
   '/terminal': typeof AuthenticatedTerminalRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/pressure': typeof PressureRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/zzcheck': typeof ZzcheckRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/forex': typeof AuthenticatedForexRoute
   '/_authenticated/terminal': typeof AuthenticatedTerminalRoute
@@ -122,6 +131,7 @@ export interface FileRouteTypes {
     | '/pressure'
     | '/register'
     | '/reset-password'
+    | '/zzcheck'
     | '/admin'
     | '/forex'
     | '/terminal'
@@ -134,6 +144,7 @@ export interface FileRouteTypes {
     | '/pressure'
     | '/register'
     | '/reset-password'
+    | '/zzcheck'
     | '/admin'
     | '/forex'
     | '/terminal'
@@ -147,6 +158,7 @@ export interface FileRouteTypes {
     | '/pressure'
     | '/register'
     | '/reset-password'
+    | '/zzcheck'
     | '/_authenticated/admin'
     | '/_authenticated/forex'
     | '/_authenticated/terminal'
@@ -161,6 +173,7 @@ export interface RootRouteChildren {
   PressureRoute: typeof PressureRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ZzcheckRoute: typeof ZzcheckRoute
   PopoutPressureRoute: typeof PopoutPressureRoute
   PopoutPricePressureRoute: typeof PopoutPricePressureRoute
 }
@@ -207,6 +220,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/zzcheck': {
+      id: '/zzcheck'
+      path: '/zzcheck'
+      fullPath: '/zzcheck'
+      preLoaderRoute: typeof ZzcheckRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin': {
@@ -269,6 +289,7 @@ const rootRouteChildren: RootRouteChildren = {
   PressureRoute: PressureRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ZzcheckRoute: ZzcheckRoute,
   PopoutPressureRoute: PopoutPressureRoute,
   PopoutPricePressureRoute: PopoutPricePressureRoute,
 }
