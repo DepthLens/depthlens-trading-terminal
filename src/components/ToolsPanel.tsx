@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Search, X } from 'lucide-react';
+import { Lock, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { MenuDropdown } from '@/components/MenuDropdown';
@@ -16,6 +16,10 @@ export type ToolsPanelProps = {
   open: boolean; onClose: () => void; mobile: boolean; theme: string;
   tools: Record<string, boolean>; setTool: (id: string, on: boolean) => void; allOff: () => void;
   disabledReason?: string | null;
+  /** Real plan label shown beside the title, e.g. "Free" or "Monthly – until 26 Dec 2026". */
+  planLabel?: string;
+  /** Free/expired accounts: tool rows show a lock and Upgrade. */
+  locked?: boolean; onUpgrade?: () => void;
   /** The Order flow button the menu drops down from. */
   button: ReactNode;
 };
@@ -32,7 +36,7 @@ export function ToolsPanel(p: ToolsPanelProps) {
   const sw = 'data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border';
   const groups = filterGroups(query);
   return <MenuDropdown open={p.open} onClose={p.onClose} button={p.button} label="Tools" mobile={p.mobile} theme={p.theme}>
-    <div className="flex items-center justify-between px-3 pt-3"><h2 className="text-base font-semibold">Tools <span className="ml-1 text-xs font-semibold text-t-accent">Paid</span></h2><Button variant="ghost" size="icon" aria-label="Close tools" onClick={p.onClose} className="size-9 text-t-muted hover:bg-t-border"><X /></Button></div>
+    <div className="flex items-center justify-between px-3 pt-3"><h2 className="text-base font-semibold">Tools <span className="ml-1 text-xs font-semibold text-t-accent">{p.planLabel ?? 'Free'}</span></h2><Button variant="ghost" size="icon" aria-label="Close tools" onClick={p.onClose} className="size-9 text-t-muted hover:bg-t-border"><X /></Button></div>
     <div className="p-3"><div className="relative"><Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-t-muted" /><input aria-label="Search tools" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search tools" className="h-9 w-full rounded-md border border-t-border bg-t-bg pl-8 pr-2 text-sm outline-none focus:border-t-accent" /></div></div>
     {p.disabledReason && <p role="note" className="mx-3 mb-2 rounded border border-t-border px-2 py-1.5 text-xs text-t-muted">{p.disabledReason}</p>}
     <div className="min-h-0 flex-1 overflow-y-auto pb-2">
@@ -40,7 +44,7 @@ export function ToolsPanel(p: ToolsPanelProps) {
         {g.rows.map(r => { const on = isOn(r), dis = Boolean(p.disabledReason) && r.kind !== 'info'; return <div key={r.id} className={`flex min-h-12 items-center gap-2 px-3 py-1.5 ${dis ? 'opacity-50' : ''}`}>
           <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${on && !dis ? 'bg-t-accent' : 'bg-transparent'}`} />
           <label htmlFor={`tool-${r.id}`} className="min-w-0 flex-1"><span className="block truncate text-sm">{r.name}</span><span className="block truncate text-[11px] text-t-muted">{r.desc}</span></label>
-          {r.kind === 'info' ? <span className="text-[10px] text-t-muted">Always on</span> : <Switch id={`tool-${r.id}`} aria-label={r.name} disabled={dis} checked={on} onCheckedChange={v => toggle(r, v)} className={sw} />}
+          {r.kind === 'info' ? <span className="text-[10px] text-t-muted">Always on</span> : p.locked && !dis ? <button type="button" onClick={p.onUpgrade} aria-label={`${r.name} locked – Upgrade`} className="inline-flex items-center gap-1 rounded border border-t-border px-2 py-1 text-[11px] font-semibold text-t-accent hover:bg-t-border"><Lock className="size-3" />Upgrade</button> : <Switch id={`tool-${r.id}`} aria-label={r.name} disabled={dis} checked={on} onCheckedChange={v => toggle(r, v)} className={sw} />}
         </div>; })}
       </div>)}
       {!groups.length && <p className="px-3 py-4 text-xs text-t-muted">No matching tools</p>}

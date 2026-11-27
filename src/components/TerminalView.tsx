@@ -44,6 +44,7 @@ import { WM_KEY, wmInitial, restoreWm, closeWin, closeTool, type WinId, type WmS
 import { stripPopoutTools, isSyncMessage, SYNC_CHANNEL, type SyncMessage, buildPressureUrl } from '@/lib/popout';
 import { signOutApp } from '@/lib/session';
 import { useProfile } from '@/hooks/use-profile';
+import { FREE, daysLeft, effectiveStatus, expiringSoon, fmtDate, isPaid, lockTools, planLabel } from '@/lib/membership';
 import { ProfileModal } from '@/components/ProfileModal';
 import { ForexChart } from '@/components/ForexChart';
 import { FX_STORAGE_KEY, FX_WM_KEY, FX_TFS, GOLD, GOLD_NOTE, FX_UNAVAILABLE, isSpotFx, fxTf, fxInitial, restoreForexState, fxQuote } from '@/lib/forex-terminal';
@@ -54,7 +55,18 @@ const TFS=[{label:'1m',min:1},{label:'5m',min:5},{label:'10m',min:10},{label:'15
 
 export function TerminalView({ forex = false }: { forex?: boolean }) {
   const account=useProfile();
-  const [state,setState]=useState(forex?fxInitial:initialState);
+  const [rawState,setState]=useState(forex?fxInitial:initialState);
+  // Paid tools need an active Weekly/15 Days/Monthly plan (admin always has access); saved switches are kept, only the view is locked.
+  const [clock,setClock]=useState(()=>Date.now());
+  useEffect(()=>{const id=setInterval(()=>setClock(Date.now()),60_000);return()=>clearInterval(id);},[]);
+  const membership=account?.membership??FREE;
+  const toolsLocked=!account?.is_admin&&!isPaid(membership,clock);
+  const state=useMemo(()=>toolsLocked?{...rawState,tools:lockTools(rawState.tools)}:rawState,[rawState,toolsLocked]);
+  const planText=account?.is_admin&&!isPaid(membership,clock)?'Admin':planLabel(membership,clock);
+  const planEnd=membership.ends_at,planStatus=effectiveStatus(membership,clock);
+  const myPlan=membership.plan!=='Free'&&planStatus==='expired'&&planEnd?`Your membership expired on ${fmtDate(planEnd)}`:membership.plan!=='Free'&&planStatus==='active'&&planEnd?`My plan: ${membership.plan} · active until ${fmtDate(planEnd)} (${daysLeft(membership,clock)} days left)`:`My plan: ${membership.plan}${planStatus==='suspended'?' · suspended':''}`;
+  const endingSoon=expiringSoon(membership,clock);
+  const [hideEnding,setHideEnding]=useState(false);
   const stateKey=forex?FX_STORAGE_KEY:STORAGE_KEY,wmKey=forex?FX_WM_KEY:WM_KEY;
   const [restored,setRestored]=useState(false);
   const [pairs,setPairs]=useState<string[]>([]);
@@ -124,7 +136,7 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
   useEffect(()=>{const start=Date.now();const timer=setInterval(()=>setListFailing(Date.now()-Math.max(lastQuoteAt.current,start)>15000),5000);return()=>clearInterval(timer);},[]);
   useEffect(()=>{try{setState(withToolParam((forex?restoreForexState:restoreState)(localStorage.getItem(stateKey)),new URLSearchParams(location.search).get('tool')));}catch{}setRestored(true);},[]);
   useEffect(()=>{if(restored)applyTheme(state.theme);},[state.theme,restored]);
-  useEffect(()=>{if(restored)try{localStorage.setItem(stateKey,JSON.stringify(state));}catch{}},[state,restored]);
+  useEffect(()=>{if(restored)try{localStorage.setItem(stateKey,JSON.stringify(rawState));}catch{}},[rawState,restored]);
   useEffect(()=>{
     const abort=new AbortController();let retry:ReturnType<typeof setTimeout>|undefined;
     const load=async()=>{try{
@@ -197,7 +209,7 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
   const setTool=(id:string,on:boolean)=>{if(id==='Price Pressure'&&!on)setWm(s=>closeWin(s,'Price Pressure'));setState(s=>({...s,tools:{...s.tools,[id]:on}}));};
   const renderToolSettings=(id:string,back:()=>void)=>id==='Volume Profile'?<VolumeProfileSettingsPanel settings={profileSettings} onChange={changeProfileSettings} onClose={back} mobile={mobile} theme={state.theme}/>:id==='Footprint'&&activeSpec?<FootprintSettingsPanel settings={footprintSettings} onChange={changeFootprintSettings} onClose={back} mobile={mobile} theme={state.theme} source={listSource} symbol={active.symbol} tick={activeSpec.minMove} minutes={active.minutes}/>:id==='Whale Trades'?<WhaleSettingsPanel settings={whaleSettings} onChange={changeWhaleSettings} onClose={back} mobile={mobile} theme={state.theme} source={listSource}/>:id==='CVD'?<CvdSettingsPanel settings={cvdSettings} onChange={changeCvdSettings} onClose={back} mobile={mobile} theme={state.theme}/>:id==='Liquidations'?<LiquidationSettingsPanel settings={liqSettings} onChange={changeLiqSettings} onClose={back} mobile={mobile} theme={state.theme} source={listSource}/>:id==='Price Pressure'?<PricePressureSettingsPanel settings={ppSettings} onChange={changePpSettings} onClose={back} mobile={mobile} theme={state.theme}/>:id==='Control & Attack bars'?<FlowBarsSettingsPanel settings={fbSettings} onChange={changeFbSettings} onClose={back} mobile={mobile} theme={state.theme}/>:null;
   const flowButton=mobile?<Button variant="ghost" size="icon" className="btn-accent mx-1 size-10 shrink-0" aria-label="Order flow tools" title="Order flow tools" aria-expanded={showFlowSheet} onClick={()=>setShowFlowSheet(o=>!o)}><Layers/></Button>:<Button variant="ghost" size="sm" aria-expanded={showFlowSheet} onClick={()=>setShowFlowSheet(o=>!o)} className="btn-accent gap-1.5 font-semibold tracking-wide"><Layers/>Order flow<ChevronDown className="opacity-70"/></Button>;
-  const toolsPanel=<ToolsPanel open={showFlowSheet} onClose={()=>setShowFlowSheet(false)} mobile={mobile} theme={state.theme} tools={state.tools} setTool={setTool} allOff={()=>{setWm(s=>closeWin(s,'Price Pressure'));setState(s=>({...s,tools:allToolsOff(s.tools)}));}} disabledReason={isFx?FX_UNAVAILABLE:null} button={flowButton}/>;
+  const toolsPanel=<ToolsPanel open={showFlowSheet} onClose={()=>setShowFlowSheet(false)} mobile={mobile} theme={state.theme} tools={state.tools} setTool={setTool} allOff={()=>{setWm(s=>closeWin(s,'Price Pressure'));setState(s=>({...s,tools:allToolsOff(s.tools)}));}} disabledReason={isFx?FX_UNAVAILABLE:null} planLabel={planText} locked={toolsLocked} onUpgrade={()=>{setShowFlowSheet(false);setShowProfile(true);}} button={flowButton}/>;
   // Edit menu: settings of tools that are on. Existing settings panels are embedded unchanged (.tools-embed hides their floating frame).
   const embed=(id:string)=><div className="tools-embed">{renderToolSettings(id,()=>{})}</div>;
   const editNames:Record<string,string>={DOM:'DOM ladder'};
@@ -226,7 +238,7 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
       <div className="flex min-w-0 items-center overflow-hidden tabular-nums"><div className="flex min-w-0 flex-col leading-tight"><span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[11px] font-bold">{active.symbol}</span><span className="shrink-0 rounded border border-t-border px-1 text-[9px] font-semibold uppercase text-t-muted">{isFx?'FX':listSource==='bybit'?'Bybit':'Binance'}</span><ChevronDown className="size-3 shrink-0 text-t-muted"/></span><div className="flex min-w-0 items-center gap-2 whitespace-nowrap text-base font-bold">{isFx?<FxLast symbol={active.symbol} quotes={quotes} specs={listSpecs}/>:<LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge} bookEnabled={Boolean(state.tools['Heatmap'] || state.tools['DOM'])} profileEnabled={Boolean(state.tools['Volume Profile'])} mode={mode} onModeChange={changeMode} onSourceChange={src=>setListSource(src==='bybit'?'bybit':'binance')} compact/>}<span className="text-xs font-semibold"><QuoteChange symbol={active.symbol} quotes={quotes}/></span></div></div></div>
       <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`size-11 ${control}`} aria-label="More" title="More"><MoreHorizontal/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} data-mobile="" align="end" className="w-64 border-t-border bg-t-panel p-1 text-sm text-t-text">
         <div className="flex min-h-11 items-center justify-between gap-2 px-2" onKeyDown={e=>e.stopPropagation()}><span className="text-t-muted">Price source</span><SourceSelect mode={mode} onChange={changeMode} className="h-10 rounded border border-t-border bg-t-bg px-2 text-sm text-t-text"/></div>
-        <DropdownMenuItem onSelect={()=>setShowProfile(true)} className="min-h-11 focus:bg-t-border focus:text-t-text"><UserRound/>Profile & subscriptions</DropdownMenuItem>
+        <div className="max-w-64 px-2 py-1.5 text-xs text-t-muted">{myPlan}</div><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="min-h-11 focus:bg-t-border focus:text-t-text"><UserRound/>Profile & subscriptions</DropdownMenuItem>
         <DropdownMenuItem asChild className="min-h-11 focus:bg-t-border focus:text-t-text"><Link to={forex?'/terminal':'/forex'}><ArrowLeftRight/>{forex?'Switch to Futures':'Switch to Forex'}</Link></DropdownMenuItem>
         <DropdownMenuItem onSelect={()=>void signOutApp()} className="min-h-11 text-t-down focus:bg-t-border focus:text-t-down"><LogOut/>Sign out</DropdownMenuItem>
       </DropdownMenuContent></DropdownMenu>
@@ -234,10 +246,11 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
       <Link to="/" className="flex items-center gap-2 text-lg font-bold text-t-accent"><img src={logo.url} alt="DepthLens logo" className="size-8 shrink-0 rounded-md" />DepthLens</Link>
       <div className="flex flex-wrap items-baseline gap-2 tabular-nums"><span className="text-sm font-semibold">{active.symbol}</span>{isFx?<FxLast symbol={active.symbol} quotes={quotes} specs={listSpecs}/>:<LiveQuote symbol={active.symbol} minutes={active.minutes} spec={activeSpec} bridge={bridge} bookEnabled={Boolean(state.tools['Heatmap'] || state.tools['DOM'])} profileEnabled={Boolean(state.tools['Volume Profile'])} mode={mode} onModeChange={changeMode} onSourceChange={src=>setListSource(src==='bybit'?'bybit':'binance')}/>}<QuoteChange symbol={active.symbol} quotes={quotes}/>{forex&&<ForexBadges isFx={isFx} note={fxNote}/>}</div>
       <div className="ml-auto flex items-center gap-2">{forex&&<ModeSwitch/>}
-        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text"><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem onSelect={()=>void signOutApp()} className="focus:bg-t-border focus:text-t-text"><LogOut/>Sign out</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={`${control} rounded-full border border-t-border`} aria-label="Profile menu" title="Profile"><UserRound/></Button></DropdownMenuTrigger><DropdownMenuContent data-theme={state.theme} align="end" className="border-t-border bg-t-panel text-t-text"><div className="max-w-64 px-2 py-1.5 text-xs text-t-muted">{myPlan}</div><DropdownMenuItem onSelect={()=>setShowProfile(true)} className="focus:bg-t-border focus:text-t-text"><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem onSelect={()=>void signOutApp()} className="focus:bg-t-border focus:text-t-text"><LogOut/>Sign out</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
 
       </div>
     </header>}
+    {endingSoon&&!hideEnding&&planEnd&&<div role="status" className="flex shrink-0 items-center justify-center gap-2 border-b border-t-border bg-t-panel px-3 py-1 text-xs text-t-accent">Your plan ends on {fmtDate(planEnd)}<button type="button" aria-label="Dismiss" onClick={()=>setHideEnding(true)} className="text-t-muted hover:text-t-text">×</button></div>}
     {showProfile&&<ProfileModal account={account} theme={state.theme} setTheme={setTheme} forex={forex} onClose={()=>setShowProfile(false)}/>}
 
     <div className="flex min-h-0 flex-1">

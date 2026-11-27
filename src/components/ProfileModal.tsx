@@ -3,7 +3,8 @@ import { Link } from '@tanstack/react-router';
 import { X, UserRound, Check, LogOut, Mail, ArrowLeftRight, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { THEME_PRESETS } from '@/lib/themes';
-import { PLANS, perDay, planLink } from '@/lib/plans';
+import { PLANS, perDay, planLink, WHATSAPP } from '@/lib/plans';
+import { daysLeft, effectiveStatus, fmtDate } from '@/lib/membership';
 import { signOutApp, type Profile } from '@/lib/session';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -37,6 +38,9 @@ export function ProfileModal({ account, theme, setTheme, forex, onClose }: { acc
           {status === 'saved' && <p className="text-xs text-t-up">Name saved.</p>}{status === 'error' && <p className="text-xs text-t-down">Couldn't save your name. Try again.</p>}
         </section>
         <section className="space-y-3"><h3 className="text-xs uppercase tracking-wider text-t-muted">Subscription</h3>
+          {account && (() => { const m = account.membership, st = effectiveStatus(m); return st === 'expired' && m.ends_at
+            ? <p role="status" className="rounded-md border border-t-down/50 px-3 py-2 text-sm">Your membership expired on {fmtDate(m.ends_at)} · <a href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(`Hi DepthLens, my membership expired. Account: ${account.email}`)}`} target="_blank" rel="noreferrer" className="text-t-accent underline">Contact support</a></p>
+            : <p className="rounded-md border border-t-border px-3 py-2 text-sm">My plan: {m.plan}{st === 'active' && m.plan !== 'Free' && m.ends_at ? ` · active until ${fmtDate(m.ends_at)} (${daysLeft(m)} days left)` : st === 'suspended' ? ' · suspended' : ''}</p>; })()}
           <div className="grid gap-3 sm:grid-cols-3">{PLANS.map(p => <div key={p.id} className={`relative flex flex-col rounded-lg border bg-t-bg p-4 ${p.tag === 'Most popular' ? 'border-t-accent' : 'border-t-border'}`}>
             {p.tag && <span className="absolute -top-2.5 left-4 rounded-full bg-t-accent px-2 py-0.5 text-[10px] font-semibold text-t-accent-fg">{p.tag}</span>}
             <p className="text-sm text-t-muted">{p.days} days</p><p className="mt-1 text-3xl font-bold">${p.price}</p><p className="text-xs text-t-muted">${perDay(p).toFixed(2)} / day</p>
