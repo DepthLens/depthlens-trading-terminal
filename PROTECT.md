@@ -111,3 +111,4 @@ After every change, add any new feature to the list in section 1.
 - /terminal, /forex and /admin live under the `_authenticated` gate: logged-out or unverified users go to /login?returnTo=…, expired sessions show a short message. Landing, /login, /register, /reset-password and /pressure stay public.
 - Private beta: access code checked only in the database (`redeem_beta_code`), saved as `profiles.beta_access`, asked once. Users can update only their display name; roles live in `user_roles`; /admin lists users and toggles beta access via admin-only functions.
 - Smoke: logged-out /terminal redirects to login; wrong password shows "Wrong email or password."
+- Memberships/Admin: /admin (server-checked is_admin, owner email only), plans Free/Weekly/15 Days/Monthly, paid tools locked with Upgrade for Free/expired, real plan label in Tools, plan line in profile menu/modal, 3-day ending notice.
