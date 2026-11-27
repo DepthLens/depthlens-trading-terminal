@@ -6,6 +6,7 @@ import logo from "@/assets/depthlens-logo.png.asset.json";
 import { Hero3DVisual } from "@/components/site/Hero3DVisual";
 import { TOOL_ICONS } from "@/components/site/ToolIcons";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { PricingSection } from "@/components/site/PricingSection";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -84,6 +85,7 @@ function Landing() {
         <div id="tools" className="scroll-mt-4 border-t border-[var(--s-border)] md:py-6">
           {TOOL_SECTIONS.map((t, i) => <ToolSection key={t.tool} info={t} index={i} flip={i % 2 === 1} onOpen={open} />)}
         </div>
+        <PricingSection />
         <section className="border-t border-[var(--s-border)] px-5 py-14 text-center sm:px-6 md:py-20">
           <h2 className="text-2xl font-bold sm:text-3xl">Every tool, one terminal</h2>
           <p className="s-muted mx-auto mt-3 max-w-lg">Open DepthLens and switch any tool on from the Order flow menu.</p>

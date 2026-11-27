@@ -35,6 +35,7 @@ Read this file before any change. It applies to every future request.
 - Mobile layout (below 768px and phone landscape): Pairs button dropdown, compact one-row top bar with settings menu, scrollable tabs and timeframe row, Tools icon with Book debug inside, tap-to-expand OHLC legend, floating chart buttons, single status indicator, heatmap header with Center and Replay, safe areas
 - Control & Attack bars: Tools switch (default ON, saved); CONTROL strip above the chart (36px, 40px phone) and ATTACK strip below chart and panes (36px), collapsible, read the chart's loaded candles once per second with Price Pressure scoring, 2-update hold, sentences (tap on phone), gear for lookback/threshold/sentences; hidden in Heatmap view; no sockets.
 - Front page, login and register pages
+- Front page Memberships section: the three Profile plans (from plans.ts) as cards with Choose plan → WhatsApp, revealed with the landing rise animation. Terminal chart area replays the same rise animation on first show, pair change and tool on/off (opacity/transform only, reduced-motion fade).
 - DepthLens logo and favicon
 
 ## 2. Rules
