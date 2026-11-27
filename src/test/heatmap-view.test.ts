@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { colorFor, ROWS, type Column } from '@/lib/heatmap-data';
-import { RecordedDecodeCache, capBubbles, colorLut, fillColumn, viewSlots } from '@/lib/heatmap-view';
+import { RecordedDecodeCache, capBubbles, colorLut, fillColumn, viewSlots, windowSlotCount } from '@/lib/heatmap-view';
 import { snapshotsToColumns, type RecordedSnapshot } from '@/lib/heatmap-recorded';
 
 const row = (t: number): RecordedSnapshot => ({ ts: new Date(t).toISOString(), source: 'binance', mid: 100, step: 1, base: 25, bids: Array(75).fill(1), asks: Array(75).fill(1), trade_levels: [[100, 1, 0, 1, 0]], price_points: [[0, 100]] });
 
 describe('heatmap view (screen-sized loading)', () => {
+  it('15m uses 900 seconds even when only two minutes of data exist', () => {
+    expect(windowSlotCount(15)).toBe(900);
+    expect(viewSlots(1200, windowSlotCount(15)).colW).toBe(3);
+    expect(viewSlots(1200, 120).colW).toBe(10);
+  });
+  it('5m and paged 4h retain their selected time scales', () => {
+    expect(windowSlotCount(5)).toBe(300);
+    expect(windowSlotCount(240, 5)).toBe(2880);
+  });
   it('4h window at 5s on a 1200px plot builds only the visible slots plus margin, same column width', () => {
     const v = viewSlots(1200, 2880);
     expect(v.colW).toBe(3);

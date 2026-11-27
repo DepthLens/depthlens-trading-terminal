@@ -12,6 +12,9 @@ const entries = new Map<string, Entry>();
 let currentSource: HeatSource | null = null;
 
 const key = (source: HeatSource, symbol: string) => `${source}:${symbol}`;
+export const BTC_DEPTH_CAP = 500;
+export const BTC_INITIAL_BUCKET = 2;
+export const heatDepthSpan = (symbol: string, span: number) => symbol === 'BTCUSDT' ? Math.min(span, BTC_DEPTH_CAP) : span;
 
 // Source change is the ONLY event that clears history.
 export function setHeatSource(source: HeatSource) {
@@ -30,7 +33,7 @@ export function getHeatmapEntry(source: HeatSource, symbol: string, price: numbe
   const k = key(source, symbol);
   let entry = entries.get(k);
   if (!entry) {
-    entry = { buffer: new HeatmapBuffer(price), restored: false, calibrated: false, depthSpan: 0 };
+    entry = { buffer: new HeatmapBuffer(price, symbol === 'BTCUSDT' ? BTC_INITIAL_BUCKET : undefined), restored: false, calibrated: false, depthSpan: 0 };
     entries.set(k, entry);
     void restoreAndBackfill(k, source, symbol, entry);
   }
@@ -40,20 +43,26 @@ export function getHeatmapEntry(source: HeatSource, symbol: string, price: numbe
 async function restoreAndBackfill(k: string, source: HeatSource, symbol: string, entry: Entry) {
   // Restore from IndexedDB; a dim gap stripe marks when the page was closed.
   const saved = await loadHeatmapBuffer(k);
-  if (saved?.calibrated && saved.bucket > 0) {
+  const savedSpan = saved?.depthSpan ?? (saved?.bucket ?? 0) * 150;
+  const validCalibration = saved?.calibrated && saved.bucket > 0 && Number.isFinite(savedSpan) && savedSpan > 0 && (symbol !== 'BTCUSDT' || (savedSpan <= BTC_DEPTH_CAP && saved.bucket <= BTC_INITIAL_BUCKET));
+  if (validCalibration && saved) {
     entry.buffer.configureBucket(saved.bucket); entry.calibrated = true; entry.depthSpan = saved.depthSpan ?? saved.bucket * 150;
   }
-  if (saved?.calibrated && Date.now() - saved.savedAt < RESTORE_MAX_AGE) {
+  if (validCalibration && saved && Date.now() - saved.savedAt < RESTORE_MAX_AGE) {
     const cutoff = Date.now() - RESTORE_MAX_AGE;
     const cols = saved.columns.filter(c => c.time >= cutoff);
     if (cols.length) {
-      const gapPrice = cols[cols.length - 1]!.price;
+      const gapPrice = cols.at(-1)?.price ?? NaN;
       const origin = entry.buffer.index(gapPrice) - 512;
       cols.push({ time: saved.savedAt, origin, data: new Float32Array(0) as unknown as Float32Array, trades: new Map(), price: gapPrice, gap: true });
       entry.buffer.merge(cols);
     }
   }
   entry.restored = true;
+  // Replace only the broken browser cache; the recording and valid history are untouched.
+  if (saved?.calibrated && !validCalibration && symbol === 'BTCUSDT') {
+    await saveHeatmapBuffer(k, entry.buffer.bucket, entry.buffer.columns, false, 0);
+  }
   await backfill(source, symbol, entry.buffer);
 }
 
@@ -68,14 +77,17 @@ export function bookDepthSpan(bids: Iterable<number>, asks: Iterable<number>, pr
   return Math.min(hi - lo, price * MAX_DEPTH_SPAN_RATIO);
 }
 // A saved calibration wider than the cap came from a broken band; the entry recalibrates from the live book.
-export function dropInsaneCalibration(entry: Entry, price: number): boolean {
-  if (!entry.calibrated || !(price > 0) || entry.depthSpan <= price * MAX_DEPTH_SPAN_RATIO * 1.01) return false;
+export function dropInsaneCalibration(entry: Entry, price: number, symbol = ''): boolean {
+  const cap = heatDepthSpan(symbol, price * MAX_DEPTH_SPAN_RATIO * 1.01);
+  if (!entry.calibrated || !(price > 0) || (entry.depthSpan <= cap && (symbol !== 'BTCUSDT' || entry.buffer.bucket <= BTC_INITIAL_BUCKET))) return false;
   entry.calibrated = false; entry.depthSpan = 0; entry.buffer.clear();
+  if (symbol === 'BTCUSDT') entry.buffer.configureBucket(BTC_INITIAL_BUCKET);
   return true;
 }
 
 export function calibrateHeatmap(source: HeatSource, symbol: string, entry: Entry, depthSpan: number, tick: number) {
   if (!entry.restored || entry.calibrated || !(depthSpan > 0)) return;
+  depthSpan = heatDepthSpan(symbol, depthSpan);
   entry.depthSpan = depthSpan; entry.buffer.configureBucket(depthRowSize(depthSpan, tick)); entry.calibrated = true;
   void saveHeatmapBuffer(key(source, symbol), entry.buffer.bucket, entry.buffer.columns, true, depthSpan);
 }

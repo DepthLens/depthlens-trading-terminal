@@ -1,5 +1,11 @@
 # Roadmap
 
+## Approved Heatmap appearance restoration
+- [x] Restore thin BTC rows, reject corrupted browser calibration, and preserve the selected time-window sizing.
+- [x] Reset price fit and center through Edit without changing menus or restoring Go to.
+- [x] All 298 tests and preview build pass; real live BTC desktop/phone shows 2-USDT rows, grouping/window/zoom/reset works, menus and Go to removal preserved; three pairs/timeframes, login and available native-overlay checks pass (≤1px).
+- [ ] Signed-in recorded-history reload and full protected terminal smoke remain blocked: this user-managed Supabase project cannot supply an assistant session. No login or permission changes made.
+
 ## Recorded heatmap trades rebuild
 - [x] Fresh five-second Binance BTCUSDT book/trade recording; advancing cursor, no recorder errors, no old rows, seven-day/250 MB retention cap.
 - [x] Per-second recorded trades/prices; shared flat bubbles, exact USDT/coin volumes, execution counts, saved units and tooltips.

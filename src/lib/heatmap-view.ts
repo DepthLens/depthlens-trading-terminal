@@ -9,6 +9,8 @@ import { heatColumnWidth } from './tool-layout';
 export const VIEW_MARGIN_SLOTS = 300; // lookback for walls/markers/flows just left of the screen
 export const OFF_SLOTS = 3600; // offscreen texture width (one pixel per slot)
 export const MAX_BUBBLES = 3000;
+// Coverage must not change the selected time scale, including on a fresh/sparse buffer.
+export const windowSlotCount = (minutes: number, stepSeconds = 1) => Math.round(minutes * 60 / stepSeconds);
 
 // Column width from the full window (unchanged look) and how many slots are visible / worth building.
 export function viewSlots(width: number, logicalN: number, margin = VIEW_MARGIN_SLOTS): { colW: number; visible: number; build: number } {

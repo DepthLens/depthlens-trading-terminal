@@ -19,7 +19,7 @@ import { orderBook } from '@/lib/order-book';
 import { formatPrice, type PriceSpec } from '@/lib/market-data';
 import { niceStep, heatColumnWidth, heatFitRows, heatMaxRows, depthRowSize } from '@/lib/tool-layout';
 import { toolDemoEnabled, demoHeatmap } from '@/lib/tool-demo';
-import { OFF_SLOTS, RecordedDecodeCache, capBubbles, paintSlots, viewSlots } from '@/lib/heatmap-view';
+import { OFF_SLOTS, RecordedDecodeCache, capBubbles, paintSlots, viewSlots, windowSlotCount } from '@/lib/heatmap-view';
 import type { TradeBridge } from '@/components/LiveQuote';
 
 const AXIS_W = 72, AXIS_H = 26, COB_W = 92, SVP_W = 64;
@@ -45,6 +45,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const mobileRef = useRef(mobile); mobileRef.current = mobile;
   const centerRef = useRef<(() => void) | null>(null);
   const redrawRef = useRef<(() => void) | null>(null);
+  const resetViewRef = useRef<(() => void) | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [collected, setCollected] = useState(0);
@@ -201,7 +202,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       const w = controls.current.windowMin, step = navStep(w), stepMs = step * 1000, follow = !navOn();
       const raw = nav.current.end ?? Date.now();
       const end = (follow ? Math.ceil(raw / stepMs) : Math.floor(raw / stepMs)) * stepMs;
-      const total = Math.round(w * 60 / step), { build } = viewSlots(W, total);
+      const total = windowSlotCount(w, step), { build } = viewSlots(W, total);
       logicalN = total; stepMsCur = stepMs;
       const k = `${w}:${end}:${buffer.bucket}:${build}`;
       if (k === navKey && !(follow && Date.now() - navAt >= 1000)) return navCols;
@@ -241,14 +242,14 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
         return cols;
       }
       long = false; stepMsCur = 1000;
+      logicalN = windowSlotCount(w);
       const liveCols = buffer.columns.slice(-Math.min(w, 60) * 60);
-      const liveOnly = () => { if (shown) { shown = false; setRecordedShown(false); } logicalN = liveCols.length; return liveCols.slice(-Math.max(1, viewSlots(W, logicalN).build)); };
+      const liveOnly = () => { if (shown) { shown = false; setRecordedShown(false); } return liveCols.slice(-Math.max(1, viewSlots(W, logicalN).build)); };
       if (!recordedOn()) return liveOnly();
       // Binance BTCUSDT: fill holes (tab hidden, chart view, other pair) with the recording, visible part only.
       if (requestedWindow !== w || Date.now() - recCheckedAt >= 10000) requestHistory(w, Date.now());
       if (recFor !== w) return liveOnly();
-      const now = Date.now(), covered = Math.round((now - Math.max(now - w * 60000, recFirst)) / 1000);
-      logicalN = Math.max(liveCols.length, Number.isFinite(covered) ? covered : 0);
+      const now = Date.now();
       const { build } = viewSlots(W, logicalN);
       const k = `${Math.floor(now / 1000)}:${buffer.bucket}:${recFor}:${recRows.length}:${build}:${liveCols.at(-1)?.time ?? 0}`;
       if (k === shortKey) return shortCols;
@@ -280,7 +281,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       // Keep recording the book while the tab is hidden; only drawing pauses. Mark a gap only when the book is not synced.
       if (dbg.enabled && dbg.state === 'Synced') {
         const bids = orderBook.bids.levels, asks = orderBook.asks.levels;
-        if (dropInsaneCalibration(entry, price)) fitted = false;
+        if (dropInsaneCalibration(entry, price, symbol)) fitted = false;
         const wasCalibrated=entry.calibrated;
         if (!entry.calibrated) calibrateHeatmap(source as HeatSource, symbol, entry, bookDepthSpan(bids.keys(), asks.keys(), price), specRef.current?.minMove ?? .01);
         if (!entry.calibrated) return;
@@ -770,6 +771,15 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     // Phones redraw every 2 seconds to save battery; collection stays at one column per second.
     const pulse = setInterval(() => { if (mobileRef.current && ++pulses % 2) return; dirty = true; schedule(); }, COLUMN_MS);
     centerRef.current = () => { view.current.center = fixture ? demoPrice : bridge.current.latest?.price ?? NaN; view.current.rows = heatFitRows(depthSpan || buffer.bucket * 150, buffer.bucket, controls.current.grouping); dirty = true; schedule(); };
+    resetViewRef.current = () => {
+      // Use the reset grouping immediately, before React commits its settings update.
+      lastGrouping = HEATMAP_VIEW_DEFAULT.grouping;
+      userAt = 0;
+      fitted = false;
+      view.current = { center: fixture ? demoPrice : bridge.current.latest?.price ?? buffer.columns.at(-1)?.price ?? NaN, rows: heatFitRows(depthSpan || buffer.bucket * 150, buffer.bucket, lastGrouping) };
+      nav.current = { end: null, pendingCenter: false }; navKey = ''; shortKey = '';
+      setLive(true); dirty = true; schedule();
+    };
     redrawRef.current = () => { dirty = true; schedule(); };
     if (recordedOn() && controls.current.windowMin <= 60) requestHistory(controls.current.windowMin, Date.now());
     schedule();
@@ -941,7 +951,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointercancel', onUp);
-      redrawRef.current = null; centerRef.current = null; navApi.current = null; replayApi.current = null; clearInterval(replayTimer); replayRef.current.on = false; replayRef.current.playing = false;
+      redrawRef.current = null; centerRef.current = null; resetViewRef.current = null; navApi.current = null; replayApi.current = null; clearInterval(replayTimer); replayRef.current.on = false; replayRef.current.playing = false;
       canvas.removeEventListener('pointerleave', onLeave);
       if (bridge.current.heat === onTrade) bridge.current.heat = null;
     };
@@ -959,7 +969,7 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
       intensity, setIntensity, windowMin, setWindowMin, windows: [...WINDOWS, ...(recordedAvail ? LONG_WINDOWS : [])], grouping, setGrouping, groupings: GROUPINGS,
       minBubble, setMinBubble, bubblesOn, setBubblesOn, unit: bubbleUnit, selectUnit, coinLabel, walls, updateWalls, pro, updatePro, alerts, updateAlerts, mob, setMob,
       retentionText, historyText: recordedAvail ? historyText : null, recordedNote, signedIn: userId !== null,
-      reset: () => { const d = HEATMAP_VIEW_DEFAULT; setIntensity(d.intensity); setWindowMin(d.windowMin); setGrouping(d.grouping); setMinBubble(d.minBubble); setBubblesOn(d.bubblesOn); selectUnit('USDT'); updateWalls({ ...DEFAULT_WALLS }); updatePro({ ...DEFAULT_PRO }); updateAlerts({ ...DEFAULT_ALERTS }); setMob({ ladder: false, panels: false, tape: false }); },
+      reset: () => { const d = HEATMAP_VIEW_DEFAULT; setIntensity(d.intensity); setWindowMin(d.windowMin); setGrouping(d.grouping); setMinBubble(d.minBubble); setBubblesOn(d.bubblesOn); selectUnit('USDT'); updateWalls({ ...DEFAULT_WALLS }); updatePro({ ...DEFAULT_PRO }); updateAlerts({ ...DEFAULT_ALERTS }); setMob({ ladder: false, panels: false, tape: false }); resetViewRef.current?.(); },
     });
   });
   useEffect(() => () => heatmapUi.publish(null), []);
