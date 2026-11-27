@@ -40,10 +40,12 @@ export function scaleRange(values: number[], lowCut: number, highCut: number): {
   return { lo, hi };
 }
 // 0..1 colour position; contrast > 1 brightens mid sizes, < 1 darkens them.
+export const HEAT_GAMMA = 2.4;
 export function scalePos(value: number, lo: number, hi: number, contrast: number): number {
   if (!(value > 0)) return 0;
   const t = clamp((Math.log1p(value) - Math.log1p(lo)) / Math.max(1e-9, Math.log1p(hi) - Math.log1p(lo)), 0, 1);
-  return Math.pow(t, 1 / clamp(contrast, 0.2, 3));
+  // Gamma > 1 keeps ordinary depth dark blue; only the heavy tail (walls) reaches yellow/red/white.
+  return Math.pow(t, HEAT_GAMMA / clamp(contrast, 0.2, 3));
 }
 
 export type ColumnFlow = { time: number; buy: number; sell: number; cvd: number; imbalance: number | null; empty: boolean };
