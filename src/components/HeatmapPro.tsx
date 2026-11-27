@@ -78,7 +78,7 @@ export function ReplayBar({ replayRef, api, minTime, onExit, mobile }: { replayR
   </div>;
 }
 
-export function TimeSales({ symbol, spec, minSize, bigSize, replay, onMin }: { symbol: string; spec: PriceSpec | undefined; minSize: number; bigSize: number; replay: MutableRefObject<TapeTrade[] | null>; onMin: (v: number) => void }) {
+export function TimeSales({ symbol, spec, minSize, bigSize, replay }: { symbol: string; spec: PriceSpec | undefined; minSize: number; bigSize: number; replay: MutableRefObject<TapeTrade[] | null>; onMin: (v: number) => void }) {
   const [rows, setRows] = useState<TapeTrade[]>([]);
   const hover = useRef(false);
   useEffect(() => {
@@ -97,7 +97,7 @@ export function TimeSales({ symbol, spec, minSize, bigSize, replay, onMin }: { s
   return <div className="flex h-full flex-col text-[11px] tabular-nums" data-testid="time-sales" onMouseEnter={() => { hover.current = true; }} onMouseLeave={() => { hover.current = false; }}>
     <div className="flex items-center justify-between gap-2 border-b border-t-border px-2 py-1 text-t-muted">
       <span className="font-semibold text-t-text">Time & Sales{replay.current ? ' · history' : ''}</span>
-      <label className="flex items-center gap-1">≥<input type="number" min={0} step={10000} value={minSize} onChange={e => onMin(Math.max(0, Number(e.target.value) || 0))} aria-label="Show only trades above (USDT)" className="h-5 w-20 rounded border border-t-border bg-t-bg px-1 text-t-text" /></label>
+      {minSize > 0 && <span title="Change in Edit" data-testid="tape-min">≥ {compact(minSize)} USDT</span>}
     </div>
     <div className="grid grid-cols-[1fr_1fr_auto] gap-x-2 border-b border-t-border px-2 py-0.5 text-t-muted"><span>Time</span><span className="text-right">Price</span><span className="text-right">Size {coin}</span></div>
     <div className="min-h-0 flex-1 overflow-y-auto">
