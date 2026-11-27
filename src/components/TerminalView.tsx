@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X, Layers, Check, ChevronDown, UserRound, LogOut, ExternalLink, MoreHorizontal, ArrowLeftRight } from 'lucide-react';
+import { X, Layers, Check, ChevronDown, UserRound, LogOut, ExternalLink, MoreHorizontal, ArrowLeftRight, SlidersHorizontal } from 'lucide-react';
 import { PriceChart } from '@/components/PriceChart';
 import { Heatmap } from '@/components/Heatmap';
 import { DomLadder } from '@/components/DomLadder';
@@ -32,9 +32,12 @@ import { useTerminalMobile } from '@/hooks/use-terminal-mobile';
 import { bybitListQuotes } from '@/lib/market-data';
 import { QuoteChange } from '@/components/MarketList';
 import { PairsSelector } from '@/components/PairsSelector';
-import { FlowRadarGear, openRadarSettings } from '@/components/FlowRadarGear';
 import { BookDebug } from '@/components/BookDebug';
 import { ToolsPanel } from '@/components/ToolsPanel';
+import { EditPanel, HeatmapEditSection, DomEditSection, RadarEditSection, resetDom, resetRadar, type EditSection } from '@/components/EditPanel';
+import { editTools, resetToDefault } from '@/lib/edit-panel';
+import { heatmapUi } from '@/lib/heatmap-ui';
+import { FB_DEFAULT } from '@/lib/flow-bars';
 import { allToolsOff } from '@/lib/tools-panel';
 import { ToolWindowLayer, type WinContent } from '@/components/ToolWindows';
 import { WM_KEY, wmInitial, restoreWm, closeWin, closeTool, type WinId, type WmState } from '@/lib/window-manager';
@@ -189,10 +192,31 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
   useEffect(()=>{const m:SyncMessage={type:'state',state:syncStateRef.current};syncRef.current?.postMessage(m);},[active.symbol,active.minutes,listSource,state.theme]);
   const control='text-t-muted hover:bg-t-border/50 hover:text-t-text';
   const [showFlowSheet,setShowFlowSheet]=useState(false);
+  const [showEdit,setShowEdit]=useState(false);
   const setTheme=(t:string)=>setState(s=>({...s,theme:t}));
   const setTool=(id:string,on:boolean)=>{if(id==='Price Pressure'&&!on)setWm(s=>closeWin(s,'Price Pressure'));setState(s=>({...s,tools:{...s.tools,[id]:on}}));};
   const renderToolSettings=(id:string,back:()=>void)=>id==='Volume Profile'?<VolumeProfileSettingsPanel settings={profileSettings} onChange={changeProfileSettings} onClose={back} mobile={mobile} theme={state.theme}/>:id==='Footprint'&&activeSpec?<FootprintSettingsPanel settings={footprintSettings} onChange={changeFootprintSettings} onClose={back} mobile={mobile} theme={state.theme} source={listSource} symbol={active.symbol} tick={activeSpec.minMove} minutes={active.minutes}/>:id==='Whale Trades'?<WhaleSettingsPanel settings={whaleSettings} onChange={changeWhaleSettings} onClose={back} mobile={mobile} theme={state.theme} source={listSource}/>:id==='CVD'?<CvdSettingsPanel settings={cvdSettings} onChange={changeCvdSettings} onClose={back} mobile={mobile} theme={state.theme}/>:id==='Liquidations'?<LiquidationSettingsPanel settings={liqSettings} onChange={changeLiqSettings} onClose={back} mobile={mobile} theme={state.theme} source={listSource}/>:id==='Price Pressure'?<PricePressureSettingsPanel settings={ppSettings} onChange={changePpSettings} onClose={back} mobile={mobile} theme={state.theme}/>:id==='Control & Attack bars'?<FlowBarsSettingsPanel settings={fbSettings} onChange={changeFbSettings} onClose={back} mobile={mobile} theme={state.theme}/>:null;
-  const toolsPanel=<ToolsPanel open={showFlowSheet} onClose={()=>setShowFlowSheet(false)} mobile={mobile} theme={state.theme} tools={state.tools} setTool={setTool} allOff={()=>{setWm(s=>closeWin(s,'Price Pressure'));setState(s=>({...s,tools:allToolsOff(s.tools)}));}} disabledReason={isFx?FX_UNAVAILABLE:null} renderSettings={renderToolSettings} externalGear={{'Flow Radar':()=>{setState(s=>s.tools['Flow Radar']?s:{...s,tools:{...s.tools,'Flow Radar':true}});openRadarSettings();}}} extras={{'Whale Trades':<WhaleCount source={listSource} symbol={active.symbol} tick={activeSpec?.minMove??.01}/>,'Price Pressure':<a href={buildPressureUrl({symbol:active.symbol,tf:active.minutes,source:listSource})} target="_blank" rel="noopener" aria-label="Open Price Pressure in new tab" title="Open in new tab" className="grid size-8 place-items-center rounded text-t-muted hover:bg-t-border"><ExternalLink className="size-3.5"/></a>}}/>;
+  const flowButton=mobile?<Button variant="ghost" size="icon" className="btn-accent mx-1 size-10 shrink-0" aria-label="Order flow tools" title="Order flow tools" aria-expanded={showFlowSheet} onClick={()=>setShowFlowSheet(o=>!o)}><Layers/></Button>:<Button variant="ghost" size="sm" aria-expanded={showFlowSheet} onClick={()=>setShowFlowSheet(o=>!o)} className="btn-accent gap-1.5 font-semibold tracking-wide"><Layers/>Order flow<ChevronDown className="opacity-70"/></Button>;
+  const toolsPanel=<ToolsPanel open={showFlowSheet} onClose={()=>setShowFlowSheet(false)} mobile={mobile} theme={state.theme} tools={state.tools} setTool={setTool} allOff={()=>{setWm(s=>closeWin(s,'Price Pressure'));setState(s=>({...s,tools:allToolsOff(s.tools)}));}} disabledReason={isFx?FX_UNAVAILABLE:null} button={flowButton}/>;
+  // Edit menu: settings of tools that are on. Existing settings panels are embedded unchanged (.tools-embed hides their floating frame).
+  const embed=(id:string)=><div className="tools-embed">{renderToolSettings(id,()=>{})}</div>;
+  const editNames:Record<string,string>={DOM:'DOM ladder'};
+  const editBody=(id:string)=>id==='Heatmap'?<HeatmapEditSection mobile={mobile}/>:id==='DOM'?<DomEditSection/>:id==='Flow Radar'?<RadarEditSection minutes={active.minutes}/>:id==='Whale Trades'?<><div className="flex items-center justify-between px-4 text-xs text-t-muted">Whale trades on this pair<WhaleCount source={listSource} symbol={active.symbol} tick={activeSpec?.minMove??.01}/></div>{embed(id)}</>:id==='Price Pressure'?<>{embed(id)}<a href={buildPressureUrl({symbol:active.symbol,tf:active.minutes,source:listSource})} target="_blank" rel="noopener" className="mx-4 inline-flex items-center gap-1.5 text-xs text-t-muted hover:text-t-text"><ExternalLink className="size-3.5"/>Open Price Pressure in new tab</a></>:embed(id);
+  const editReset:Record<string,()=>void>={
+    'Volume Profile':()=>changeProfileSettings(resetToDefault('Volume Profile',PROFILE_DEFAULT,profileSettings)),
+    Heatmap:()=>heatmapUi.get()?.reset(),
+    DOM:resetDom,
+    Footprint:()=>changeFootprintSettings(resetToDefault('Footprint',FOOTPRINT_DEFAULT,footprintSettings)),
+    CVD:()=>changeCvdSettings(resetToDefault('CVD',CVD_DEFAULT,cvdSettings)),
+    'Whale Trades':()=>changeWhaleSettings(resetToDefault('Whale Trades',WHALE_DEFAULT,whaleSettings)),
+    'Price Pressure':()=>changePpSettings(resetToDefault('Price Pressure',PP_DEFAULT,ppSettings)),
+    'Control & Attack bars':()=>changeFbSettings(resetToDefault('Control & Attack bars',FB_DEFAULT,fbSettings)),
+    Liquidations:()=>changeLiqSettings(resetToDefault('Liquidations',LIQ_DEFAULT,liqSettings)),
+    'Flow Radar':resetRadar,
+  };
+  const editSections:EditSection[]=showEdit?editTools(state.tools).filter(id=>editReset[id]&&(id!=='Footprint'||activeSpec)).map(id=>({id,name:editNames[id]??id,body:editBody(id),reset:editReset[id]!})):[];
+  const editButton=mobile?<Button variant="ghost" size="icon" className="btn-accent mr-1 size-10 shrink-0" aria-label="Edit tool settings" title="Edit tool settings" aria-expanded={showEdit} onClick={()=>setShowEdit(o=>!o)}><SlidersHorizontal/></Button>:<Button variant="ghost" size="sm" aria-expanded={showEdit} onClick={()=>setShowEdit(o=>!o)} className="btn-accent gap-1.5 font-semibold tracking-wide"><SlidersHorizontal/>Edit<ChevronDown className="opacity-70"/></Button>;
+  const editPanel=<EditPanel open={showEdit} onClose={()=>setShowEdit(false)} mobile={mobile} theme={state.theme} button={editButton} sections={editSections} disabledReason={isFx?FX_UNAVAILABLE:null}/>;
   const customForm=showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs mobile:h-10 mobile:text-sm"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90 mobile:h-10">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>;
   return <div data-mobile={mobile||undefined} className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-t-bg text-t-text mobile:min-h-0 mobile:pt-[env(safe-area-inset-top)] mobile:pr-[env(safe-area-inset-right)] mobile:pb-[env(safe-area-inset-bottom)] mobile:pl-[env(safe-area-inset-left)]">
     {mobile?<header className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b border-t-border bg-t-panel px-2 py-1">
@@ -212,7 +236,6 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
 
       </div>
     </header>}
-    {toolsPanel}
     {showProfile&&<ProfileModal account={account} theme={state.theme} setTheme={setTheme} forex={forex} onClose={()=>setShowProfile(false)}/>}
 
     <div className="flex min-h-0 flex-1">
@@ -228,14 +251,14 @@ export function TerminalView({ forex = false }: { forex?: boolean }) {
             {!isFx&&<Button variant="ghost" size="sm" aria-expanded={showCustom} onClick={()=>{setCustom(String(active.minutes));setShowCustom(s=>!s);}} className={`h-10 shrink-0 text-sm ${!TFS.some(t=>t.min===active.minutes)?'bg-t-accent text-t-bg':control}`}>{!TFS.some(t=>t.min===active.minutes)?`${active.minutes}m · Custom`:'Custom'}<ChevronDown/></Button>}
           </div>
           <div className="ml-1"><PairsSelector pairs={listPairs} quotes={quotes} specs={listSpecs} active={active.symbol} status={pairStatus} select={select} query={query} setQuery={setQuery} onEnter={searchEnter} forex={forex} mobile={mobile}/></div>
-          <Button variant="ghost" size="icon" className="btn-accent mx-1 size-10 shrink-0" aria-label="Order flow tools" title="Order flow tools" aria-expanded={showFlowSheet} onClick={()=>setShowFlowSheet(true)}><Layers/></Button>
+          {toolsPanel}{editPanel}
         </div>{showCustom&&<div className="shrink-0 border-b border-t-border px-2 py-1">{customForm}</div>}</>:<>
         <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-t-border px-2 py-2">
           <div className="mr-1"><PairsSelector pairs={listPairs} quotes={quotes} specs={listSpecs} active={active.symbol} status={pairStatus} select={select} query={query} setQuery={setQuery} onEnter={searchEnter} forex={forex} mobile={mobile}/></div>
           {(isFx?FX_TFS:TFS).map(t=><Button key={t.label} variant="ghost" size="sm" aria-pressed={active.minutes===t.min} onClick={()=>timeframe(t.min)} className={`px-2.5 ${active.minutes===t.min?'btn-accent':control}`}>{t.label}</Button>)}
           {!isFx&&<Button variant="ghost" size="sm" aria-expanded={showCustom} onClick={()=>{setCustom(String(active.minutes));setShowCustom(s=>!s);}} className={!TFS.some(t=>t.min===active.minutes)?'bg-t-accent text-t-bg':control}>{!TFS.some(t=>t.min===active.minutes)?`${active.minutes}m · Custom`:'Custom'}<ChevronDown/></Button>}
         <div className="flex shrink-0 items-center gap-2 px-2">
-        <Button variant="ghost" size="sm" aria-expanded={showFlowSheet} onClick={()=>setShowFlowSheet(true)} className="btn-accent gap-1.5 font-semibold tracking-wide"><Layers/>Order flow<ChevronDown className="opacity-70"/></Button>
+        {toolsPanel}{editPanel}
         </div>
           {showCustom&&<form onSubmit={e=>{e.preventDefault();applyCustom();}} className="flex flex-wrap items-center gap-2"><input autoFocus type="number" min={1} max={1440} step={1} aria-label="Custom timeframe minutes" value={custom} onChange={e=>setCustom(e.target.value)} className="h-8 w-20 rounded-md border border-t-border bg-t-panel px-2 text-xs"/><Button type="submit" size="sm" className="bg-t-accent text-t-bg hover:bg-t-accent/90">Go</Button>{customError&&<span role="alert" className="text-xs text-t-down">{customError}</span>}</form>}
         </div>

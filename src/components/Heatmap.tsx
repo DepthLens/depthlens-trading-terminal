@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { Crosshair, Info, Settings2, SlidersHorizontal, History, X } from 'lucide-react';
+import { Crosshair, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { colorFor, COLUMN_MS, type Column, type HeatTrade } from '@/lib/heatmap-data';
@@ -9,8 +9,10 @@ import { DEFAULT_PRO, HEATMAP_PRO_KEY, restoreProSettings, scaleRange, scalePos,
 import { MarkerEngine, type Marker } from '@/lib/heatmap-markers';
 import { AlertGate, DEFAULT_ALERTS, alertsKey, restoreAlerts, type AlertSettings } from '@/lib/heatmap-alerts';
 import { heatTape } from '@/lib/heatmap-tape';
-import { HeatmapProPanel, ReplayBar, TimeSales, type ReplayState } from '@/components/HeatmapPro';
-import { DEFAULT_WALLS, HEATMAP_WALLS_KEY, WALL_FADES, WALL_INFO, WALL_MIN_TIMES, WALL_PERCENTILES, WALL_STATUS_LABEL, detectWalls, restoreWallSettings, wallAge, wallAlpha, wallThreshold, wallWidth, type Wall, type WallSettings } from '@/lib/heatmap-walls';
+import { ReplayBar, TimeSales, type ReplayState } from '@/components/HeatmapPro';
+import { heatmapUi } from '@/lib/heatmap-ui';
+import { HEATMAP_VIEW_DEFAULT } from '@/lib/edit-panel';
+import { DEFAULT_WALLS, HEATMAP_WALLS_KEY, WALL_STATUS_LABEL, detectWalls, restoreWallSettings, wallAge, wallAlpha, wallThreshold, wallWidth, type Wall, type WallSettings } from '@/lib/heatmap-walls';
 import { HEATMAP_UNIT_KEY, restoreHeatmapUnit, type HeatmapUnit } from '@/lib/terminal-state';
 import { calibrateHeatmap, getHeatmapEntry, persistHeatmaps, type HeatSource } from '@/lib/heatmap-store';
 import { orderBook } from '@/lib/order-book';
@@ -27,10 +29,8 @@ const DEFAULT_ROWS = 200;
 const windowLabel = (w: number) => w >= 1440 ? `${w / 1440 === 7 ? '7d' : `${w / 60}h`}` : w >= 120 ? `${w / 60}h` : `${w}m`;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const JUMPS = [['−15m', 15 * 60000], ['−1h', 3600000], ['−4h', 4 * 3600000], ['−1d', 86400000]] as const;
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const stamp = (t: number, seconds = false) => { const d = new Date(t); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${pad2(d.getHours())}:${pad2(d.getMinutes())}${seconds ? `:${pad2(d.getSeconds())}` : ''}`; };
-const toLocalInput = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
 
 function compact(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
@@ -42,7 +42,6 @@ function compact(n: number): string {
 export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, floating = false, paused = false }: { symbol: string; spec: PriceSpec | undefined; bridge: MutableRefObject<TradeBridge>; historySource?: 'binance' | 'bybit'; mobile?: boolean; floating?: boolean; paused?: boolean }) {
   // Paused (minimized window) skips drawing only; column collection keeps running.
   const pausedRef = useRef(paused); pausedRef.current = paused;
-  const [showSettings, setShowSettings] = useState(false);
   const mobileRef = useRef(mobile); mobileRef.current = mobile;
   const centerRef = useRef<(() => void) | null>(null);
   const redrawRef = useRef<(() => void) | null>(null);
@@ -85,13 +84,12 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   useEffect(() => { try { setWalls(restoreWallSettings(localStorage.getItem(HEATMAP_WALLS_KEY))); } catch { /* unavailable browser storage */ } }, []);
   const updateWalls = (patch: Partial<WallSettings>) => setWalls(prev => { const next = { ...prev, ...patch }; if (!toolDemoEnabled()) { try { localStorage.setItem(HEATMAP_WALLS_KEY, JSON.stringify(next)); } catch { /* unavailable browser storage */ } } return next; });
   const [pro, setPro] = useState<ProSettings>(DEFAULT_PRO);
-  useEffect(() => { try { setPro(restoreProSettings(localStorage.getItem(HEATMAP_PRO_KEY))); } catch { /* unavailable browser storage */ } }, []);
+  useEffect(() => { try { setPro(restoreProSettings(localStorage.getItem(HEATMAP_PRO_KEY))); setBubbleUnit(restoreHeatmapUnit(localStorage.getItem(HEATMAP_UNIT_KEY))); } catch { /* unavailable browser storage */ } }, []);
   const updatePro = (patch: Partial<ProSettings>) => setPro(prev => { const next = { ...prev, ...patch }; if (!toolDemoEnabled()) { try { localStorage.setItem(HEATMAP_PRO_KEY, JSON.stringify(next)); } catch { /* unavailable browser storage */ } } return next; });
   // The Tools panel edits Wall lines / Time & Sales / panel switches in storage and announces it; re-read so both stay in sync.
   useEffect(() => { const sync = () => { try { setWalls(restoreWallSettings(localStorage.getItem(HEATMAP_WALLS_KEY))); setPro(restoreProSettings(localStorage.getItem(HEATMAP_PRO_KEY))); } catch { /* unavailable browser storage */ } }; window.addEventListener('depthlens-heatmap-settings', sync); return () => window.removeEventListener('depthlens-heatmap-settings', sync); }, []);
   // Phones collapse ladder, lower panels and Time & Sales into toggles (off until tapped).
   const [mob, setMob] = useState({ ladder: false, panels: false, tape: false });
-  const [showPro, setShowPro] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [alerts, setAlerts] = useState<AlertSettings>(DEFAULT_ALERTS);
   useEffect(() => { let off = false; void import('@/integrations/supabase/client').then(({ supabase }) => supabase.auth.getSession()).then(({ data }) => { if (off) return; const id = data.session?.user.id ?? null; setUserId(id); try { setAlerts(restoreAlerts(localStorage.getItem(alertsKey(id)))); } catch { /* unavailable browser storage */ } }).catch(() => { /* signed-out or offline: guest alerts */ }); return () => { off = true; }; }, []);
@@ -104,7 +102,6 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   // Time navigation: end === null follows live; otherwise the view is paused at that absolute end time.
   const [live, setLive] = useState(true);
   const [navLoading, setNavLoading] = useState(false);
-  const [gotoValue, setGotoValue] = useState('');
   const nav = useRef<{ end: number | null; pendingCenter: boolean }>({ end: null, pendingCenter: false });
   const navApi = useRef<{ goTo: (end: number) => void; goLive: () => void } | null>(null);
   const rangeRef = useRef<HTMLSpanElement>(null);
@@ -946,67 +943,36 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
   const center = () => centerRef.current?.();
   const control = 'text-t-muted hover:bg-t-border/50 hover:text-t-text';
   useEffect(() => { if (symbol !== RECORDED_SYMBOL && windowMin > 60) setWindowMin(60); else if (windowMin > 240) setWindowMin(240); }, [symbol, windowMin]);
-  const nowMsAvail = Date.now();
-  const availableMs = recordedAvail ? nowMsAvail - recordedOldestMs(nowMsAvail) : collected * 1000;
   const retentionText = recordedAvail ? (retention ? retentionLine(retention) : 'History kept: loading…') : 'History kept: 60 minutes (this browser)';
-  const nowMs = Date.now();
-  const pickTime = (value: string) => { setGotoValue(value); const t = new Date(value).getTime(); if (Number.isFinite(t)) navApi.current?.goTo(t + windowMin * 30000); };
   const liveButton = (cls: string) => <Button size="sm" onClick={() => navApi.current?.goLive()} className={`${cls} bg-t-accent text-t-bg hover:bg-t-accent/90`} aria-label="Return to live">Live ▶</Button>;
-  const gotoInput = (cls: string) => <input type="datetime-local" value={gotoValue} min={toLocalInput(nowMs - availableMs)} max={toLocalInput(nowMs)} onChange={e => pickTime(e.target.value)} aria-label="Go to date and time" className={`${cls} rounded border border-t-border text-t-text [color-scheme:dark]`} />;
+  // The Edit menu changes these through the published bridge; the heatmap screen no longer shows option rows.
+  const recordedNote = !recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL;
+  useEffect(() => {
+    heatmapUi.publish({
+      intensity, setIntensity, windowMin, setWindowMin, windows: [...WINDOWS, ...(recordedAvail ? LONG_WINDOWS : [])], grouping, setGrouping, groupings: GROUPINGS,
+      minBubble, setMinBubble, bubblesOn, setBubblesOn, unit: bubbleUnit, selectUnit, coinLabel, walls, updateWalls, pro, updatePro, alerts, updateAlerts, mob, setMob,
+      retentionText, historyText: recordedAvail ? historyText : null, recordedNote, signedIn: userId !== null,
+      reset: () => { const d = HEATMAP_VIEW_DEFAULT; setIntensity(d.intensity); setWindowMin(d.windowMin); setGrouping(d.grouping); setMinBubble(d.minBubble); setBubblesOn(d.bubblesOn); selectUnit('USDT'); updateWalls({ ...DEFAULT_WALLS }); updatePro({ ...DEFAULT_PRO }); updateAlerts({ ...DEFAULT_ALERTS }); setMob({ ladder: false, panels: false, tape: false }); },
+    });
+  });
+  useEffect(() => () => heatmapUi.publish(null), []);
+  const replayButton = (cls: string, icon: string) => <Button variant="ghost" size="sm" aria-pressed={replayOn} disabled={!recordedAvail && collected < 120} onClick={() => setReplayOn(v => { if (v) replayApi.current?.exit(); return !v; })} className={`${cls} ${replayOn ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}><History className={icon} />Replay</Button>;
   return <div className={`heatmap-surface relative flex h-full w-full flex-col ${mobile || floating ? 'min-h-0' : 'min-h-80'}`} data-testid="heatmap">
     {mobile ? <div className="flex h-11 shrink-0 items-center gap-2 border-b border-t-border px-2 text-xs">
       <span className="min-w-0 flex-1 truncate font-semibold text-t-text">{symbol} · Heatmap · {windowLabel(windowMin)}</span>
       {!live && liveButton('h-10 px-3 text-xs')}
       <Button variant="ghost" size="sm" onClick={center} className={`h-10 px-3 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-4" />Center</Button>
-      <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)} className={`size-10 ${control}`} aria-label="Heatmap settings"><Settings2 /></Button>
+      {replayButton('h-10 px-3 text-xs', 'size-4')}
     </div> : <>
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-t-border px-3 py-1.5 text-xs">
       <span className="font-semibold text-t-text">{symbol} · Heatmap</span>
-      <label className="flex items-center gap-1.5 text-t-muted">Contrast
-        <input type="range" min={0.2} max={3} step={0.1} value={intensity} onChange={e => setIntensity(Number(e.target.value))} aria-label="Contrast" className="h-1 w-24 accent-current" />
-      </label>
-      <span className="flex items-center gap-1" role="group" aria-label="Time window">
-        {[...WINDOWS, ...(recordedAvail ? LONG_WINDOWS : [])].map(w => <Button key={w} variant="ghost" size="sm" aria-pressed={windowMin === w} onClick={() => setWindowMin(w)} className={`h-6 px-2 text-xs ${windowMin === w ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{windowLabel(w)}</Button>)}
-      </span>
-      <span className="flex items-center gap-1" role="group" aria-label="Grouping">
-        {GROUPINGS.map(gr => <Button key={gr} variant="ghost" size="sm" aria-pressed={grouping === gr} onClick={() => setGrouping(gr)} className={`h-6 px-2 text-xs ${grouping === gr ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>x{gr}</Button>)}
-      </span>
-      <label className="flex items-center gap-1.5 text-t-muted">Min bubble
-        <input type="number" min={0} step={1000} value={minBubble} onChange={e => setMinBubble(Math.max(0, Number(e.target.value) || 0))} aria-label="Minimum bubble size" className="h-6 w-20 rounded border border-t-border bg-t-panel px-1 text-xs text-t-text" />
-      </label>
-      <label className="flex items-center gap-1.5 text-t-muted">Bubbles
-        <input type="checkbox" checked={bubblesOn} onChange={e => setBubblesOn(e.target.checked)} aria-label="Toggle trade bubbles" className="accent-current" />
-      </label>
-      <span role="group" aria-label="Bubble volume unit" className="flex items-center gap-1">{(['USDT', 'BTC'] as const).map(unit => <Button key={unit} variant="ghost" size="sm" aria-pressed={bubbleUnit === unit} onClick={() => selectUnit(unit)} className={`h-6 px-2 text-xs ${bubbleUnit === unit ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{unit === 'USDT' ? unit : coinLabel}</Button>)}</span>
-      <span className="flex items-center gap-1.5 text-t-muted" role="group" aria-label="Wall lines">
-        <label className="flex items-center gap-1.5">Walls<input type="checkbox" checked={walls.on} onChange={e => updateWalls({ on: e.target.checked })} aria-label="Toggle wall lines" className="accent-current" /></label>
-        {walls.on && <>
-          <select value={walls.percentile} onChange={e => updateWalls({ percentile: Number(e.target.value) })} aria-label="Wall size percentile" className="h-6 rounded border border-t-border bg-t-panel px-1 text-xs text-t-text">{WALL_PERCENTILES.map(v => <option key={v} value={v}>Top {v}%</option>)}</select>
-          <select value={walls.minMs} onChange={e => updateWalls({ minMs: Number(e.target.value) })} aria-label="Wall minimum time" className="h-6 rounded border border-t-border bg-t-panel px-1 text-xs text-t-text">{WALL_MIN_TIMES.map(v => <option key={v} value={v}>≥ {wallAge(v)}</option>)}</select>
-          <select value={walls.fadeMs} onChange={e => updateWalls({ fadeMs: Number(e.target.value) })} aria-label="Wall fade time" className="h-6 rounded border border-t-border bg-t-panel px-1 text-xs text-t-text">{WALL_FADES.map(v => <option key={v} value={v}>Fade {wallAge(v).replace(' 0m', '')}</option>)}</select>
-          <label className="flex items-center gap-1">Pulled<input type="checkbox" checked={walls.showPulled} onChange={e => updateWalls({ showPulled: e.target.checked })} aria-label="Show pulled walls" className="accent-current" /></label>
-          <label className="flex items-center gap-1">Broken<input type="checkbox" checked={walls.showBroken} onChange={e => updateWalls({ showBroken: e.target.checked })} aria-label="Show broken walls" className="accent-current" /></label>
-        </>}
-        <span title={WALL_INFO} aria-label={WALL_INFO} role="img" data-testid="wall-info" className="cursor-help"><Info className="size-3" /></span>
-      </span>
       <Button variant="ghost" size="sm" onClick={center} className={`h-6 px-2 text-xs ${control}`} title="Center on the current price"><Crosshair className="size-3" />Center</Button>
-      <Button variant="ghost" size="sm" aria-pressed={showPro} onClick={() => setShowPro(v => !v)} className={`h-6 px-2 text-xs ${showPro ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`} aria-label="Heatmap panels, markers and alerts"><SlidersHorizontal className="size-3" />Panels & alerts</Button>
-      <Button variant="ghost" size="sm" aria-pressed={replayOn} disabled={!recordedAvail && collected < 120} onClick={() => setReplayOn(v => { if (v) replayApi.current?.exit(); return !v; })} className={`h-6 px-2 text-xs ${replayOn ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}><History className="size-3" />Replay</Button>
-      <span className="flex items-center gap-1" role="group" aria-label="Go to time">
-        <span className="text-t-muted">Go to</span>
-        {gotoInput('h-6 bg-t-panel px-1 text-xs')}
-        {JUMPS.map(([label, ms]) => <Button key={label} variant="ghost" size="sm" disabled={ms > availableMs} onClick={() => navApi.current?.goTo(Date.now() - ms)} className={`h-6 px-2 text-xs ${control}`}>{label}</Button>)}
-      </span>
+      {replayButton('h-6 px-2 text-xs', 'size-3')}
       {!live && liveButton('h-6 px-2 text-xs')}
       <span className="basis-full text-[10px] text-t-muted tabular-nums"><span data-testid="history-kept">{retentionText}</span>{!recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL && <> · <span data-testid="recorded-only">Recorded history: BTCUSDT only</span></>}{recordedAvail && <> · <span data-testid="history-range">{historyText}</span></>}</span>
     </div>
     </>}
-    {mobile && <div className="flex h-9 shrink-0 items-center gap-1.5 overflow-x-auto border-b border-t-border px-2 text-xs" role="group" aria-label="Heatmap panels">
-      {([['ladder', 'Book'], ['panels', 'Panels'], ['tape', 'T&S']] as const).map(([k, label]) => <Button key={k} variant="ghost" size="sm" aria-pressed={mob[k]} onClick={() => setMob(m => ({ ...m, [k]: !m[k] }))} className={`h-7 px-2.5 text-xs ${mob[k] ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{label}</Button>)}
-      <Button variant="ghost" size="sm" aria-pressed={replayOn} disabled={!recordedAvail && collected < 120} onClick={() => setReplayOn(v => { if (v) replayApi.current?.exit(); return !v; })} className={`h-7 px-2.5 text-xs ${replayOn ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}><History className="size-3.5" />Replay</Button>
-    </div>}
     {replayOn && <ReplayBar mobile={mobile} replayRef={replayRef} api={replayApi} minTime={recordedAvail ? recordedOldestMs() : Date.now() - collected * 1000} onExit={() => { replayApi.current?.exit(); setReplayOn(false); }} />}
-    {!mobile && showPro && <div className="absolute right-2 top-full z-30 mt-1 max-h-[70vh] w-80 overflow-y-auto rounded-md border border-t-border bg-t-panel p-3 text-xs text-t-text shadow-lg" style={{ top: 0, marginTop: 44 }}><div className="mb-2 flex items-center justify-between"><span className="font-semibold">Panels, markers & alerts</span><Button variant="ghost" size="icon" className={`size-6 ${control}`} aria-label="Close panels and alerts" onClick={() => setShowPro(false)}><X className="size-3.5" /></Button></div><HeatmapProPanel pro={pro} update={updatePro} alerts={alerts} updateAlerts={updateAlerts} recordedNote={!recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL} signedIn={userId !== null} /></div>}
     <div className="flex min-h-0 flex-1">
     <div className="relative min-h-0 flex-1">
       {toolDemoEnabled() && <span className="demo-watermark">DEMO DATA</span>}
@@ -1028,58 +994,5 @@ export function Heatmap({ symbol, spec, bridge, historySource, mobile = false, f
     </div>
     {showTape && !mobile && <div className="w-56 shrink-0 border-l border-t-border"><TimeSales symbol={symbol} spec={spec} minSize={pro.tapeMin} bigSize={pro.tapeBig} replay={tapeReplay} onMin={v => updatePro({ tapeMin: v })} /></div>}
     </div>
-    {mobile && showSettings && <div className="fixed inset-0 z-50 flex flex-col justify-end bg-t-bg/70" onClick={() => setShowSettings(false)}>
-      <div role="dialog" aria-modal="true" aria-label="Heatmap settings" onClick={e => e.stopPropagation()} className="max-h-[85dvh] space-y-4 overflow-y-auto rounded-t-xl border-t border-t-border bg-t-panel px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] text-sm text-t-text">
-        <div className="flex items-center justify-between"><h2 className="font-semibold">Heatmap settings</h2><Button variant="ghost" size="icon" className={`size-10 ${control}`} aria-label="Close heatmap settings" onClick={() => setShowSettings(false)}><X /></Button></div>
-        <p data-testid="history-kept" className="text-xs text-t-muted">{retentionText}{!recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL && <> · <span data-testid="recorded-only">Recorded history: BTCUSDT only</span></>}</p>
-        {recordedAvail && <p data-testid="history-range" className="text-xs text-t-muted tabular-nums">{historyText}</p>}
-        <div className="space-y-1"><span className="text-t-muted">Go to</span>
-          {gotoInput('h-10 w-full bg-t-bg px-2 text-sm')}
-          <div className="grid grid-cols-4 gap-2" role="group" aria-label="Go to time">
-            {JUMPS.map(([label, ms]) => <Button key={label} variant="ghost" disabled={ms > availableMs} onClick={() => { navApi.current?.goTo(Date.now() - ms); setShowSettings(false); }} className={`h-10 text-sm ${control}`}>{label}</Button>)}
-          </div>
-          {!live && liveButton('h-10 w-full text-sm')}
-        </div>
-        <label className="flex h-10 items-center gap-3 text-t-muted">Contrast
-          <input type="range" min={0.2} max={3} step={0.1} value={intensity} onChange={e => setIntensity(Number(e.target.value))} aria-label="Contrast" className="h-10 flex-1 accent-current" />
-        </label>
-        <div className="space-y-1"><span className="text-t-muted">Time window</span><div className="grid grid-cols-4 gap-2" role="group" aria-label="Time window">
-          {[...WINDOWS, ...(recordedAvail ? LONG_WINDOWS : [])].map(w => <Button key={w} variant="ghost" aria-pressed={windowMin === w} onClick={() => setWindowMin(w)} className={`h-10 text-sm ${windowMin === w ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{windowLabel(w)}</Button>)}
-        </div></div>
-        <div className="space-y-1"><span className="text-t-muted">Grouping</span><div className="grid grid-cols-4 gap-2" role="group" aria-label="Grouping">
-          {GROUPINGS.map(gr => <Button key={gr} variant="ghost" aria-pressed={grouping === gr} onClick={() => setGrouping(gr)} className={`h-10 text-sm ${grouping === gr ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>x{gr}</Button>)}
-        </div></div>
-        <label className="flex h-10 items-center justify-between gap-3 text-t-muted">Min bubble size (USDT)
-          <input type="number" min={0} step={1000} value={minBubble} onChange={e => setMinBubble(Math.max(0, Number(e.target.value) || 0))} aria-label="Minimum bubble size" className="h-10 w-28 rounded border border-t-border bg-t-bg px-2 text-sm text-t-text" />
-        </label>
-        <label className="flex h-10 items-center justify-between gap-3 text-t-muted">Trade bubbles
-          <input type="checkbox" checked={bubblesOn} onChange={e => setBubblesOn(e.target.checked)} aria-label="Toggle trade bubbles" className="size-5 accent-current" />
-        </label>
-        <div role="group" aria-label="Bubble volume unit" className="grid grid-cols-2 gap-2">{(['USDT', 'BTC'] as const).map(unit => <Button key={unit} variant="ghost" aria-pressed={bubbleUnit === unit} onClick={() => selectUnit(unit)} className={`h-10 text-sm ${bubbleUnit === unit ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{unit === 'USDT' ? unit : coinLabel}</Button>)}</div>
-        <div className="space-y-2 border-t border-t-border pt-3" role="group" aria-label="Wall lines">
-          <label className="flex h-10 items-center justify-between gap-3 text-t-muted">Wall lines
-            <input type="checkbox" checked={walls.on} onChange={e => updateWalls({ on: e.target.checked })} aria-label="Toggle wall lines" className="size-5 accent-current" />
-          </label>
-          <p data-testid="wall-info" className="text-xs text-t-muted">{WALL_INFO}</p>
-          {walls.on && <>
-            <span className="text-t-muted">Size</span>
-            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Wall size percentile">{WALL_PERCENTILES.map(v => <Button key={v} variant="ghost" aria-pressed={walls.percentile === v} onClick={() => updateWalls({ percentile: v })} className={`h-10 text-sm ${walls.percentile === v ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>Top {v}%</Button>)}</div>
-            <span className="text-t-muted">Minimum time</span>
-            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Wall minimum time">{WALL_MIN_TIMES.map(v => <Button key={v} variant="ghost" aria-pressed={walls.minMs === v} onClick={() => updateWalls({ minMs: v })} className={`h-10 text-sm ${walls.minMs === v ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{wallAge(v)}</Button>)}</div>
-            <span className="text-t-muted">Fade old lines after</span>
-            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Wall fade time">{WALL_FADES.map(v => <Button key={v} variant="ghost" aria-pressed={walls.fadeMs === v} onClick={() => updateWalls({ fadeMs: v })} className={`h-10 text-sm ${walls.fadeMs === v ? 'bg-t-accent text-t-bg hover:bg-t-accent/90' : control}`}>{wallAge(v).replace(' 0m', '')}</Button>)}</div>
-            <label className="flex h-10 items-center justify-between gap-3 text-t-muted">Show pulled walls
-              <input type="checkbox" checked={walls.showPulled} onChange={e => updateWalls({ showPulled: e.target.checked })} aria-label="Show pulled walls" className="size-5 accent-current" />
-            </label>
-            <label className="flex h-10 items-center justify-between gap-3 text-t-muted">Show broken walls
-              <input type="checkbox" checked={walls.showBroken} onChange={e => updateWalls({ showBroken: e.target.checked })} aria-label="Show broken walls" className="size-5 accent-current" />
-            </label>
-          </>}
-        </div>
-        <div className="space-y-2 border-t border-t-border pt-3"><span className="font-semibold">Panels, markers & alerts</span>
-          <HeatmapProPanel mobile pro={pro} update={updatePro} alerts={alerts} updateAlerts={updateAlerts} recordedNote={!recordedAvail && !toolDemoEnabled() && symbol !== RECORDED_SYMBOL} signedIn={userId !== null} />
-        </div>
-      </div>
-    </div>}
   </div>;
 }

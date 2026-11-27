@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { Settings, X, Crosshair } from 'lucide-react';
+import { X, Crosshair } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { orderBook } from '@/lib/order-book';
@@ -16,7 +16,6 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose, floating = fa
   // Floating: fills its window (the per-frame canvas size read reacts to window resizing); paused skips drawing only.
   const pausedRef = useRef(paused); pausedRef.current = paused;
   const [settings, setSettings] = useState<DomSettings>({ ...DOM_DEFAULT });
-  const [showSettings, setShowSettings] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [rowLabel, setRowLabel] = useState('');
   const settingsRef = useRef(settings); settingsRef.current = settings;
@@ -24,7 +23,8 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose, floating = fa
   const headRef = useRef<Partial<Record<'dot' | 'source' | 'bid' | 'ask' | 'mid' | 'imb' | 'imbText' | 'note' | 'sync', HTMLElement | null>>>({});
   const tipRef = useRef<HTMLDivElement>(null);
   const scroll = useRef(0), hover = useRef<{ y: number; x: number } | null>(null), hits = useRef<Hit[]>([]);
-  useEffect(() => { setSettings(restoreDomSettings(localStorage.getItem(DOM_KEY))); }, []);
+  useEffect(() => { const read = () => { try { setSettings(restoreDomSettings(localStorage.getItem(DOM_KEY))); } catch { /* unavailable browser storage */ } }; read(); window.addEventListener(DOM_SYNC_EVENT, read); return () => window.removeEventListener(DOM_SYNC_EVENT, read); }, []);
+  useEffect(() => { domRow.label = rowLabel; window.dispatchEvent(new Event(DOM_ROW_EVENT)); }, [rowLabel]);
   const change = (next: DomSettings) => { setSettings(next); try { localStorage.setItem(DOM_KEY, JSON.stringify(next)); } catch { /* ignore */ } };
   const recenter = () => { scroll.current = 0; setScrolled(false); };
   useEffect(() => { recenter(); }, [symbol]);
@@ -164,20 +164,6 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose, floating = fa
     const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); change({ ...settingsRef.current }); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   };
-  const sel = 'h-9 rounded border border-t-border bg-t-bg px-2 text-sm text-t-text mobile:h-10';
-  const settingsPanel = showSettings && <div role="dialog" aria-label="DOM settings" className={mobile ? 'fixed inset-x-0 bottom-0 z-[60] max-h-[70dvh] overflow-y-auto rounded-t-xl border-t border-t-border bg-t-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))]' : 'absolute inset-x-2 top-10 z-30 rounded-md border border-t-border bg-t-panel p-3 shadow-lg'}>
-    <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold">DOM settings</h3><Button variant="ghost" size="icon" className="size-8 text-t-muted mobile:size-10" aria-label="Close DOM settings" onClick={() => setShowSettings(false)}><X /></Button></div>
-    <div className="space-y-2 text-sm">
-      <label className="flex items-center justify-between gap-2"><span className="text-t-muted">Grouping</span><select aria-label="Grouping" className={sel} value={String(settings.grouping)} onChange={e => change({ ...settings, grouping: e.target.value === 'auto' ? 'auto' : Number(e.target.value) as DomSettings['grouping'] })}>{DOM_GROUPINGS.map(g => <option key={g} value={String(g)}>{g === 'auto' ? 'Auto' : `x${g}`}</option>)}</select></label>
-      <p className="text-right text-xs text-t-muted" data-testid="dom-row-size">Row size: {rowLabel}</p>
-      <label className="flex items-center justify-between gap-2"><span className="text-t-muted">Rows per side</span><select aria-label="Rows per side" className={sel} value={settings.rows} onChange={e => change({ ...settings, rows: Number(e.target.value) as DomSettings['rows'] })}>{[15, 25, 40].map(r => <option key={r} value={r}>{r}</option>)}</select></label>
-      <label className="flex items-center justify-between gap-2"><span className="text-t-muted">Unit</span><select aria-label="Unit" className={sel} value={settings.unit} onChange={e => change({ ...settings, unit: e.target.value === 'coin' ? 'coin' : 'usdt' })}><option value="usdt">USDT notional</option><option value="coin">Coin</option></select></label>
-      <label className="flex min-h-9 items-center justify-between"><span className="text-t-muted">Cumulative column</span><Switch aria-label="Cumulative column" checked={settings.cumulative} onCheckedChange={v => change({ ...settings, cumulative: v })} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border" /></label>
-      <label className="flex min-h-9 items-center justify-between"><span className="text-t-muted">Walls</span><Switch aria-label="Walls" checked={settings.walls} onCheckedChange={v => change({ ...settings, walls: v })} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border" /></label>
-      <label className="flex items-center justify-between gap-2"><span className="text-t-muted">Wall threshold</span><span className="flex items-center gap-2"><input aria-label="Wall threshold" type="range" min={2} max={10} step={.5} value={settings.wallMultiple} onChange={e => change({ ...settings, wallMultiple: Number(e.target.value) })} className="accent-[var(--t-accent)]" /><span className="w-10 text-right tabular-nums">{settings.wallMultiple}×</span></span></label>
-      <label className="flex min-h-9 items-center justify-between"><span className="text-t-muted">Flash changes</span><Switch aria-label="Flash changes" checked={settings.flash} onCheckedChange={v => change({ ...settings, flash: v })} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border" /></label>
-    </div>
-  </div>;
   const head = (k: 'dot' | 'source' | 'bid' | 'ask' | 'mid' | 'imb' | 'imbText' | 'note' | 'sync') => (el: HTMLElement | null) => { headRef.current[k] = el; };
   return <section ref={rootRef} aria-label="Order book ladder" data-testid="dom-ladder"
     style={mobile || floating ? undefined : { width: settings.width }}
@@ -185,7 +171,6 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose, floating = fa
     {!mobile && !floating && <div role="separator" aria-orientation="vertical" aria-label="Resize DOM" onPointerDown={startResize} className="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize hover:bg-t-accent/40" />}
     <header className="shrink-0 space-y-1 border-b border-t-border px-2 py-1.5 text-xs tabular-nums">
       <div className="flex items-center gap-2"><span ref={head('dot')} className="size-2 rounded-full bg-t-warning" /><span ref={head('source')} className="font-semibold">—</span>{toolDemoEnabled() && <span className="font-mono text-[10px] font-bold text-t-accent">DEMO DATA</span>}<span className="ml-auto text-t-muted">DOM</span>
-        <Button variant="ghost" size="icon" className="size-7 text-t-muted hover:bg-t-border mobile:size-10" aria-label="DOM settings" title="DOM settings" onClick={() => setShowSettings(s => !s)}><Settings className="size-4" /></Button>
         {mobile && <Button variant="ghost" size="icon" className="size-10 text-t-muted" aria-label="Close DOM" onClick={onClose}><X /></Button>}</div>
       <div className="grid grid-cols-3 gap-1 font-mono"><span>Bid <b ref={head('bid')} className="text-t-up">—</b></span><span className="text-center">Mid <b ref={head('mid')}>—</b></span><span className="text-right">Ask <b ref={head('ask')} className="text-t-down">—</b></span></div>
       <div className="flex items-center gap-2"><div className="relative h-1.5 flex-1 overflow-hidden rounded bg-t-down/70" aria-label="Bid ask imbalance"><div ref={head('imb')} className="h-full bg-t-up" style={{ width: '50%' }} /></div><span ref={head('imbText')} className="font-mono text-t-muted">— / —</span></div>
@@ -203,6 +188,24 @@ export function DomLadder({ symbol, spec, bridge, mobile, onClose, floating = fa
       <div ref={head('sync')} className="pointer-events-none absolute inset-0 hidden items-center justify-center"><span className="rounded bg-t-bg/90 px-3 py-1.5 text-xs text-t-warning">Syncing order book...</span></div>
       {scrolled && <Button size="sm" onClick={recenter} className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 bg-t-accent text-t-bg hover:bg-t-accent/90"><Crosshair className="size-3.5" />Re-center</Button>}
     </div>
-    {settingsPanel}
   </section>;
+}
+
+export const DOM_SYNC_EVENT = 'depthlens-dom-settings', DOM_ROW_EVENT = 'depthlens-dom-row';
+/** Current DOM row size text, shown in the Edit menu. */
+export const domRow = { label: '' };
+
+/** DOM ladder settings, shown in the Edit menu. */
+export function DomSettingsFields({ settings, change, rowLabel }: { settings: DomSettings; change: (next: DomSettings) => void; rowLabel: string }) {
+  const sel = 'h-9 rounded border border-t-border bg-t-bg px-2 text-sm text-t-text mobile:h-10';
+  return <div className="space-y-2 text-sm">
+      <label className="flex items-center justify-between gap-2"><span className="text-t-muted">Grouping</span><select aria-label="Grouping" className={sel} value={String(settings.grouping)} onChange={e => change({ ...settings, grouping: e.target.value === 'auto' ? 'auto' : Number(e.target.value) as DomSettings['grouping'] })}>{DOM_GROUPINGS.map(g => <option key={g} value={String(g)}>{g === 'auto' ? 'Auto' : `x${g}`}</option>)}</select></label>
+      <p className="text-right text-xs text-t-muted" data-testid="dom-row-size">Row size: {rowLabel}</p>
+      <label className="flex items-center justify-between gap-2"><span className="text-t-muted">Rows per side</span><select aria-label="Rows per side" className={sel} value={settings.rows} onChange={e => change({ ...settings, rows: Number(e.target.value) as DomSettings['rows'] })}>{[15, 25, 40].map(r => <option key={r} value={r}>{r}</option>)}</select></label>
+      <label className="flex items-center justify-between gap-2"><span className="text-t-muted">Unit</span><select aria-label="Unit" className={sel} value={settings.unit} onChange={e => change({ ...settings, unit: e.target.value === 'coin' ? 'coin' : 'usdt' })}><option value="usdt">USDT notional</option><option value="coin">Coin</option></select></label>
+      <label className="flex min-h-9 items-center justify-between"><span className="text-t-muted">Cumulative column</span><Switch aria-label="Cumulative column" checked={settings.cumulative} onCheckedChange={v => change({ ...settings, cumulative: v })} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border" /></label>
+      <label className="flex min-h-9 items-center justify-between"><span className="text-t-muted">Walls</span><Switch aria-label="Walls" checked={settings.walls} onCheckedChange={v => change({ ...settings, walls: v })} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border" /></label>
+      <label className="flex items-center justify-between gap-2"><span className="text-t-muted">Wall threshold</span><span className="flex items-center gap-2"><input aria-label="Wall threshold" type="range" min={2} max={10} step={.5} value={settings.wallMultiple} onChange={e => change({ ...settings, wallMultiple: Number(e.target.value) })} className="accent-[var(--t-accent)]" /><span className="w-10 text-right tabular-nums">{settings.wallMultiple}×</span></span></label>
+      <label className="flex min-h-9 items-center justify-between"><span className="text-t-muted">Flash changes</span><Switch aria-label="Flash changes" checked={settings.flash} onCheckedChange={v => change({ ...settings, flash: v })} className="data-[state=checked]:bg-t-accent data-[state=unchecked]:bg-t-border" /></label>
+    </div>;
 }
