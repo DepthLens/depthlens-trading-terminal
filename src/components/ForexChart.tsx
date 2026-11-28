@@ -6,6 +6,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { isBasePair, mergeFx, priceDigits, type ForexTf, type FxBar } from '@/lib/forex-data';
 import { openForexPair, syncForex } from '@/lib/forex.functions';
 import { toColor } from '@/components/PopoutChart';
+import { DrawingTools } from '@/components/DrawingTools';
+import type { ProfileChart } from '@/components/VolumeProfile';
+
+const TF_MINUTES: Record<ForexTf, number> = { '1h': 60, '4h': 240, '1d': 1440, '1w': 10080, '1M': 43200 };
 
 type Row = { time: number; open: number; high: number; low: number; close: number };
 const num = (r: Row): FxBar => ({ time: Number(r.time), open: r.open, high: r.high, low: r.low, close: r.close });
@@ -19,7 +23,9 @@ export async function loadFx(pair: string, tf: ForexTf): Promise<FxBar[]> {
   return mergeFx(bars, (hours as Row[]).map(num), tf);
 }
 
-export function ForexChart({ pair, tf, theme, onNote }: { pair: string; tf: ForexTf; theme: string; onNote: (text: string) => void }) {
+export function ForexChart({ pair, tf, theme, onNote, mobile = false }: { pair: string; tf: ForexTf; theme: string; onNote: (text: string) => void; mobile?: boolean }) {
+  const drawApi = useRef<ProfileChart | null>(null);
+  const [revision, setRevision] = useState(0);
   const [bars, setBars] = useState<FxBar[]>([]);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [tick, setTick] = useState(0);
@@ -53,7 +59,9 @@ export function ForexChart({ pair, tf, theme, onNote }: { pair: string; tf: Fore
     const c = createChart(el, { autoSize: true, localization: { locale: 'en-US' }, layout: { background: { color: 'transparent' }, textColor: text }, grid: { vertLines: { color: grid }, horzLines: { color: grid } }, crosshair: { mode: CrosshairMode.MagnetOHLC, vertLine: line, horzLine: line }, rightPriceScale: { borderColor: border }, timeScale: { borderColor: border, timeVisible: true, rightOffset: 6 } });
     const series = c.addSeries(CandlestickSeries, { upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: false });
     chart.current = { chart: c, series };
-    return () => { chart.current = null; c.remove(); };
+    const api: ProfileChart = { chart: c, series, probes: new Set(), host: el, disposed: false, colors: { up, down, muted: text, poc: toColor(el, '--flow-poc'), unsplit: toColor(el, '--flow-unsplit'), valueArea: toColor(el, '--flow-value-area'), labelText: toColor(el, '--t-bg') } };
+    drawApi.current = api; setRevision(v => v + 1);
+    return () => { api.disposed = true; drawApi.current = null; chart.current = null; c.remove(); };
   }, [theme]);
   useEffect(() => {
     const c = chart.current; if (!c) return;
@@ -63,12 +71,16 @@ export function ForexChart({ pair, tf, theme, onNote }: { pair: string; tf: Fore
     c.chart.timeScale().fitContent();
   }, [bars, pair, theme]);
 
-  return <div className="absolute inset-0">
+  const digits = priceDigits(pair);
+  return <div className="absolute inset-0 flex">
+    <DrawingTools chartRef={drawApi} hostRef={host} symbol={`fx-${pair}`} minutes={TF_MINUTES[tf]} spec={{ precision: digits, minMove: 1 / 10 ** digits }} mobile={mobile} revision={revision} />
+    <div className="relative min-w-0 flex-1">
     <div ref={host} className="absolute inset-0" data-testid="fx-chart" data-bars={bars.length} />
     {opening && !bars.length && phase !== 'error' && <div className="absolute inset-0 grid place-items-center text-sm text-t-muted">Downloading {pair} history...</div>}
     {phase === 'loading' && !opening && !bars.length && <div className="absolute inset-0 grid place-items-center text-sm text-t-muted">Loading candles...</div>}
     {phase === 'ready' && !opening && !bars.length && <div className="absolute inset-0 grid place-items-center text-sm text-t-muted">No candles saved for {pair} yet.</div>}
     {phase === 'error' && <div className="absolute inset-0 grid place-items-center text-sm text-t-muted"><div className="text-center">Could not load forex candles.<button type="button" onClick={() => setTick(t => t + 1)} className="ml-2 rounded bg-t-accent px-3 py-1 font-semibold text-t-accent-fg">Retry</button></div></div>}
     <span className="pointer-events-none absolute bottom-8 left-2 text-[10px] text-t-muted">Forex data delayed, volume = tick volume</span>
+    </div>
   </div>;
 }
